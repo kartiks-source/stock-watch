@@ -545,7 +545,11 @@ function report(stock, orders, settings = {}, opts = {}) {
     const units26 = wsRow ? Math.max(0, num(wsRow.u)) : 0, lastEp = eps[eps.length - 1];
     const seeded = !p.inactive && units === 0 && units26 > 0 && !!lastEp && lastEp.open && demandPerDay(0, histFrom, now, cantSell).rawDays < 1;
     const lossPrice = seeded && num(wsRow.n) > 0 ? num(wsRow.n) / units26 : price;
-    const lossPerHour = seeded ? units26 / FLOOR_DAYS / 24 : perSellingHour;
+    /* 1.4.0 (LOGIC §21): a long stock-out's rate comes from an older in-stock stretch (history / before-out), which on
+       Sammsara was the pre-Diwali rush. With Shopify's 12 months read, ₹ lost uses the brand report's pace for this month
+       instead (6 months of in-stock days × this month's season), opts.lossPace[variantId] a day; reorder keeps perDay */
+    const lp = rate.basis !== 'window' && !lowData ? num(own(opts.lossPace, p.id)) : 0;
+    const lossPerHour = seeded ? units26 / FLOOR_DAYS / 24 : lp > 0 ? lp / 24 : perSellingHour;
     /* §6 (1.3.0): Shopify's stock is a website allocation the warehouse tops up → no reorder from here; ₹ lost apart */
     const alloc = +S.allocationCheck !== 0 && !p.inactive && p.stock != null ? allocationOf(p.changes, now) : null;
 
@@ -594,6 +598,7 @@ function report(stock, orders, settings = {}, opts = {}) {
       status: pl ? (selling ? pl.status : 'Slow seller') : 'No stock data',
       orderQty: pl && selling ? pl.qty : 0, orderValue: pl && selling ? Math.round(pl.qty * (p.cost || price)) : 0,   // cash to commit: unit cost when known
       rateBasis: rate.basis, rateFrom: rate.from,   // which sales the rate was measured on (LOGIC.md §3)
+      ...(lp > 0 && !seeded ? { lossPace: round(lp, 2) } : {}),   // 1.4.0: ₹ lost at the brand report's seasonal pace (§21)
       rateUnits: units, confidence, heldUnits, weeksSold, weeksLive: live != null && live >= WEEKS_MIN_LIVE ? live : null, confBasis: live != null && live >= WEEKS_MIN_LIVE ? 'weeks' : 'units', nrDays,   // §4c: how sure ₹ lost is, on what
       lost: Math.round(lost), unitsLost: round(unitsLost, 1), outs, smallTopUps, repeats,
       sold: Math.round(p.lines.filter((o) => o.t >= from).reduce((s, o) => s + num(o.qty) * num(o.price), 0)),

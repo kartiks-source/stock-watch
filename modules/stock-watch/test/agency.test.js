@@ -134,3 +134,21 @@ test('fromRows: the same shape from the rows we hold (demo, Flow, Sheet, CSV)', 
   const r = A.build(y, cat(['1']), {});
   assert.equal(r.products[0].months['2026-11'].daysOut, 2.5, '2 Nov half, 3–4 Nov out');
 });
+
+test('engine: a long stock-out (rate from an older stretch) values ₹ lost at the 12-month seasonal pace when given; reorder keeps its rate', () => {
+  const E = require('../src/engine');
+  const DAY = 864e5, now = Date.parse('2026-11-24T06:00:00Z');
+  const stock = [{ t: now - 70 * DAY, variantId: '9', sku: 'S9', product: 'Oak', variant: '', before: null, now: 40, price: 1000 }];
+  const orders = [];
+  for (let i = 0; i < 20; i++) orders.push({ t: now - (60 - i) * DAY, order: `#${i}`, line: String(i), variantId: '9', sku: 'S9', qty: 2, price: 1000 });
+  stock.push({ t: now - 40 * DAY, variantId: '9', sku: 'S9', product: 'Oak', variant: '', before: 40, now: 0, price: 1000 });
+  const base = E.report(stock, orders, {}, { now, days: 30 });
+  const p0 = base.products.find((p) => p.id === '9');
+  assert.notEqual(p0.rateBasis, 'window', 'out for the whole window: the rate looks back');
+  const seasonal = E.report(stock, orders, {}, { now, days: 30, lossPace: { 9: 0.5 } });
+  const p1 = seasonal.products.find((p) => p.id === '9');
+  assert.equal(p1.lossPace, 0.5);
+  assert.ok(Math.abs(p1.lost - p0.lost * 0.5 / p0.perDay) < p0.lost * 0.02, `₹ lost scales with the pace: ${p0.lost} → ${p1.lost}`);
+  assert.equal(p1.perDay, p0.perDay, 'the reorder rate stays');
+  assert.equal(p1.orderQty, p0.orderQty);
+});

@@ -55,7 +55,10 @@ function file() {
 }
 const dayKey = (t, zone) => engine.dayKey(t, zone);
 /** What the snapshots were worked out on: engine rules, the stock history rebuild, the order price basis. */
-const calcOf = (d) => [engine.CALC_VERSION, (d.shopify && d.shopify.history && d.shopify.history.at) || '', (d.shopify && d.shopify.priceBasis) || ''].join('|');
+const calcOf = (d) => [engine.CALC_VERSION, (d.shopify && d.shopify.history && d.shopify.history.at) || '', (d.shopify && d.shopify.priceBasis) || '', lossPaceKey(d)].join('|');
+/* 1.4.0 (LOGIC §21): the 12-month pace for long stock-outs' ₹ lost, from server.js (null without Shopify's 12 months) */
+let lossPaceFn = () => null, lossPaceKey = () => '';
+function useLossPace(fn, key) { lossPaceFn = fn; lossPaceKey = key || (() => ''); }
 /** Calc changed → forget the last BACKFILL_DAYS days (whatever took them) so missing() takes them again. True if changed. */
 function rebase(f, d, now = Date.now()) {
   const c = calcOf(d);
@@ -85,7 +88,7 @@ function compute(d, key, oo = {}, at = Date.now()) {
   const off = TZ.zoneOf(d.settings), t0 = startOf(key, off), t1 = endOf(key, off);
   const rows = period.asOf(d.stock, d.orders, t1);
   const onOrder = Object.fromEntries(Object.entries(oo || {}).filter(([, v]) => v && +v.at <= t1));
-  const r = engine.report(rows.stock, rows.orders, d.settings, { now: t1, from: t0, catalog: catalogAt(d.catalog, t1), onOrder, weekSales: weeks.forReport(d.shopify) });
+  const r = engine.report(rows.stock, rows.orders, d.settings, { now: t1, from: t0, catalog: catalogAt(d.catalog, t1), onOrder, weekSales: weeks.forReport(d.shopify), lossPace: lossPaceFn(d) });
   const t = r.totals;
   /* L6 (1.3.0): movers on the headline's part (lostCounted), the same ₹ as the weekly total; estimates never show as movers */
   const lostBy = Object.fromEntries(r.products.filter((p) => p.lostCounted > 0).sort((a, b) => b.lostCounted - a.lostCounted).slice(0, TOP_LOST).map((p) => [String(p.id), p.lostCounted]));
@@ -231,5 +234,5 @@ async function handle(req, url) {
   return { code: 200, body: { ok: true, ...current() } };
 }
 
-module.exports = { compute, missing, catchUp, calcOf, rebase, clear, summary, current, digestLine, handle, catalogAt, nameMap, METRICS, KEEP_DAYS, BACKFILL_DAYS,
+module.exports = { useLossPace, compute, missing, catchUp, calcOf, rebase, clear, summary, current, digestLine, handle, catalogAt, nameMap, METRICS, KEEP_DAYS, BACKFILL_DAYS,
   FILE_NAME: box.name, all: () => box.read(), reset: box.reset };
