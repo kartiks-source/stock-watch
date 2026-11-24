@@ -1036,3 +1036,9 @@ body.no-period .top .range, body.no-period .top .rlabel, body.no-period .top .rd
   .kgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .pstory { font-size: 14px; }
 }
+
+/* 1.4.2: a long product name hid the whole picture + name block as "…" (text-overflow on the cell drops an
+   inline-flex box that doesn't fit). Clip the cell instead and let the name itself shorten with "…". */
+.tbl td:first-child:has(.prod) { text-overflow: clip; }
+.tbl td:first-child .prod { max-width: 100%; }
+.tbl td:first-child:has(.pick, .pick-sp) .prod { max-width: calc(100% - 30px); }

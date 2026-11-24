@@ -2,6 +2,10 @@
 
 User-facing changes, newest first. Semver: minor when a number's rule changes or a feature lands, patch for fixes. The version in `package.json` matches the top heading. Versions before 0.9.0 were reconstructed from `docs/DEVLOG.md` on 20 Nov 2026 (no tags existed); dates are the DEVLOG dates. Per DEVLOG, nothing from 0.6.0 on has been deployed yet. Since 1.0.0-rc.1, `/health`, `/status` and the page footer show the version and the build's commit (SW-056); `test/docs.test.js` checks the top heading matches `package.json`.
 
+## 1.4.2 · 2026-11-24 · long product names
+
+- Fix: rows with a long product name showed only “…” (picture, name, code and links all hidden). The name now shortens with “…” and the picture and links stay.
+
 ## 1.4.1 · 2026-11-24 · the product drawer is a 12-month profile
 
 - The drawer no longer shows the 30-day *Trend* bars (0, 0, 0…) or the flat 30-day *Stock level* block. It is the product's 12 months, top to bottom:
