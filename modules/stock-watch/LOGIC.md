@@ -1079,6 +1079,6 @@ Who they are for (`.claude/skills/agency-perspective`): the agency that runs a b
 
 ## 23. Best sellers now; push / pause ads (`src/sell.js`)
 
-- **Best sellers now:** each best seller (§22): in stock (pieces) or out since when (any selling option out = out), days out and money missed this month (§22), how fast it sells (§21), refill: ordered (lands …), order N now, not ordered, enough stock. Out first, then money missed this month. Opening a row gives *Mark ordered* (§6b).
+- **Best sellers now:** each best seller (§22): in stock (pieces) or out since when (any selling option out = out; the day comes from the 12 months, so a product out longer than the rows we hold says "since 9 Aug" or "since before 25 Nov 2025", not the first stock record), days out and money missed this month (§22), how fast it sells (§21), refill: ordered (lands …), order N now, not ordered, enough stock. Out first, then money missed this month. Opening a row gives *Mark ordered* (§6b).
 - **Push in ads:** in stock, selling (pace > 0), and at least max(21 days, lead time + buffer) of stock at its pace, so ads won't empty the shelf; most money a day first (pace × price). **Pause ads:** the Pause list of §15c (out now, or runs out before a refill can land), only items that sell; best sellers first, then money a day. Copy list (code + name) and CSV, with links.
 - Pace = the brand report's pace for this month (§21) when Shopify's 12 months are read, else the 28-day rate (§3).
