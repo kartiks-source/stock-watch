@@ -56,6 +56,7 @@ const apiv1 = require('./src/apiv1');       // /api/v1: every /api route + summa
 const weekly = require('./src/weekly');     // sprint 3 B-review: daily snapshots, this week vs last week (SW-043)
 const targets = require('./src/targets');   // sprint 3 B-review: monthly targets on groups (SW-042)
 const lists = require('./src/lists');       // sprint 3 B-review: saved product lists (SW-044)
+const links = require('./src/links');       // 1.4.0: product image, Shopify admin and website links (LOGIC §19)
 
 const PORT = /^\d+$/.test(process.env.PORT || '') ? Number(process.env.PORT) : 4400;   // PORT=0 picks a free port (tests)
 const PASSWORD = process.env.ADMIN_PASSWORD || '';
@@ -318,6 +319,7 @@ async function pullOne(id) {
     stores.noteShop(id, keys.status(id).store);
     const stock = store.add('stock', s.rows, 'shopify');
     store.setCatalog(s.catalog, started);   // current stock + attributes, replaced whole (SW-002)
+    if (s.shop) store.setShopify({ shopInfo: s.shop });   // 1.4.0: shop domain + website address for product links
     Object.assign(run, { stock, phase: 'orders', notes: runs.stockNotes(s.excluded) });
     store.setShopify({ lastQty: s.lastQty });
     let orders = 0;
@@ -533,6 +535,7 @@ async function storeApi(req, res, url, role, id) {
   /* SW-032: decisions are based on, and checked against, sales per day on the saved settings (never trial values) */
   /* Every report-shaped answer (report, groups, product, CSV) uses the same options, so their numbers agree. */
   const sups = supplierOf(d);   // SW-040: each variant's supplier and terms (lead time, MOQ, case pack)
+  const shopLinks = () => ({ ...(d.shopify.shopInfo || {}), handle: keys.status(id).store || null });   // 1.4.0 (LOGIC §19)
   const reportOpts = (extra = {}) => ({ ...span, catalog: d.catalog, onOrder: onorder.all(), suppliers: sups, reversals: d.reversals, weekSales: weeks.forReport(d.shopify), syncMinutes: SYNC_MIN, ...extra });   // span: { days } or { from } (SW-027)
   const savedRates = () => new Map(engine.report(d.stock, d.orders, d.settings, { days: 30, catalog: d.catalog, onOrder: onorder.all() }).products.map((x) => [String(x.id), x.perDay]));
   const dc = await decide.handle(req, p, readBody, (id) => savedRates().get(id));
@@ -558,13 +561,16 @@ async function storeApi(req, res, url, role, id) {
     const S = settingsFor(url, d.settings), trial = Object.keys(LIMITS).some((k) => S[k] !== d.settings[k]);
     const r = helpers.enrich(engine.report(d.stock, d.orders, S, reportOpts()), { decisions: decide.all(), rates: trial ? savedRates() : null });
     r.period = periodKind; r.yesterday = period.yesterdayFor(d.stock, d.orders, S, r, reportOpts());   // SW-027
+    links.annotateReport(r, d.catalog, shopLinks());   // 1.4.0: image + links on every product row
     if (!readOnly()) setImmediate(() => weekly.catchUp());   // SW-043: the first report after store-midnight takes the day's snapshot (a read-only copy never writes, SW-055)
     return send(res, 200, { ok: true, ...r, store: here, source: d.source, lastSync: d.lastSync, lastSyncError: d.lastSyncError, shopify: shopifyStatus(), freshness: freshness(), app: version.current() });
   }
   if (p.startsWith('/api/product/') && req.method === 'GET') {
     let id; try { id = decodeURIComponent(p.slice('/api/product/'.length)); } catch { throw badRequest('Bad product ID in the address'); }
     const S = { ...engine.DEFAULT_SETTINGS, ...settingsFor(url, d.settings) }, now = Date.now();
-    return send(res, 200, { ok: true, ...helpers.enrichDetail(engine.productDetail(id, d.stock, d.orders, S, reportOpts({ now })), S, now) });
+    const det = helpers.enrichDetail(engine.productDetail(id, d.stock, d.orders, S, reportOpts({ now })), S, now);
+    if (det && det.product) links.annotate([det.product], d.catalog, shopLinks());   // 1.4.0
+    return send(res, 200, { ok: true, ...det });
   }
   /* Group by (SW-022): ?lens=product|type|collection|tag, same period, trial values, catalog and on-order as /api/report,
      so group totals equal report totals. No lens: which lenses the catalog can offer. */
@@ -638,7 +644,7 @@ async function storeApi(req, res, url, role, id) {
   if (p === '/api/clear' && req.method === 'POST') { if (pulls.has(id)) return fail(res, 409, PULL_RUNNING); store.replaceAll([], [], 'empty'); onorder.clear(); decide.clear(); weekly.clear(); return send(res, 200, { ok: true }); }
   if (p === '/api/export/reorder.csv' && req.method === 'GET') {
     /* SW-025: usable as a PO: the tab filter and search on the page, vendor, unit cost, variant ID (LOGIC.md §15b) */
-    const r = helpers.enrich(engine.report(d.stock, d.orders, settingsFor(url, d.settings), reportOpts()));
+    const r = links.annotateReport(helpers.enrich(engine.report(d.stock, d.orders, settingsFor(url, d.settings), reportOpts())), d.catalog, shopLinks());
     /* SW-040: Vendor = the product's supplier (SKU map, else Shopify vendor); ?supplier=<name> = that supplier's PO draft (lines to order only) */
     const filter = url.searchParams.get('filter') || 'all';
     const one = url.searchParams.has('supplier') ? supplierRules.cleanName(url.searchParams.get('supplier')).toLowerCase() : null;
@@ -680,7 +686,7 @@ function serveStatic(req, res, url) {
 
 /* ---------- security headers + same-origin writes ---------- */
 const CSP = ["default-src 'self'", "script-src 'self'", "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com", "font-src https://fonts.gstatic.com",
-  "img-src 'self' data: blob:", "connect-src 'self'", "object-src 'none'", "base-uri 'none'", "form-action 'self'", "frame-ancestors 'none'"].join('; ');
+  "img-src 'self' data: blob: https://cdn.shopify.com", "connect-src 'self'", "object-src 'none'", "base-uri 'none'", "form-action 'self'", "frame-ancestors 'none'"].join('; ');
 function securityHeaders(req, res) {
   res.setHeader('content-security-policy', CSP);
   res.setHeader('x-content-type-options', 'nosniff');

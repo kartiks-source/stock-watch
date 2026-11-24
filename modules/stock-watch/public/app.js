@@ -398,7 +398,8 @@
   };
   const outDot = (p) => (p.stock != null && p.stock <= 0 ? '<span class="dot" title="Out of stock now"></span>' : '');
   const bestTag = (p) => (p.abc === 'A' ? '<span class="best" title="Best seller: among the products making the top 80% of sales">Best seller</span>' : '');
-  const nameCell = (p, tag = true, sp = false) => `${sp ? `<span class="ispark">${spark(p, 40, 12)}</span>` : ''}${outDot(p)}<span class="pname" title="${esc(p.name)}">${esc(p.name)}</span>${tag ? bestTag(p) : ''}`;
+  /* 1.4.0: picture left, name + code stacked, Shopify / website links (public/prod.js, LOGIC §19) */
+  const nameCell = (p, tag = true, sp = false) => SW_PROD.cell(p, { before: `${sp ? `<span class="ispark">${spark(p, 40, 12)}</span>` : ''}${outDot(p)}`, extra: tag ? bestTag(p) : '' });
   /* SW-021: trend in the decision rows. ≥ 1400 px: its own cell (48×16 spark + chip); narrower: a 40×12 spark at the
      start of the name cell (no extra column; at the start so a long name's … never hides it, and the sparks line up) */
   const trendCell = (p) => `<span class="trc">${spark(p, 48, 16)}${trendOnly(p)}</span>`;
@@ -605,7 +606,7 @@
     const dead = (id) => { const p = prod.get(id); return !!p && !p.unitsSold && !p.sold && !p.lost; };
     for (const s of state.report.stockouts) {
       const pr = prod.get(s.id) || {};
-      const a = m.get(s.id) || { id: s.id, name: s.name, sku: s.sku, times: 0, days: 0, lost: 0, open: false, small: 0, repeat: 0, last: 0, dead: dead(s.id), since: null,
+      const a = m.get(s.id) || { id: s.id, name: s.name, sku: s.sku, image: pr.image, adminUrl: pr.adminUrl, webUrl: pr.webUrl, stock: pr.stock, abc: pr.abc, times: 0, days: 0, lost: 0, open: false, small: 0, repeat: 0, last: 0, dead: dead(s.id), since: null,
         confidence: pr.confidence, rateUnits: pr.rateUnits, heldUnits: pr.heldUnits, weeksSold: pr.weeksSold, weeksLive: pr.weeksLive, nrDays: pr.nrDays, floorPerDay: pr.floorPerDay, units26: pr.units26, historyFrom: pr.historyFrom,
         lostCounted: pr.lostCounted || 0, lostEstimate: pr.lostEstimate || 0, lostNotRestocked: pr.lostNotRestocked || 0, lostAllocation: pr.lostAllocation || 0 };   // §4c
       a.times++; a.days += (s.hoursInPeriod ?? s.hours) / 24; a.lost += s.lost; a.open = a.open || s.open; a.small += s.small ? 1 : 0; a.repeat += s.repeat ? 1 : 0; a.last = Math.max(a.last, s.start);
@@ -628,7 +629,7 @@
     const extra = `${dead.length ? `<p class="muted small" id="dead-note" title="No sales and no sales lost ${inPeriod()}: nothing was lost while they were out">${dead.length} out but not selling, not counted above</p>` : ''}${h && h.ok && h.kept && r.from < h.until ? `<p class="muted small" id="rebuilt-note" title="Shopify keeps no past stock levels; these come from its stock change log, to the hour (LOGIC §1c). The others have no stock record before then, so their sales lost before it are unknown (Data lists them)">Before ${esc(dt(h.until).slice(0, 6))}: rebuilt from Shopify’s change log for ${inr.format(h.kept)} of ${inr.format(h.total)} products</p>` : ''}`;
     const pattern = (a) => [a.small ? `<span class="st small" title="Refilled with less than ${state.report.settings.smallTopUpDays} days of sales, ${a.small}×">Refilled too little</span>` : '', a.repeat ? `<span class="st again" title="Ran out again within a week, ${a.repeat}×">Ran out again</span>` : ''].join(' ') || '–';
     const cols = [
-      { k: 'name', label: 'Product', f: (a) => `<span class="pname" title="${esc(a.name)}">${esc(a.name)}</span>` },
+      { k: 'name', label: 'Product', f: (a) => nameCell(a) },
       { k: 'lost', label: 'Sales lost', r: 1, tip: 'Red = in the headline; grey = not (estimate, not restocked, refill gaps)', f: (a) => `${a.lostCounted > 0 ? `<b class="lostv">${money(a.lostCounted)}</b>` : ''}${lostMark(a)}`, val: lostSort },
       { k: 'confidence', label: 'Confidence', opt: 1, tip: 'How sure the sales lost is: share of Shopify’s last 25 weeks with a sale (High 44%+, Medium 22–43%, Low under 22%); units sold when that isn’t read', f: confCell, val: (a) => ({ high: 3, medium: 2, low: 1 })[a.confidence] || 0 },
       { k: 'times', label: 'Times out', r: 1 },
@@ -644,7 +645,7 @@
       <div class="toolbar"><div class="chips">${groups.map(([k, l, c]) => `<button class="chip ${f === k ? 'on' : ''}" data-filter-stockouts="${k}">${l}<span class="c">${c}</span></button>`).join('')}</div>
         <input class="search" id="q-stockouts" placeholder="Search…" title="Search product or SKU" value="${esc(state.q.stockouts)}"></div>
       ${table('stockouts', cols, rows, 'No stock-outs in this view.', (a) => `
-        <header><h3>${esc(a.name)}</h3><div class="mq">${a.lostCounted > 0 ? `<b class="lostv">${money(a.lostCounted)}</b>` : '<b class="muted">–</b>'}<small>sales lost</small>${lostMark(a)}</div></header>
+        <header><h3>${nameCell(a, false)}</h3><div class="mq">${a.lostCounted > 0 ? `<b class="lostv">${money(a.lostCounted)}</b>` : '<b class="muted">–</b>'}<small>sales lost</small>${lostMark(a)}</div></header>
         <div class="mfacts">${a.open ? '<span class="st g-today">Still out</span>' : ''}<span><b>${a.times}</b>× out</span>${outSince(a) ? `<span>out <b>${esc(outSince(a))}</b></span>` : `<span><b>${n1(a.days)}</b> days out</span>`}${a.small ? '<span class="st small">Refilled too little</span>' : ''}${a.repeat ? '<span class="st again">Ran out again</span>' : ''}</div>`)}`;
   }
 
@@ -692,8 +693,8 @@
     return `<div class="mktbar"><span title="${esc(MKT_TIP[f])}">${n}</span>${rows.length ? `<button class="btn ghost xs" id="copy-skus">Copy ${inr.format(rows.length)} SKUs</button>` : ''}</div>`;   // the list's CSV is in ⋯ (M5)
   }
   function downloadMktCsv(f) {
-    const head = f === 'pause' ? ['Product', 'SKU', 'Variant ID', 'Why', 'Back in stock', 'In stock', 'Days left'] : ['Product', 'SKU', 'Variant ID', 'Overstock ₹', 'In stock', 'Days left'];
-    const body = productRows().map((p) => (f === 'pause' ? [p.name, p.sku, p.id, p.why, p.backIn, p.stock, p.daysLeft ?? ''] : [p.name, p.sku, p.id, p.excessValue, p.stock, p.daysLeft ?? '']));
+    const head = [...(f === 'pause' ? ['Product', 'SKU', 'Variant ID', 'Why', 'Back in stock', 'In stock', 'Days left'] : ['Product', 'SKU', 'Variant ID', 'Overstock ₹', 'In stock', 'Days left']), ...SW_PROD.CSV_HEAD];
+    const body = productRows().map((p) => [...(f === 'pause' ? [p.name, p.sku, p.id, p.why, p.backIn, p.stock, p.daysLeft ?? ''] : [p.name, p.sku, p.id, p.excessValue, p.stock, p.daysLeft ?? '']), ...SW_PROD.csv(p)]);
     saveCsv(`${f === 'pause' ? 'pause-promotion' : 'push-these'}-${isoToday()}.csv`, [head, ...body]);
   }
   const isoToday = () => local(Date.now()).toISOString().slice(0, 10);
@@ -837,7 +838,7 @@
     const cols = PRODUCT_COLS();
     // Same rule as csvCell in src/rows.js: text starting = + - @ tab CR gets a leading ' (no formulas run in Excel/Sheets).
     const q = (x) => { let v = String(x ?? ''); if (typeof x === 'string' && /^[=+\-@\t\r]/.test(v)) v = `'${v}`; return `"${v.replace(/"/g, '""')}"`; };
-    const lines = [cols.map((c) => c.label), ...productRows().map((p) => cols.map((c) => (c.csv ? c.csv(p) : p[c.k])))].map((l) => l.map(q).join(','));
+    const lines = [[...cols.map((c) => c.label), ...SW_PROD.CSV_HEAD], ...productRows().map((p) => [...cols.map((c) => (c.csv ? c.csv(p) : p[c.k])), ...SW_PROD.csv(p)])].map((l) => l.map(q).join(','));
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob(['﻿' + lines.join('\n')], { type: 'text/csv' }));
     a.download = `products-${isoDay(Date.now())}.csv`; a.click(); URL.revokeObjectURL(a.href);
@@ -950,8 +951,7 @@
       const d = await api(`/api/product/${encodeURIComponent(id)}?days=${state.days}${whatQs()}`);
       const p = d.product, now = state.report.generatedAt, from = state.report.from, gap = noHistory(p, from);
       body.innerHTML = `
-        ${manyStores() ? `<p class="dstore">${esc(SW_STORES.name())}</p>` : ''}<h2 id="drawer-title">${esc(p?.name || id)}</h2>
-        <div class="toolbar">${p ? status(p) + bestTag(p) : ''}<span class="mono muted">${esc(p?.sku || '')}</span></div>
+        ${manyStores() ? `<p class="dstore">${esc(SW_STORES.name())}</p>` : ''}${p ? SW_PROD.hero(p, `<div class="toolbar">${status(p) + bestTag(p)}</div>`) : `<h2 id="drawer-title">${esc(id)}</h2>`}
         ${p?.why ? `<p class="dwhy">${whyCell(p)}</p>` : ''}
         <section class="tiles dtiles">
           <div class="tile amber"><b>${p?.orderQty ? `${inr.format(p.orderQty)} pcs` : '–'}</b><span>order now${p?.orderQty ? ` · ${money(p.orderValue)} ${atCost()}` : ''}${p?.paceQty != null ? `<br><small id="pace-qty" title="Sales are falling (${p.trendPct ?? '–'}% this product, ${state.report.totals.storeTrendPct ?? '–'}% the typical product): the same order at the last 14 days’ in-stock pace, ${n1(p.pacePerDay)} a day">${inr.format(p.paceQty)} pcs at last 2 weeks’ pace</small>` : ''}</span></div>
@@ -1072,6 +1072,7 @@
 
   document.addEventListener('click', async (e) => {
     if (e.target.closest('.rz')) return;
+    if (e.target.closest('a.plink')) return;   // 1.4.0: Shopify / website links open in a new tab, not the drawer
     if (e.target.closest('.mpick') && !e.target.matches('input')) return;   // the label's own click; the checkbox click follows
     if (e.target.matches('input.pick')) { const id = e.target.dataset.pick; if (e.target.checked) state.pick.add(id); else state.pick.delete(id); render(); return; }
     if (e.target.id === 'toast-act' && toast._do) { const run = toast._do; $('#toast').hidden = true; toast._do = null; run().catch((err) => toast(err.message)); return; }

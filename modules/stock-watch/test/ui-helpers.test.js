@@ -227,7 +227,7 @@ test('final critic round 1, desktop: focus ring inside the period buttons (UI-1)
     const p2 = await page(w, 900);
     await p2.goto(base + '/#products'); await p2.click('[data-filter-products="pause"]'); await p2.waitForSelector('[data-filter-products="pause"].on .c');
     const hs = await p2.$$eval('.tbl.desk tbody tr', (r) => r.map((x) => x.getBoundingClientRect().height));
-    assert.ok(hs.length && Math.max(...hs) < 40, `${w}: Pause rows ${Math.max(...hs)} px (Back in stock wrapped)`);
+    assert.ok(hs.length && Math.max(...hs) < 58, `${w}: Pause rows ${Math.max(...hs)} px (Back in stock wrapped)`);   // 1.4.0: 40 px picture + name/code lines ≈ 53 px
     assert.equal(await p2.evaluate(() => document.documentElement.scrollWidth - innerWidth), 0, `${w}: no sideways scroll`);
     if (w === 1280) {
       await p2.goto(base + '/?role=all#reorder'); await p2.waitForSelector('.tbl.desk table');

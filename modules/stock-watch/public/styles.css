@@ -873,3 +873,33 @@ details.rolepick.one > summary svg, details.rolepick.one > .menu { display: none
 .mcard .mq small.lmark, .mcard .mq small.lmark.nr { color: var(--soft); font-size: 11px; font-weight: 500; }
 .tile .lsplit { display: block; order: -1; margin-top: 4px; font-size: 12px; color: var(--soft); }
 .headline .bucket { flex-basis: 100%; margin: 2px 0 0; }
+
+/* 1.4.0 (LOGIC §19): product picture on the left, name + code stacked, Shopify / website links (public/prod.js) */
+.prod { display: inline-flex; align-items: center; gap: 10px; min-width: 0; max-width: 100%; vertical-align: middle; }
+.thumb { flex: none; width: 40px; height: 40px; border-radius: 6px; object-fit: cover; background: #F1F4F8; border: 1px solid var(--line); }
+.thumb.none { display: inline-grid; place-items: center; color: var(--faint); font-weight: 600; font-size: 14px; }
+.pt { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
+.pl1 { display: flex; align-items: center; min-width: 0; white-space: nowrap; }
+.pl1 .pname { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.pl2 { display: flex; align-items: center; gap: 6px; min-height: 20px; font-size: 12px; color: var(--soft); white-space: nowrap; }
+.psku { font-family: var(--mono); font-size: 11.5px; color: var(--soft); }
+.plinks { display: inline-flex; align-items: center; gap: 2px; }
+.plink { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 5px; color: var(--soft); }
+.plink:hover { background: var(--brand-wash); color: var(--brand); }
+.plink svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.plink.big { display: inline-flex; width: auto; height: 36px; gap: 6px; padding: 0 12px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--card); color: var(--brand); font-weight: 600; font-size: 13px; text-decoration: none; }
+.pnoweb { font-size: 11.5px; color: var(--faint); }
+.phero { display: flex; gap: 16px; align-items: flex-start; padding-right: 36px; }
+.phero .thumb { width: 120px; height: 120px; border-radius: 10px; }
+.phero .thumb.none { font-size: 36px; }
+.pht { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.pht .plinks { gap: 8px; flex-wrap: wrap; }
+.pht .toolbar { margin: 0; }
+.mcard h3 .prod { display: flex; }
+.mcard h3 .thumb { width: 44px; height: 44px; }
+@media (max-width: 759.98px) {
+  .plink { width: 44px; height: 44px; }
+  .plink.big { height: 44px; }
+  .pl2 { gap: 2px; }
+  .phero .thumb { width: 96px; height: 96px; }
+}

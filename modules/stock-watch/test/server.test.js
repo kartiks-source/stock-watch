@@ -178,6 +178,7 @@ test('security headers on every response; cross-site writes → 403 (SW-016)', a
     const r = await s.req(p);
     assert.match(r.headers.get('content-security-policy') || '', /frame-ancestors 'none'/, p);
     assert.match(r.headers.get('content-security-policy'), /script-src 'self'/, p);
+    assert.match(r.headers.get('content-security-policy'), /img-src 'self' data: blob: https:\/\/cdn\.shopify\.com;/, p);   // 1.4.0: product pictures from Shopify's CDN only
     assert.equal(r.headers.get('x-content-type-options'), 'nosniff', p);
     assert.equal(r.headers.get('referrer-policy'), 'no-referrer', p);
     assert.equal(r.headers.get('strict-transport-security'), null, `${p}: no HSTS over plain http`);

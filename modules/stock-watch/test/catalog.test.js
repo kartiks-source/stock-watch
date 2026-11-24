@@ -76,7 +76,8 @@ test('catalog queries are read-only', () => {
 
 test('variants come from the store catalog snapshot (SW-002): product ID and tags read by the stock pull', async () => {
   const node = { id: gid('ProductVariant', 7), sku: 'A', title: 'Default Title', price: '10', inventoryQuantity: 3, inventoryItem: { tracked: true }, product: { id: gid('Product', 70), title: 'Vase', status: 'ACTIVE', productType: 'Vases', tags: ['Gold', 'Diwali'] } };
-  const s = await S.pullStock({}, { now: 123, q: async (doc) => { assert.match(doc, /product \{ id title status productType tags vendor \}/); return { productVariants: { nodes: [node], pageInfo: { hasNextPage: false } } }; } });
+  const s = await S.pullStock({}, { now: 123, q: async (doc) => { if (/query Shop/.test(doc)) return { shop: { myshopifyDomain: 'vase.myshopify.com', primaryDomain: { url: 'https://vase.example' } } }; assert.match(doc, /product \{ id title status productType tags vendor handle/); return { productVariants: { nodes: [node], pageInfo: { hasNextPage: false } } }; } });
+  assert.deepEqual(s.shop, { domain: 'vase.myshopify.com', web: 'https://vase.example' });
   assert.deepEqual(C.fromSnapshot(s.catalog), { variants: { 7: { productId: '70', product: 'Vase', type: 'Vases', tags: ['Gold', 'Diwali'] } }, variantsAt: 123 });
   C.use(tmp());
   const c = C.current('live', s.catalog);
