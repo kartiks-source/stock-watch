@@ -41,6 +41,7 @@ const keyPlus = (key, n) => new Date(Date.parse(`${key}T00:00:00Z`) + n * DAY).t
 const monthOf = (k) => k.slice(0, 7);
 const clamp = (x, [a, b]) => Math.min(b, Math.max(a, x));
 const r2 = (x) => Math.round(x * 100) / 100;
+const r4 = (x) => Math.round(x * 1e4) / 1e4;
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const monthLabel = (m) => `${MON[+m.slice(5, 7) - 1]} ${m.slice(0, 4)}`;
 const dayLabel = (k) => `${+k.slice(8, 10)} ${MON[+k.slice(5, 7) - 1]}`;
@@ -260,6 +261,8 @@ function build(y, catalog = {}, { paceMonths = 6, bestShare = 0.8, links = () =>
     const tp = top.pace;
     out.push({
       productId: p.productId, name: p.name, sku: top.c.sku || '', variantId: top.id, variants: p.variants.length, best: p.best,
+      monthPace: Object.fromEntries(p.variants.map((v) => [v.id, { ...Object.fromEntries(Object.keys(shop).map((m) => [m, r4(v.pace.perDay * seasonFor(v.pace.season, m) / (v.pace.level || 1))])), _: r4(v.pace.perDay * seasonFor(v.pace.season, nowM) / (v.pace.level || 1)) }])),   // 1.4.3: §21 expected pace per month, for the engine's ₹ lost
+      variantPrice: Object.fromEntries(p.variants.map((v) => [v.id, r4(v.price)])),
       ids: p.variants.map((v) => v.id), outFrom: Object.fromEntries(p.variants.map((v) => [v.id, outRun(v.dayMap)])), variantPace: Object.fromEntries(p.variants.map((v) => [v.id, r2(v.pace.perDay * seasonFor(v.pace.season, nowM) / (v.pace.level || 1))])),
       sold: Math.round(p.sold), units: p.units, share: r2(p.share * 100),
       price: Math.round(top.price), pace: { perDay: r2(selling.reduce((s, v) => s + v.pace.perDay, 0)), basis: tp.basis, few: selling.every((v) => v.pace.few), inDays: tp.inDays, months: paceMonths },

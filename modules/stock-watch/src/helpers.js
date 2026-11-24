@@ -62,6 +62,9 @@ const allocationWhy = (level) => `Shopify shows a website allocation (~${level} 
 const weeksText = (p) => (p && p.weeksLive ? `sold in ${p.weeksSold || 0} of ${p.weeksLive} weeks` : null);
 /** §3 floor (1.3.0): a product out the whole time we hold, priced from Shopify's 26 weeks before. */
 const counted = (p) => (p.confidence === 'high' || p.confidence === 'medium') && !p.notRestocked && !p.allocation && p.floorPerDay == null;
+/** ₹ a day a stock-out costs: the money-missed pace (1.4.3: §21's expected pace × its price when the 12 months are read), else
+ *  the sales rate (or the 26-week floor) × the average price paid (LOGIC §15a) */
+const costADay = (p) => Math.round(p.lossPace != null ? (+p.lossPace || 0) * (+p.lossPrice || +p.price || 0) : (+p.perDay || +p.floorPerDay || 0) * (+p.price || 0));
 function why(p, S, now, outSince = null, outLost = null) {
   const off = TZ.zoneOf(S), safety = +S.safetyDays || 0;
   const lead = +(p.leadDays ?? S.leadDays) || 0, assumed = p.leadDays == null ? ' (assumed)' : '';   // the supplier's lead time when set (SW-040); 1.3.0: the store default is a guess, say so
@@ -69,14 +72,14 @@ function why(p, S, now, outSince = null, outLost = null) {
   if (p.status === 'Inactive') { res.why = 'Archived or not tracked'; return res; }
   if (p.status === ALLOCATION_STATUS && p.allocation) {
     res.why = allocationWhy(p.allocation.level);
-    if (p.stock != null && p.stock <= 0) { res.outSince = outSince; res.costPerDay = Math.round((+p.perDay || 0) * (+p.price || 0)); }
+    if (p.stock != null && p.stock <= 0) { res.outSince = outSince; res.costPerDay = costADay(p); }
     return res;
   }
   if (p.status === 'Ordered' && p.onOrder && p.onOrder.eta) { res.why = `Ordered · lands ${dateShort(p.onOrder.eta, off)}`; return res; }
   if (p.stock == null) { res.why = 'No stock data'; return res; }
   if (p.stock <= 0) {
     res.outSince = outSince;
-    res.costPerDay = Math.round((+p.perDay || +p.floorPerDay || 0) * (+p.price || 0));
+    res.costPerDay = costADay(p);
     const h = outSince != null ? Math.max(0, now - outSince) / HOUR : null;
     /* SIMP-6: out at the first stock record we have → it was out before then too; we don't know how long */
     const len = h == null ? '' : p.historyFrom != null && outSince <= p.historyFrom ? ` since before ${dateShort(p.historyFrom, off)}`
