@@ -56,6 +56,7 @@ export default defineRailway(() => {
       PUBLIC_URL: preserve(),
       STOP_WAIT_MS: preserve(),
       SYNC_MINUTES: preserve(),
+      YEAR_CALLS_PER_RUN: preserve(),   // 1.4.0: ShopifyQL reads per pull for the 12-month history
     },
   });
   return project("stock-watch", { resources: [web, data] });

@@ -310,6 +310,26 @@ Goal: each role sees its one decision first, with less on screen than today. See
 - Source: owner, 24 Nov 2026 (business walkthrough).
 - Status: Done 1.2.0 (LOGIC §3, §4, §4c, §5, §11, §15a). Tests `confidence.test.js`, `ui-helpers` §4c. Sammsara 30 d headline ₹3.72 L (5.9%), 7 d ₹77k (7.4%).
 
+## Feature · agency proof (1.4.0, branch `feature/agency-proof`)
+
+**SW-067 · Brand report: best sellers out of stock, month by month, 12 months** (P0 · L · builder)
+- Why: the agency must prove to brands which best sellers were out, when, how long and what it cost, month by month, so it isn't blamed (or paid less) for revenue lost to empty shelves; pace must use 6–12 months, not 30 days.
+- Accept: 12 months from ShopifyQL aggregates only (daily sales + daily 'available' changes per variant, paged under the cap with explicit dates, a few reads per pull, then only new days; skipped without read_reports); days in / out with oversells kept out; pace over in-stock days (6 or 12 months) with a capped seasonal index; money missed per product per month; best sellers = top 80%; page with headline, month chart + table, grid, month list, CSVs, dates and "as of"; no sideways scroll 1280–1920; usable at 390.
+- Source: owner, 24 Nov 2026.
+- Status: Done 1.4.0 (LOGIC §20–§22, `src/year.js`, `src/agency.js`, `public/brand.js`; tests `year`, `agency`, `ui-brand`). Checked live on Sammsara (read-only): sales match ShopifyQL to the paisa; 4 known stock-outs dated right.
+
+**SW-068 · Sell what's in stock: Best sellers now, push / pause ads** (P1 · M · builder)
+- Accept: best sellers now (in / out since, days out and ₹ this month, refill state); push = in stock, selling, enough weeks of stock, by ₹ a day; pause = can't be bought; copy + CSV.
+- Status: Done 1.4.0 (LOGIC §23, `src/sell.js`).
+
+**SW-069 · Product picture and Shopify / website links on every row** (P1 · S · builder)
+- Accept: featured image (CDN, lazy, alt), name + SKU stacked, Open in Shopify / View on website (Not on website when unpublished), 44 px on phones, CSV link columns, CSP img-src cdn.shopify.com.
+- Status: Done 1.4.0 (LOGIC §19, `src/links.js`, `public/prod.js`).
+
+**SW-070 · ₹ lost of long stock-outs at the seasonal 12-month pace** (P1 · S · builder)
+- Status: Done 1.4.0 (LOGIC §21, engine `opts.lossPace`). Sammsara 30 d headline ₹4.95 L → ₹3.94 L.
+- Open (Later): Overview and Stock-outs left out of the rail (still reachable by link); fold their remaining parts into the new pages or remove them; critic round for 1.4.0.
+
 ## Later
 
 Ordered by money impact. Each becomes a full item when pulled into a sprint.

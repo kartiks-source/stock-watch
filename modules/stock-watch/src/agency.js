@@ -23,7 +23,8 @@
  *
  * Money missed (§22): out-of-stock share of each day × expected a day in that month × average price paid (12-month net sales
  * ÷ units, ex GST; list price when it never sold for money). Best sellers = products making the top `bestShare` (80%) of the
- * 12 months' net sales, among products on sale now.
+ * 12 months' net sales, among products on sale now. opts.apart = variant IDs of website allocations (§6): their refill gaps
+ * stay on the product (allocation: true) but out of the month totals and the headline (lostApart).
  */
 const DAY = 864e5;
 const MIN_DAYS = 14;          // in-stock days the pace needs before it widens to 12 months
@@ -143,7 +144,7 @@ function ranges(keys) {
  * The report. catalog = store.catalog ({ variantId → productId, product, variant, sku, price, active, createdAt, … }).
  * opts: { paceMonths = 6, bestShare = 0.8, zone, links: (catalogEntry) → { image, adminUrl, webUrl }, month: 'YYYY-MM' }.
  */
-function build(y, catalog = {}, { paceMonths = 6, bestShare = 0.8, links = () => ({}), dayOf = null } = {}) {
+function build(y, catalog = {}, { paceMonths = 6, bestShare = 0.8, links = () => ({}), dayOf = null, apart = null } = {}) {
   const sp = spanOf(y);
   if (!sp) return { ok: false, reason: !y || !y.anchor ? 'none' : 'short' };
   const keys = dayKeys(sp.from, sp.through);
@@ -154,7 +155,7 @@ function build(y, catalog = {}, { paceMonths = 6, bestShare = 0.8, links = () =>
   for (let i = MONTHS - 1; i >= 0; i--) { const d = new Date(Date.UTC(+lastM.slice(0, 4), +lastM.slice(5, 7) - 1 - i, 1)); monthKeys.push(d.toISOString().slice(0, 7)); }
   const inMonths = new Set(monthKeys);
   /* store sales per month (every sales row: the total Shopify shows) */
-  const months = new Map(monthKeys.map((m) => [m, { key: m, label: monthLabel(m), from: null, to: null, days: 0, sold: 0, units: 0, lost: 0, lostUnits: 0, lostAll: 0, bestOut: 0, daysOut: 0 }]));
+  const months = new Map(monthKeys.map((m) => [m, { key: m, label: monthLabel(m), from: null, to: null, days: 0, sold: 0, units: 0, lost: 0, lostUnits: 0, lostAll: 0, bestOut: 0, daysOut: 0, lostApart: 0 }]));
   for (const k of keys) {
     const m = months.get(monthOf(k)); if (!m) continue;
     const t = (y.sales.all || {})[k] || [0, 0];
@@ -219,6 +220,7 @@ function build(y, catalog = {}, { paceMonths = 6, bestShare = 0.8, links = () =>
       lost: Object.values(pm).reduce((s, x) => s + x.lost, 0), daysOut: r2(Object.values(pm).reduce((s, x) => s + x.daysOut, 0)),
       stockNow: p.variants.reduce((s, v) => s + Math.max(0, Number(y.anchor.levels[v.id]) || 0), 0),
       ...links(top.c),
+      ...(apart && p.variants.some((v) => apart.has(String(v.id))) ? { allocation: true } : {}),
     });
   }
   for (const p of out) {
@@ -226,15 +228,17 @@ function build(y, catalog = {}, { paceMonths = 6, bestShare = 0.8, links = () =>
       const row = months.get(m); if (!row) continue;
       row.lostAll += x.lost;
       if (!p.best) continue;
+      if (p.allocation) { row.lostApart += x.lost; continue; }   // §6: a website allocation's refill gaps, apart
       row.lost += x.lost; row.lostUnits += x.units;
       if (x.daysOut > 0) { row.bestOut++; row.daysOut += x.daysOut; }
     }
   }
-  const mlist = [...months.values()].map((m) => ({ ...m, sold: Math.round(m.sold), lost: Math.round(m.lost), lostAll: Math.round(m.lostAll), lostUnits: Math.round(m.lostUnits), daysOut: r2(m.daysOut), pct: m.sold > 0 ? r2((m.lost / m.sold) * 100) : 0 }));
+  const mlist = [...months.values()].map((m) => ({ ...m, sold: Math.round(m.sold), lost: Math.round(m.lost), lostAll: Math.round(m.lostAll), lostUnits: Math.round(m.lostUnits), lostApart: Math.round(m.lostApart), daysOut: r2(m.daysOut), pct: m.sold > 0 ? r2((m.lost / m.sold) * 100) : 0 }));
   const best = out.filter((p) => p.best);
   const sum = (k) => mlist.reduce((s, m) => s + m[k], 0);
   const headline = { from: mlist.find((m) => m.days)?.from || sp.from, through: sp.through, sold: sum('sold'), lost: sum('lost'), lostAll: sum('lostAll'), daysOut: r2(sum('daysOut')),
-    bestsellers: best.length, bestRanOut: best.filter((p) => p.daysOut > 0).length, pct: 0, unsure: dropped.length };
+    bestsellers: best.length, bestRanOut: best.filter((p) => p.daysOut > 0 && !p.allocation).length, pct: 0, unsure: dropped.length,
+    lostApart: sum('lostApart'), apart: best.filter((p) => p.allocation).length };
   headline.pct = headline.sold > 0 ? r2((headline.lost / headline.sold) * 100) : 0;
   return {
     ok: true, span: { from: sp.from, through: sp.through, days: keys.length }, asOf: { readAt: y.at || null, stockAt: y.anchor.at || null, through: sp.through },

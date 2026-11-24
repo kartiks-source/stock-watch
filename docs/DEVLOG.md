@@ -11,6 +11,16 @@ Older entries: [2026-11](devlog/2026-11.md)
 
 
 
+## 2026-11-24 · 1.4.0 · agency proof (branch `feature/agency-proof`)
+stock-watch 1.4.0 (not pushed, not deployed). Owner: prove to brands which best sellers were out, when, how long, what it cost, month by month; protect the agency from fee deductions; push restocks; sell what's in stock; pace from 6–12 months.
+- **Restructure (owner: "we can rehaul the thing"):** rail = Brand report (home) · Best sellers now · Ads: push / pause · Restock list (= Reorder) · All products · Data. Overview and Stock-outs kept, reachable by `#overview` / `#stockouts`, not in the rail. Engine and APIs unchanged underneath.
+- `src/year.js`: ShopifyQL `sales` + `inventory_adjustment_history` ('available') by day × variant, 365 days, explicit dates (both ends in), reads sized from rows/day under the 1,000 cap, capped read halved, 8 reads per pull, then new days daily; `year.json` per store. ShopifyQL throttles per minute: `gql` now waits for `windowResetAt`. Sammsara first load: 37 reads in 17 s.
+- `src/agency.js`: days in / out / half from the walked-back stock; oversold units out; walks > 2 below min(now, 0) dropped (0 of 253 on Sammsara; with 0 tolerance 14 dropped incl. Kyoto, all at −1/−2 from oversell races); pace 6 months of in-stock days; season blended with the shop's, capped 0.5–2; money missed per month; best sellers top 80%; website allocations apart. `src/sell.js`: best sellers now, push / pause.
+- Engine: long stock-outs (rate basis history / before-out) value ₹ lost at the seasonal pace (`opts.lossPace`), reorder keeps the 28-day rate. 30 d headline ₹4,94,679 → ₹3,93,865.
+- Pictures + links: catalog reads handle, onlineStoreUrl, publishedAt, featured image (320 px CDN), shop primary domain; `src/links.js`, `public/prod.js`; CSP img-src https://cdn.shopify.com.
+- Live check (Sammsara, local server on the worktree, read-only): 12-month sales = ShopifyQL exactly (27,069 units, ₹7,26,86,792.99; every month; Oakwood/Nivaya/Seville/Surrey per product); stock-out dates match the stock log (Oakwood 4 Nov, Nivaya 4–11 Oct + 23 Oct, Seville 11 Oct, Surrey 3 Nov). 12 months: ₹23.0 L missed (3.24%), August worst (₹7.8 L, 29 best sellers).
+- Open: critic round for 1.4.0 not run; the shared dev log page not updated (needs the owner's session); Overview/Stock-outs to fold in or remove; a variant archived during the year drops out of earlier months.
+
 ## 2026-11-24 · 1.2.1 · stale banner, digest cost wording, This month hovers
 stock-watch 1.2.1, on `main` (not pushed, not deployed). Banner uses server `freshness.stale` / `staleAfterMin` (255 min at 2-hour pull), not a hard 45; Ops/Buyer digest "at selling price" without costs; group hovers use the period label. Docs: 15-min pull / 45-min stale → 2 h (`SYNC_MINUTES`) / 255 min; LOGIC §6a describes Plan settings + Advanced planning rules (no Assumptions bar). Tests: digest unit, ui-review banner + hovers.
 

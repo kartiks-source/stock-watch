@@ -110,7 +110,9 @@ A Flow body needs no header row (a first line is treated as a header only if it 
 
 UTF-8 with BOM, every cell quoted, text starting with `= + - @ tab CR` gets a leading `'` (formula guard). File `reorder-YYYY-MM-DD.csv` (store date). Rows: the tab (`filter`) and search (`q`) shown on the page, grouped by vendor A–Z (unknown last), page order within a vendor.
 
-`Vendor, Product, SKU, Variant ID, Order qty, Unit cost, Order value, Status, Why, Order by, Stock now, Sells per day, Days left, Sales lost (₹), Confidence, Not restocked 30+ d (₹)`
+`Vendor, Product, SKU, Variant ID, Order qty, Unit cost, Order value, Status, Why, Order by, Stock now, Sells per day, Days left, Sales lost (₹), Confidence, Not restocked 30+ d (₹), Shopify admin link, Website link`
+
+*Shopify admin link* / *Website link* (1.4.0, LOGIC §19): the product in Shopify admin and on the brand's website; `Not on website` when it isn't on the online store; blank without Shopify.
 
 *Sales lost (₹)* = the product's whole number; *Confidence* = `High` / `Medium` / `Low` (units behind the rate, LOGIC §4c; Low = an estimate, not in the headline); *Not restocked 30+ d (₹)* = the part of it after day 30 of an open stock-out with no PO (not in the headline either) (1.2.0). *Order by* is a store date `YYYY-MM-DD`; *Unit cost* is blank when unknown; *Status* uses the page's labels. *Vendor* = the product's supplier (SKU map, else Shopify vendor, SW-040). `?supplier=<name>` → file `po-<supplier>-<store>-YYYY-MM-DD.csv` with that supplier's lines to order only; `?budget=<₹>` keeps only the rows above the budget cut line (SW-041, LOGIC §6d).
 
@@ -126,6 +128,10 @@ Same BOM and formula guard. Header names match whatever their case and spacing; 
 - Products (`products-YYYY-MM-DD.csv`): the columns and rows shown (with *Confidence*, 1.2.0, when that column is on).
 - Pause promotion (`pause-promotion-YYYY-MM-DD.csv`): `Product, SKU, Variant ID, Why, Back in stock, In stock, Days left`.
 - Push these (`push-these-YYYY-MM-DD.csv`): `Product, SKU, Variant ID, Overstock ₹, In stock, Days left`.
+- 1.4.0: Products, Pause promotion and Push these end with `Shopify admin link, Website link` (LOGIC §19).
+- Brand report, months (`brand-report-months-<through>.csv`): `Month, From, To, Sold ₹ (net, ex GST), Missed ₹ (best sellers), % of sales, Best sellers out, Days out (best sellers), Missed ₹ (all products)` (LOGIC §22).
+- Brand report, one month (`brand-report-YYYY-MM.csv`): `Month, Product, SKU, Variant ID, Best seller, Ran out on, Out-of-stock dates, Days out, Would have sold (units), Pace (units a day, in stock), Average price paid ₹, Money missed ₹, Shopify admin link, Website link`; *Out-of-stock dates* = the store days out (`YYYY-MM-DD`, space separated; half days included).
+- Ads (`push-in-ads-YYYY-MM-DD.csv`): `Product, SKU, Variant ID, Best seller, Sells (units a day), In stock, Weeks of stock, ₹ a day it can sell, Shopify admin link, Website link`; (`pause-ads-YYYY-MM-DD.csv`): `Product, SKU, Variant ID, Best seller, In stock, Days left, Back in stock, Sells (units a day), Shopify admin link, Website link` (LOGIC §23).
 
 ## Kept in the browser (per browser, never on the server)
 
@@ -158,6 +164,7 @@ Several stores (ADR-0015): each store's files are in its own folder, `DATA_DIR/s
 | `lists.json` | `src/lists.js` via `src/sidefile.js` (SW-044) | `{ [id]: { name, items: [string], at, by } }`: saved product lists (SKUs / names / variant IDs as pasted); `id` = the name in lower case, spaces as `-` | yes, as `sideFiles['lists.json']` |
 | `onorder.json.bak`, `decisions.json.bak`, `suppliers.json.bak`, `….corrupt-<time>` | `src/sidefile.js` | the previous good save (used when the file can't be read), and a copy of an unreadable file left for a human; with neither good, the app refuses to start (critic r2 X1) | no |
 | `mappings.json` | `src/csvmap.js` (temp + rename) | `{ sets: { [key]: { kind: 'stock'\|'order', map: { <our column>: <their header>\|'@now'\|'@sku'\|'@options'\|'' }, at } } }`: the column mapping last used for a set of CSV headers (key = first 20 hex of sha256 of the sorted, lower-cased header names); newest 50 kept. An unreadable file is set aside as `mappings.json.corrupt-<time>` and starts empty (SW-045) | no (one re-pick if lost) |
+| `year.json` | `src/year.js` via `src/sidefile.js` (1.4.0, LOGIC §20) | below | no: it is Shopify's own reports, read again in a few pulls (an unreadable file is treated as empty and read again) |
 | `catalog.json` | `src/catalog.js` (temp + rename) | `{ collections: { [collectionId]: { title, productIds[] } }, collectionsAt, pending, lastError, variants, variantsAt }`: Shopify collections cache for Group by, re-read daily; `pending` = a resumable read in progress | no (rebuilt from Shopify within a day) |
 | `backups/store-YYYYMMDD.json`, `backups/store-YYYYMMDD-HHMMSS-<why>.json` | `src/backup.js` | copies of `store.json` plus `sideFiles: { 'onorder.json', 'decisions.json', 'suppliers.json' }` (`why` = `before-clear`, `before-demo`, `before-restore`); newest 14 of each kind | — |
 | `restore.json` | a human | a `store.json` to put in place at the next start (`docs/RUNBOOK.md`) | — |
@@ -188,13 +195,15 @@ Outside `DATA_DIR`, in the app folder: `BUILD_SHA` (optional, SW-056): one line,
   "reversals": "?[ { id: '<refund line ID>|c<line ID>', t: 0, order: '#1001', variantId: '', qty: 1, value: 0, kind: 'refund|cancel' } ]",   // Shopify pull only, 1.1.5
   "catalog": { "<variantId>": { "productId": "", "product": "", "variant": "", "sku": "", "type": "", "vendor": "", "tags": [],
                 "price": 0, "cost": null, "status": "ACTIVE|ARCHIVED|DRAFT|UNTRACKED|DELETED", "tracked": true, "active": true,
-                "stock": 0, "seenAt": 0, "inactiveSince": "?",
+                "stock": 0, "seenAt": 0, "inactiveSince": "?", "createdAt": "?0",
+                "image": "?https://cdn.shopify.com/…", "handle": "?", "web": "?https://…", "published": "?true",
                 "spells": "?[ { from: 0, to: 0, status: 'DRAFT' } ]" } },
   "source": "empty|demo|live", "everLive": true,
   "lastSync": null, "lastSyncError": null,
   "shopify": { "lastQty": { "<variantId>": 0 }, "ordersCursor": null, "lastSync": null, "lastError": null, "lastTry": null, "writeScopes": "?['write_products']",
                "priceBasis": "?'exTax'",
                "orderFields": "?'reversals'",
+               "shopInfo": "?{ domain: 'brand.myshopify.com', web: 'https://www.brand.com' }",
                "historyRebuiltAt": "?0", "history": "?{ at, v, ok, kept, total, changed, flat, dropped, droppedLog, droppedCheck, check: { lines, bad, badUnits, variants }, from, until, rows, calls, note }" },
   "settingsLog": [ { "at": 0, "by": "admin|view|admin (script)|server (env)", "key": "leadDays|…|digest.hour|digest.roles|digest.paused|digest.webhook", "old": 7, "new": 10 } ],
   "syncRuns":    [ { "kind": "shopify|sheet", "start": 0, "ms": 0, "stock": 0, "orders": 0, "lines": 0, "error": null, "notes": [] } ],
@@ -206,6 +215,7 @@ Outside `DATA_DIR`, in the app folder: `BUILD_SHA` (optional, SW-056): one line,
 - Times are ms since 1970 (UTC). `"?"` marks an optional key. `before` may be `null` (unknown).
 - Rows older than 120 days are pruned, except per variant the newest stock row and the row that opened a stock-out still running (ADR-0010).
 - `catalog` is Shopify only, replaced whole on every stock pull; a variant that disappears stays as `DELETED` until it is 120 days gone. `spells` (optional) are the variant's past inactive spells, added when it turns active again (from = `inactiveSince`, to = the pull that saw it active); at most 20, each dropped 120 days after it ends (LOGIC §1). Older files without it load as before.
+- Catalog `image`, `handle`, `web`, `published` and `shopify.shopInfo` (1.4.0, LOGIC §19): the product's featured image (Shopify CDN URL, 320 px wide, `https://cdn.shopify.com` only), its handle, its `onlineStoreUrl` (only when on the online store), whether it has a publish date; the shop's `*.myshopify.com` domain and primary domain. Read by the stock pull; optional, older files load as before. Settings gain `paceMonths` (6) and `bestShare` (80) (LOGIC §21, §22).
 - `settingsLog` keeps 200 entries, newest first; the ingest key shows as `(old key)` → `(new key)`. `syncRuns` keeps 20. `digest.log` keeps 50.
 - `shopify.writeScopes` (optional, SW-051): the `write_*` scopes the last pull's token had; only ever non-empty for Performity's token (our own apps with one are refused), shown on Data as "Token also allows writes; this app only reads". Older files without it load as `[]`.
 - `src: 'rebuilt'` stock rows (SW-063, LOGIC §1c): stock before the store's first Shopify read, rebuilt from Shopify's change log; same fields as a pulled row, only times before the first live row; replaced whole on each rebuild (`store.setRebuilt`). `shopify.historyRebuiltAt` (optional) = when the rebuild last ran (set even when it was skipped, so it runs once per store; reset with the rest of `shopify` by Clear / demo); `shopify.history` = its outcome (`v` = rules version, `history.VERSION`, 2 since 1.1.1; a file without `v` or with an older one is rebuilt on the next pull; `kept` of `total` variants; `dropped` = `droppedLog` (rebuilt stock below min(stock at the first read, 0)) + `droppedCheck` (failed the order check); `check` = order lines in the rebuilt span, how many fell inside a rebuilt stock-out with no logged drop, their units, and the variants they hit; `from`/`until` = rebuilt span; `note` = why it was skipped, refused (check over 1%) or the last re-run failed). Older files without them load as before; no schema bump.
@@ -214,3 +224,23 @@ Outside `DATA_DIR`, in the app folder: `BUILD_SHA` (optional, SW-056): one line,
 - `reversals` (1.1.5, LOGIC §9e), Shopify pull only: one event per refund line (`t` = the refund's `createdAt`, `qty` its units, `value` its subtotal after discounts less its tax when the order's prices include tax, ₹ ex GST, 2 decimals) and, for a cancelled order, one per line for the units no refund line covers (`id` = `c<line ID>`, `t` = `cancelledAt`, `value` = units × price paid ex GST); a refund made after the cancellation adds none. `kind`: `cancel` (order cancelled, or restock type `CANCEL`) or `refund`. Every read of an order replaces its events whole (`store.replaceReversals`), one per `id`, older than 120 days dropped. Absent until the first pull that reads them (the engine then counts reversals by order date from the lines). `shopify.orderFields: 'reversals'` (1.1.5) marks a store whose events are read; `'refunds'` (1.1.3–1.1.4) or older empties `reversals` and clears `ordersCursor` once (the 60-day backfill, now including older orders updated in the 60 days, is read again). Clear all data / demo remove the key. No schema bump (optional key).
 - Keys starting with `_` are in-memory indexes and never written.
 - A file is accepted as a store when it is a JSON object with `stock` and `orders` arrays (restore also needs `settings`).
+
+### `year.json` (1.4.0, `src/year.js`, LOGIC §20)
+
+```
+{
+  "v": 1, "zone": "Asia/Kolkata", "days": 365, "at": 0, "triedAt": 0, "ok": true, "done": true, "note": null, "error": "?",
+  "sales":  { "from": "YYYY-MM-DD", "to": "YYYY-MM-DD", "perDay": 31.2,
+              "by":  { "<variantId>": { "YYYY-MM-DD": [units, net ₹] } },
+              "all": { "YYYY-MM-DD": [units, net ₹] } },
+  "moves":  { "from": "YYYY-MM-DD", "to": "YYYY-MM-DD", "perDay": 33.1,
+              "by":  { "<variantId>": { "YYYY-MM-DD": change } } },
+  "anchor": { "at": 0, "day": "YYYY-MM-DD", "levels": { "<variantId>": stock } },
+  "calls":  { "last": 37, "total": 37, "runs": [ { "at": 0, "n": 37, "ms": 16898 } ] }
+}
+```
+
+- `sales.by` = ShopifyQL `net_items_sold` and `net_sales` per variant per store day (ex GST, returns on the day they happened, so a day can be negative); `sales.all` = every row of the day, the rows without a variant too: the store total Shopify shows. `moves.by` = the day's net 'available' stock change. `from` / `to` = the oldest / newest store day read in full; today is held too and read again next time. A window read replaces its days whole.
+- `anchor.levels` = the catalog's stock at the read (`at` = the pull's time), `anchor.day` = that store day; stock at the end of an earlier day = level − the changes after it.
+- `perDay` = rows per day of the last read (sizes the next read). `calls.runs` keeps 30.
+- A different `v`, time zone or span is read again from scratch. Clear all data empties it.

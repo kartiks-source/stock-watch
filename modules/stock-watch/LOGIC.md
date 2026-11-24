@@ -10,7 +10,7 @@ The code is in `src/engine.js`, which has no inputs or outputs of its own, so ev
 
 If you change a rule, change this file in the same commit and add a line to `docs/DEVLOG.md`.
 
-**Index** (find the section, read only that): §0a store time zone · §1 what goes in (rows, catalog, §1a CSV/Sheet/Flow, §1c stock history rebuilt from Shopify, what counts as a sale) · §2 stock-out episodes · §3 sales per day · §4 ₹ lost (§4a hour profile, §4b example, §4c how sure ₹ lost is) · §5 Overview totals (§5a periods: N calendar days, This month, Yesterday) · §6 reorder status and qty (§6a assumptions + typing, §6b Mark ordered) · §7 slow sellers (§7a A/B/C, §7b profit, §7c overstock, §7d trend) · §8 restocking · §9 Products columns (§9a/§9b Group by, §9e cancel/refund %, check against Shopify) · §10 demo · §11 known limits · §12 Google Sheet differences · §13 view-only + change log · §14 sync runs (§14a capacity + data folder lock) · §15 decision helpers (§15a–d) · §16 role views · §17 morning digest · §18 several stores.
+**Index** (find the section, read only that): §0a store time zone · §1 what goes in (rows, catalog, §1a CSV/Sheet/Flow, §1c stock history rebuilt from Shopify, what counts as a sale) · §2 stock-out episodes · §3 sales per day · §4 ₹ lost (§4a hour profile, §4b example, §4c how sure ₹ lost is) · §5 Overview totals (§5a periods: N calendar days, This month, Yesterday) · §6 reorder status and qty (§6a assumptions + typing, §6b Mark ordered) · §7 slow sellers (§7a A/B/C, §7b profit, §7c overstock, §7d trend) · §8 restocking · §9 Products columns (§9a/§9b Group by, §9e cancel/refund %, check against Shopify) · §10 demo · §11 known limits · §12 Google Sheet differences · §13 view-only + change log · §14 sync runs (§14a capacity + data folder lock) · §15 decision helpers (§15a–d) · §16 role views · §17 morning digest · §18 several stores · **1.4.0 agency pages:** §19 product picture and links · §20 12 months from Shopify (days in / out) · §21 pace and season · §22 money missed by month, best sellers · §23 best sellers now, push / pause ads.
 
 ---
 
@@ -236,7 +236,7 @@ All of its ₹ lost goes to **not restocked** (§4c; an estimate when a PO is ma
 **Why 28 days:** four full weeks, so every weekday counts equally, and it's recent enough to follow a trend. We considered 7 days (too jumpy for slow sellers) and 90 days (too slow to react to a season or a campaign).
 
 **When it can be wrong:**
-- **Seasonal peaks:** right after a festive peak such as Diwali the rate is still high, so it may over-order for a week or two. Shorten the window during a known peak if needed. Long stock-outs are worse: their rate comes from the last in-stock stretch (*history*), which on Sammsara (24 Nov) is late Sep–Oct, the pre-Diwali rush, for about half of the counted ₹ lost; the store now sells about 14% slower, so read those rows as a ceiling.
+- **Seasonal peaks:** right after a festive peak such as Diwali the rate is still high, so it may over-order for a week or two. Shorten the window during a known peak if needed. Long stock-outs were worse: their rate comes from the last in-stock stretch (*history*), which on Sammsara (24 Nov) is late Sep–Oct, the pre-Diwali rush, for about half of the counted ₹ lost. **Since 1.4.0 (§21), with Shopify's 12 months read, ₹ lost on those rows uses the 6-month in-stock pace × this month's season instead** (`lossPace` on the row); the order quantity keeps this section's rate.
 - **New products** with only a few days of data: the rate is noisy. Use the product's stock chart before trusting the order quantity.
 
 ---
@@ -800,6 +800,7 @@ The demo exists to show the screens with realistic shape. Its numbers say nothin
 - One time zone per store (§0a); a store selling across zones still sees its own clock only.
 - Group by: collection membership can be up to 24 hours old; tag and collection rows overlap, so they have no grand total (section 9a).
 - Stock before the first Shopify read is rebuilt from Shopify's change log, to the hour, 60 days back; variants whose log doesn't add up are left out (§1c).
+- The brand report (§20–§22) works on whole store days: a day is in stock, out, or half (it ran out or came back that day); only products on sale now are counted, so a best seller archived during the year drops out of earlier months.
 
 **By source** (what counts as a sale is in section 1):
 
@@ -1003,3 +1004,80 @@ No number changes. Who can open which store:
 - A person's page: the picker lists only their stores; the store in the address must be one of theirs (else "This store isn’t open to your sign-in", 403); a store remembered on the browser that isn't theirs opens their first store instead. The digest, CSV and backup are per store, so the same rule covers them.
 - The change log (§13) names the person ("Meera"), not the role.
 - Why: one brand's people must not see another brand's sales (multi-store spec, 20 Nov). Considered: one password per store (no names, can't revoke one person), Performity SSO (SW-060, not available yet). Limits: no email or self-service reset (the owner hands out a new password); the morning digest webhooks are still per store and set on the server, not per person.
+
+
+---
+
+# 1.4.0: the agency's pages
+
+Who they are for (`.claude/skills/agency-perspective`): the agency that runs a brand's ads. They answer: which best sellers ran out, on which days, for how long, and what that cost, month by month; what to push in ads now and what to pause.
+
+## 19. Product picture and links (`src/links.js`, `public/prod.js`)
+
+**Rule:** every product row (Brand report lists, Best sellers now, Ads, Restock list, All products, Stock-outs, the drawer) shows the product's picture on the left (40 px, 44 px on phone cards, 120 px in the drawer), the name and product code (SKU) stacked to its right, and two links that open in a new tab:
+- **Open in Shopify** = `https://admin.shopify.com/store/<shop handle>/products/<product ID>`; shop handle = the `*.myshopify.com` name.
+- **View on website** = the product's `onlineStoreUrl` (Shopify sets it only when the product is on the online store); else, for an active product with a publish date, `<shop primary domain>/products/<handle>`; else **Not on website** (draft, archived, or not on the online store) instead of a broken link.
+- Picture = the product's featured image from Shopify's CDN at 320 px wide (`https://cdn.shopify.com` only; the page's CSP allows images from there and nowhere else), lazy-loaded, alt = the product name. No picture (demo, Flow, Sheet, CSV) → a neutral box with the first letter.
+- All read by the same read-only stock query (`handle onlineStoreUrl publishedAt featuredMedia`) plus `shop { myshopifyDomain primaryDomain }` once per pull; stored in the catalog. CSVs carry two columns: *Shopify admin link*, *Website link*.
+
+**Why:** the brand recognises products by picture, not by name; the agency jumps to the product to check stock or the page. **Considered:** variant images (most products have one variant; the product picture is what shoppers see first). **Can be wrong:** a product published to the online store after the last pull shows "Not on website" until the next pull.
+
+## 20. 12 months from Shopify: which days each product was in stock (`src/year.js`, `src/agency.js`)
+
+**What is read** (Admin API 2025-10, scope `read_reports`, no order download):
+
+> `FROM sales SHOW net_items_sold, net_sales GROUP BY day, product_variant_id SINCE 2025-11-25 UNTIL 2025-12-20 …`
+> `FROM inventory_adjustment_history SHOW inventory_adjustment_change WHERE inventory_state = 'available' GROUP BY day, product_variant_id SINCE … UNTIL …`
+
+- The last 365 store days, today included. Dates are explicit and **both ends are included** (checked again on Sammsara, 24 Nov 2026: `SINCE 2026-11-14 UNTIL 2026-11-14` returns that one day; relative `UNTIL -Nd` leaves day N out, §1c).
+- **Paging:** at most 1,000 rows a query. Each read is sized from the rows per day of the read before (about 800 rows, at most 62 days); one that comes back with 1,000 rows is read again in halves; a single day over 1,000 stops with a note.
+- **Pacing:** each ShopifyQL read uses a large share of Shopify's query budget and ShopifyQL is limited per minute (a throttled read waits for `windowResetAt`). So a run makes at most 8 reads (`YEAR_CALLS_PER_RUN`) in at most 4 minutes after a pull and carries on at the next pull; both streams step back together, newest first, so the newest months are usable first. Once complete, one run a day reads only the days since the last read (the last day held and today again: 2 reads). Data → *Read 12 months now* (admin) allows 60 reads. Every read is counted (Data line, `year.json` `calls`, the log line names each window).
+- **Never fails a pull:** without `read_reports`, or on any error, a plain note on Data; the brand report then uses the rows we hold (up to 120 days) and says so.
+
+**Days in / out (per variant):**
+> stock at the end of day d = stock at the read − the 'available' changes logged after d
+
+- Start of a day = end of the day before. **In stock** (1): start > 0 and end > 0. **Out** (0): start ≤ 0 and end ≤ 0, unless it sold more units that day than it oversold (then it was refilled and sold out again inside the day: in stock). **Half a day** (½): it ran out or came back that day.
+- **Oversold units** = how far the day pushed stock further below 0. An order that takes 0 to −1 is a checkout race (Sammsara denies selling at 0, §2): the shelf was still empty; those units never count in the pace.
+- **Broken walks:** a variant whose walk goes more than 2 below min(stock now, 0) is left out ("unsure", counted on the page). *Why 2 and not 0 as in §1c:* over a year a best seller may sit at −1 or −2 after a race until someone corrects it; with 0, 14 of 253 Sammsara variants were dropped, Kyoto Round Nesting Table among them (−1 in March). With 2: 0 dropped.
+- A variant created inside the 12 months counts from its first day in stock (not "out" before it launched). Only variants on sale now (active, tracked) are counted.
+
+**Why days, not hours:** a year by hour is about 10× the reads; the month-by-month proof needs dates, not hours. The hourly rebuild (§1c) still times the stock-outs of the last 60 days on the other pages.
+
+**Checked on Sammsara (24 Nov 2026, read-only, 37 reads in 17 s):** the stored sales add up to Shopify's own totals for 25 Nov 2025 – 23 Nov 2026 exactly: 27,069 units, ₹7,26,86,792.99 net sales; every month Dec 2025 – Nov 2026 equals `GROUP BY month` to the paisa; per product: Oakwood Table Set of 2 156 units / ₹7,98,030, Nivaya Table Set of 2 110 / ₹5,21,346, Seville Nesting Table Set of 3 33 / ₹1,84,918, Surrey Drink Table 6 / ₹31,019 = Shopify's `GROUP BY product_title`. Stock-out dates against the store's stock log: Oakwood out 4–23 Nov (log: from 4 Nov 18:00 IST, so 4 Nov is a half day); Nivaya 4–11 Oct and 23 Oct – 23 Nov (log: 4–11 Oct, from 23 Oct 07:00); Seville 11 Oct – 23 Nov (log: from 11 Oct 15:00); Surrey Drink Table 3–23 Nov (log: from 3 Nov 16:00).
+
+## 21. Pace (how fast it sells) and the season
+
+**Pace** = units sold ÷ days in stock, over the **last 6 months** (setting *Brand report: months of pace*, 6 or 12), oversold units out. Fewer than 14 in-stock days in those months → the 12 months; fewer than 7 → divided by 7 at least. Shown as a day, a week and a month ("0.29 a day, about 2 a week, 9 a month").
+
+**Season** (per variant, per calendar month):
+> index(m) = its in-stock pace in month m ÷ its 12-month in-stock pace
+
+- Blended with the **shop's** index for that month (units a day that month ÷ units a day over the year) by its in-stock days that month: weight d ÷ (d + 14). Under 7 in-stock days that month, or under 12 units sold in the year → the shop's index. Capped 0.5–2.0.
+- **Expected a day in month m** = pace × index(m) ÷ the average index of the days the pace was measured on. So a 6-month pace measured over the Diwali rush isn't applied to a quiet January.
+
+**Where it is used:** the brand report (§22), the drawer, the Ads lists (§23), and since 1.4.0 the **₹ lost of long stock-outs** on every other page: a row whose 28-day rate comes from an older in-stock stretch (§3 *history* / *before-out*) values its stock-out at this month's expected pace (`lossPace`). Sammsara, 30 days to 24 Nov: headline ₹4,94,679 → ₹3,93,865 (31 rows); Nivaya ₹67,293 → ₹37,577 (0.45 a day, its October pace, → 0.25 a day for November).
+
+**Reorder keeps the 28-day rate (§3).** *Why:* the order quantity must follow what sells now (a campaign, a new photo); a 6-month pace lags both ways. The 28-day rate already removes out-of-stock days. Only when it has to look back past the window (long stock-outs) did it borrow an old season; that is the case fixed above. *Considered:* the 6-month pace for reorder too (smooth, but slow after a change); the season on the 28-day rate (one month of a season says little).
+
+**Can be wrong:** a product's own months are noisy when it sells a few a month (hence the blend); the season is last year's: a festival on different dates this year shifts its month.
+
+## 22. Money missed by month, best sellers (Brand report)
+
+> money missed in month m = Σ over its days (out share of the day × expected a day in m) × average price paid
+> average price paid = 12-month net sales ÷ net units (ex GST, after discounts); the list price when it never sold for money
+
+- **Best sellers** = products (variants summed) making the top **80%** of the 12 months' net sales among products on sale now (setting *Best sellers: products making this % of sales*; a product counts while the share before it is under 80%, as §7a).
+- **Month table:** sold (Shopify's net sales that month, every sales row, so it matches Shopify exactly), money missed on best sellers, % of sales, best sellers that ran out, days out (best sellers, added up), and money missed on all products (CSV).
+- **Headline:** "Best sellers ran out on N days in the last 12 months. Money we missed: about ₹X. That is Y% of what the brand sold (₹Z), <dates>." N = days out added up over best sellers (half days count ½). The 12 months = the 12 calendar months ending with this month, to yesterday.
+- **Grid:** each best seller × month: days out (darker = longer) and the ₹ in the hover; tap a month → the list: picture, name, code, links, the dates it was out ("4–11 Oct, 23–31 Oct"), days out, "would have sold about N", money missed. CSV of the month table and of the list.
+- **Numbers as of:** sales up to yesterday; stock read at the time shown.
+- **Sammsara, 12 months to 23 Nov 2026:** best sellers (41 products) ran out on 943 days; ₹23.0 lakh missed = 3.24% of ₹7.11 Cr sold. Worst month August 2026: 29 best sellers out for 277 days, ₹7.8 lakh (12.9%).
+
+**Why best sellers only in the headline:** the brand can't argue with them (they sell every month), and they are what the agency's ads push. All products' missed money is in the CSV. **Why at the price paid:** the brand's own sales report is net sales, so the two compare. **Can be wrong:** substitutes (a shopper buys a similar table instead) make it an upper bound, as §4.
+
+## 23. Best sellers now; push / pause ads (`src/sell.js`)
+
+- **Best sellers now:** each best seller (§22): in stock (pieces) or out since when (any selling option out = out), days out and money missed this month (§22), how fast it sells (§21), refill: ordered (lands …), order N now, not ordered, enough stock. Out first, then money missed this month. Opening a row gives *Mark ordered* (§6b).
+- **Push in ads:** in stock, selling (pace > 0), and at least max(21 days, lead time + buffer) of stock at its pace, so ads won't empty the shelf; most money a day first (pace × price). **Pause ads:** the Pause list of §15c (out now, or runs out before a refill can land), only items that sell; best sellers first, then money a day. Copy list (code + name) and CSV, with links.
+- Pace = the brand report's pace for this month (§21) when Shopify's 12 months are read, else the 28-day rate (§3).

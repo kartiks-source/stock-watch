@@ -76,6 +76,8 @@
     return `<svg class="bchart" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Sold and money missed each month">${ticks.join('')}${bars}</svg>`;
   }
   function niceStep(x) { const p = 10 ** Math.floor(Math.log10(Math.max(1, x))); const m = x / p; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * p; }
+  /** §6: a website allocation refilled from the warehouse: its gaps are not counted in the totals */
+  const topUp = (p) => (p.allocation ? '<span class="best tu" title="Shopify shows a few pieces topped up from the warehouse: these gaps are refill waits, not counted in the totals (LOGIC §6)">website top-up</span>' : '');
   const heat = (d) => (d <= 0 ? 0 : d < 3 ? 1 : d < 8 ? 2 : d < 15 ? 3 : 4);
 
   function brandView() {
@@ -95,7 +97,7 @@
       <section class="headline brand-h">
         <h1>Best sellers ran out on <span class="lost">${inr.format(Math.round(h.daysOut))} days</span> ${when}.</h1>
         <p class="lead">Money we missed: about <b class="lostv">${money(h.lost)}</b>. That is ${h.pct}% of what the brand sold (${money(h.sold)}), ${span(h.from, h.through)}.</p>
-        <p class="muted small">${h.bestRanOut} of ${h.bestsellers} best sellers ran out. Best sellers = the products that make ${bestShare()}% of sales. Sales up to ${dayY(b.asOf.through)}; stock read ${b.asOf.stockAt ? esc(A.dt(b.asOf.stockAt)) : '–'}.${h.unsure ? ` ${h.unsure} product${h.unsure === 1 ? '' : 's'} left out: Shopify’s stock log doesn’t add up for ${h.unsure === 1 ? 'it' : 'them'}.` : ''}</p>
+        <p class="muted small">${h.bestRanOut} of ${h.bestsellers} best sellers ran out.${h.lostApart ? ` Not counted: ${rs(h.lostApart)} while ${h.apart} website top-up item${h.apart === 1 ? '' : 's'} waited for a warehouse refill.` : ''} Best sellers = the products that make ${bestShare()}% of sales. Sales up to ${dayY(b.asOf.through)}; stock read ${b.asOf.stockAt ? esc(A.dt(b.asOf.stockAt)) : '–'}.${h.unsure ? ` ${h.unsure} product${h.unsure === 1 ? '' : 's'} left out: Shopify’s stock log doesn’t add up for ${h.unsure === 1 ? 'it' : 'them'}.` : ''}</p>
         ${stale}
         <details class="how exp"><summary>How we count</summary><p>A day is “out” when the shelf was empty all day: nobody could buy it. Half a day when it ran out or came back that day. “Would have sold” = how fast it sells on days it is in stock (last ${(b.settings || {}).paceMonths || 6} months), made busier or quieter for the month (Diwali sells more than June). Money missed = would have sold × the price people paid. All from Shopify’s own sales and stock reports, so every number can be checked there.</p></details>
       </section>
@@ -108,7 +110,7 @@
       </div>
       <div class="panel"><div class="panel-head"><h2>Which best sellers ran out, and when</h2><span class="muted small">Days the shelf was empty each month. Darker = longer. Tap a month to see the list.</span></div>
         ${best.length ? `<div class="heat" style="--mcols:${ms.length}"><div class="hrow hhead"><span></span>${ms.map((m) => `<button class="hm${m === sel ? ' on' : ''}" data-month="${m}" title="${esc(monthName(m))}">${mShort(m)}</button>`).join('')}<span class="r">Missed</span></div>
-          ${best.slice(0, all).map((p) => `<div class="hrow"><span class="hp" data-product="${esc(p.variantId)}" tabindex="0" role="button">${SW_PROD.cell(p, { size: 32 })}</span>${ms.map((m) => { const x = p.months && p.months[m]; const d = x ? x.daysOut : 0; return `<span class="hc h${heat(d)}${m === sel ? ' on' : ''}" data-month="${m}" title="${esc(x && d ? `${p.name}: out ${nDays(d)} in ${monthName(m)} (${x.range}). About ${exact(x.lost)} missed.` : `${p.name}: in stock all of ${monthName(m)}`)}">${d ? Math.round(d) || '½' : ''}</span>`; }).join('')}<span class="r hv"><b class="lostv">${money(p.lost)}</b></span></div>`).join('')}
+          ${best.slice(0, all).map((p) => `<div class="hrow"><span class="hp" data-product="${esc(p.variantId)}" tabindex="0" role="button">${SW_PROD.cell(p, { size: 32, extra: topUp(p) })}</span>${ms.map((m) => { const x = p.months && p.months[m]; const d = x ? x.daysOut : 0; return `<span class="hc h${heat(d)}${m === sel ? ' on' : ''}" data-month="${m}" title="${esc(x && d ? `${p.name}: out ${nDays(d)} in ${monthName(m)} (${x.range}). About ${exact(x.lost)} missed.` : `${p.name}: in stock all of ${monthName(m)}`)}">${d ? Math.round(d) || '½' : ''}</span>`; }).join('')}<span class="r hv"><b class="lostv">${money(p.lost)}</b></span></div>`).join('')}
           ${best.length > 12 ? `<div class="more"><button class="btn ghost" id="brand-all">${S().brandAll ? 'Show the top 12' : `Show all ${best.length}`}</button></div>` : ''}</div>` : '<p class="muted">No best seller ran out in these months.</p>'}
       </div>
       ${monthDetail(b, sel)}`;
@@ -123,10 +125,10 @@
     if (!m) return '';
     const mm = b.months.find((x) => x.key === m) || {};
     const rows = monthRows(b, m);
-    const lost = rows.reduce((s, p) => s + p.x.lost, 0);
+    const lost = rows.reduce((s, p) => s + (p.allocation && !S().brandMonthAll ? 0 : p.x.lost), 0);
     const lead = rows.length ? `${monthName(m)}: ${rows.length} ${S().brandMonthAll ? 'product' : 'best seller'}${rows.length === 1 ? '' : 's'} ran out. We missed about ${rs(lost)}.` : `${monthName(m)}: no ${S().brandMonthAll ? 'product' : 'best seller'} ran out.`;
     const cols = [
-      { k: 'name', label: 'Product', f: (p) => A.nameCell(p, false) },
+      { k: 'name', label: 'Product', f: (p) => SW_PROD.cell(p, { extra: topUp(p) }) },
       { k: 'range', label: 'Ran out on', f: (p) => `<span class="rng" title="${esc(p.x.range)}">${esc(p.x.range)}</span>`, val: (p) => p.x.dates[0] || '' },
       { k: 'daysOut', label: 'Days out', r: 1, f: (p) => inr.format(Math.round(p.x.daysOut * 2) / 2), val: (p) => p.x.daysOut },
       { k: 'units', label: 'Would have sold', r: 1, tip: 'How fast it sells on days it is in stock, for this month', f: (p) => `<span title="${(Math.round(p.x.units * 10) / 10).toLocaleString('en-IN')} at ${pace(p.pace.perDay)}">about ${units(p.x.units)}</span>`, val: (p) => p.x.units },

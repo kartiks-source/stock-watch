@@ -602,10 +602,10 @@ async function storeApi(req, res, url, role, id) {
   const S0 = { ...engine.DEFAULT_SETTINGS, ...d.settings };
   const brandOpts = () => ({ paceMonths: Math.round(+S0.paceMonths || 6), bestShare: (+S0.bestShare || 80) / 100, dayOf, links: (c) => links.of(c, shopLinks()) });
   if (p === '/api/brand' && req.method === 'GET') {
-    const b = brandData(), r = agency.build(b.y, b.cat, brandOpts());
-    for (const x of r.products || []) { x.name = x.name || x.sku; if (b.cat[x.variantId] && b.cat[x.variantId].variant && x.variants === 1) x.name = `${x.name} · ${b.cat[x.variantId].variant}`; }
-    /* 1.4.0 (§23): best sellers now and the ads lists, from today's report (30 days, saved settings) */
+    /* 1.4.0 (§23): today's report (30 days, saved settings): best sellers now, ads, and website allocations (§6, kept apart) */
     const rep = links.annotateReport(helpers.enrich(engine.report(d.stock, d.orders, d.settings, reportOpts({ days: 30, from: undefined }))), d.catalog, shopLinks());
+    const b = brandData(), r = agency.build(b.y, b.cat, { ...brandOpts(), apart: new Set(rep.products.filter((x) => x.allocation).map((x) => String(x.id))) });
+    for (const x of r.products || []) { x.name = x.name || x.sku; if (b.cat[x.variantId] && b.cat[x.variantId].variant && x.variants === 1) x.name = `${x.name} · ${b.cat[x.variantId].variant}`; }
     const month = r.ok ? r.months[r.months.length - 1].key : null;
     const now = r.ok ? sell.bestNow(r, rep.products, month) : [];
     const adl = sell.ads(r.ok ? r : null, rep.products, { ...engine.DEFAULT_SETTINGS, ...d.settings });

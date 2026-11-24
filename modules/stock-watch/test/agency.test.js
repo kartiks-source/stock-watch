@@ -152,3 +152,13 @@ test('engine: a long stock-out (rate from an older stretch) values ₹ lost at t
   assert.equal(p1.perDay, p0.perDay, 'the reorder rate stays');
   assert.equal(p1.orderQty, p0.orderQty);
 });
+
+test('a website allocation (§6) keeps its gaps on the product but out of the month totals and the headline', () => {
+  const y = yearOf({ from: '2026-11-01', today: '2026-11-10', levels: { 1: 0, 2: 0 }, sales: { 1: { '2026-11-02': 5 }, 2: { '2026-11-02': 5 } }, moves: { 1: { '2026-11-02': -5 }, 2: { '2026-11-02': -5 } } });
+  const r = A.build(y, cat(['1', '2']), { apart: new Set(['2']) });
+  const p1 = r.products.find((p) => p.productId === 'p1'), p2 = r.products.find((p) => p.productId === 'p2');
+  assert.equal(p2.allocation, true); assert.ok(p2.lost > 0);
+  const nov = r.months.find((m) => m.key === '2026-11');
+  assert.equal(nov.lost, p1.months['2026-11'].lost); assert.equal(nov.lostApart, p2.months['2026-11'].lost); assert.equal(nov.bestOut, 1);
+  assert.equal(r.headline.apart, 1); assert.equal(r.headline.lostApart, p2.lost);
+});

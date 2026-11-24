@@ -975,3 +975,4 @@ body.no-period .top .range, body.no-period .top .rlabel, body.no-period .top .rd
   .mtable th { white-space: normal; }
   .mtable td small { display: block; }
 }
+.best.tu { color: var(--soft); background: #EEF1F5; }
