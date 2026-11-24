@@ -32,11 +32,14 @@ const row = (r, id) => r.products.find((p) => p.id === id);
 test('confidence thresholds: high ≥ 10, medium 5–9, low ≤ 4 units behind the rate', () => {
   assert.deepEqual([0, 1, 4, 5, 9, 10, 50].map(E.confidenceOf), ['low', 'low', 'low', 'medium', 'medium', 'high', 'high']);
   assert.equal(E.CONF_HIGH, 10); assert.equal(E.CONF_MEDIUM, 5); assert.equal(E.NOT_RESTOCKED_DAYS, 30);
-  /* in stock the whole window, out for the last 3 days: k sales in the window → rateUnits k */
-  for (const [k, want] of [[4, 'low'], [5, 'medium'], [9, 'medium'], [10, 'high']]) {
+  /* in stock the whole window, out for the last 3 days: k sales in the window → rateUnits k; with the sale 90 days ago
+     k + 1 units held, and 1.3.0 confidence takes the larger (H5) */
+  for (const [k, want] of [[3, 'low'], [4, 'medium'], [8, 'medium'], [9, 'high']]) {
     const p = product('k', { outAt: 3, sales: [90, ...Array.from({ length: k }, (_, i) => 5 + i * 2)] });
     const x = row(run(p), 'k');
     assert.equal(x.rateUnits, k, `rateUnits for ${k}`);
+    assert.equal(x.heldUnits, k + 1, `units held for ${k}`);
+    assert.equal(x.confBasis, 'units');
     assert.equal(x.confidence, want, `${k} units`);
     assert.ok(x.lost > 0);
     if (want === 'low') { assert.equal(x.lostEstimate, x.lost); assert.equal(x.lostCounted, 0); assert.equal(x.lostConfidence, 'low'); }
@@ -126,7 +129,7 @@ test('the same headline in /api/v1/summary, the digest, the weekly snapshot, gro
   assert.equal(v1.lostPct, t.lostPct);
   const d = DG.build({ report: r, role: 'ceo', storeName: 'S', now: NOW });
   assert.ok(d.text.includes(`last 30 days: ${DG.money(t.lost)} (`), d.text);
-  assert.ok(d.text.includes(`+${DG.money(t.lostEstimate)} estimate`) && d.text.includes(`+${DG.money(t.lostNotRestocked)} not restocked`), d.text);
+  assert.ok(d.text.includes(`+${DG.money(t.lostEstimate)} est.`) && d.text.includes(`+${DG.money(t.lostNotRestocked)} after day 30, `), d.text);
   assert.ok(d.lines.every((l) => l.length <= 160));
   /* weekly snapshot of yesterday (store day): lost = that day's report headline, not lostAll */
   const key = TZ.dayKey(NOW - DAY, 'Asia/Kolkata');

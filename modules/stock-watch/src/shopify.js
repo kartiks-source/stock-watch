@@ -75,7 +75,7 @@ async function gql(doc, variables = {}, { fetchImpl = fetch, tries = 0, version 
 const STOCK_Q = `query Stock($after: String) {
   productVariants(first: 250, after: $after) {
     pageInfo { hasNextPage endCursor }
-    nodes { id sku title price inventoryQuantity inventoryItem { tracked unitCost { amount } } product { id title status productType tags vendor } }
+    nodes { id sku title price createdAt inventoryQuantity inventoryItem { tracked unitCost { amount } } product { id title status productType tags vendor } }
   }
 }`;
 
@@ -149,6 +149,7 @@ function diffStock(variants, lastQty, t) {
       type: v.product?.productType || '', vendor: v.product?.vendor || '', tags: Array.isArray(v.product?.tags) ? v.product.tags : [], price: Number(v.price) || 0, cost,
       status: tracked ? status : (status === 'ACTIVE' ? 'UNTRACKED' : status), tracked, active: tracked && status === 'ACTIVE',
       stock: Number.isFinite(now) ? now : null, seenAt: t,
+      ...(Number.isFinite(Date.parse(v.createdAt)) ? { createdAt: Date.parse(v.createdAt) } : {}),   // 1.3.0: weeks live for G26 confidence (LOGIC §4c)
     };
     if (!tracked) excluded.untracked++; else if (status !== 'ACTIVE') excluded.notActive++;
     if (!catalog[id].active || !Number.isFinite(now)) continue;

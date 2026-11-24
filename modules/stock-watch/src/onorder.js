@@ -17,6 +17,8 @@ const has = (o, k) => Object.hasOwn(o, k);   // product IDs are data: never Obje
 /** Every record. Throws when onorder.json is unreadable and there's no good .bak (never "starting empty"). */
 const all = () => box.read();
 const save = () => box.write();
+/** The records marked by time t (a past report, e.g. the digest's "7 days before": L7, 1.3.0), as src/weekly.js does. */
+const asOf = (t) => Object.fromEntries(Object.entries(all()).filter(([, v]) => v && +v.at <= t));
 
 /** ETA from "YYYY-MM-DD" (end of that day, store time; zone = src/tz.js) or ms. Must be within −1 … +365 days of now. */
 function parseEta(v, now, zone = TZ.DEFAULT_ZONE) {
@@ -68,4 +70,4 @@ async function handle(req, p, readBody, offMin) {
   return r.ok ? { code: 200, body: r } : { code: 400, body: r };
 }
 
-module.exports = { all, mark, clear, handle, parseEta, reset: box.reset, FILE_NAME: box.name };
+module.exports = { all, asOf, mark, clear, handle, parseEta, reset: box.reset, FILE_NAME: box.name };

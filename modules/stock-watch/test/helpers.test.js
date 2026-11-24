@@ -40,16 +40,16 @@ test('SW-024 why: runs out, order by (lead + buffer before), supplier lead', () 
   const w = H.why({ stock: 30, perDay: 2, daysLeft: 15, status: 'Order this week' }, S, now);
   assert.equal(w.runsOut, now + 15 * D);
   assert.equal(w.orderBy, now + 5 * D);
-  assert.equal(w.why, 'Runs out Fri 4 Dec · order by Tue 24 Nov · supplier takes 7 d');
+  assert.equal(w.why, 'Runs out Fri 4 Dec · order by Tue 24 Nov · supplier takes 7 d (assumed)');
   /* Order now: fewer days left than lead + buffer → order by today */
   const n = H.why({ stock: 16, perDay: 2, daysLeft: 8, status: 'Order now' }, S, now);
   assert.equal(n.orderBy, now);
-  assert.equal(n.why, 'Runs out Fri 27 Nov · order by today · supplier takes 7 d');
+  assert.equal(n.why, 'Runs out Fri 27 Nov · order by today · supplier takes 7 d (assumed)');
   assert.match(H.why({ stock: 1, perDay: 4, daysLeft: 0.25, status: 'Critical' }, S, now).why, /^Runs out today · order by today/);
   assert.equal(H.why({ stock: 5, perDay: 0, daysLeft: null, status: 'Slow seller' }, S, now).why, 'No sales lately');
   /* date follows the status: a This week row right at the line (10.0 days, lead + buffer 10) is never "order by today" */
   const edge = H.why({ stock: 20, perDay: 2, daysLeft: 10, status: 'Order this week' }, S, now);
-  assert.equal(edge.why, 'Runs out Sun 29 Nov · order by Fri 20 Nov · supplier takes 7 d');
+  assert.equal(edge.why, 'Runs out Sun 29 Nov · order by Fri 20 Nov · supplier takes 7 d (assumed)');
   assert.equal(edge.orderBy, Date.parse('2026-11-19T18:30:00Z'), 'midnight starting the next store day');
   const late = Date.parse('2026-11-19T18:00:00Z');   // 23:30 in India: runs-out − 10 d is still "today" in store time
   assert.match(H.why({ stock: 21, perDay: 2, daysLeft: 10.4, status: 'Order this week' }, S, late).why, /order by Fri 20 Nov/);
@@ -87,9 +87,12 @@ test('SW-024 enrich: why on every row; still-out cost per day = Σ sales/day × 
   assert.match(a.why, /^Out 2 d · lost ₹/);
   const open = r.stockouts.find((s) => s.id === 'A' && s.open);
   assert.equal(a.why, `Out 2 d · lost ${H.money(open.lost)} this stock-out`);
-  assert.match(b.why, /^Runs out .* · order by today · supplier takes 7 d$/);
-  const out = r.products.filter((p) => p.stock <= 0);
-  assert.equal(r.totals.stillOutPerDay, out.reduce((s, p) => s + Math.round(p.perDay * p.price), 0));
+  assert.match(b.why, /^Runs out .* · order by today · supplier takes 7 d \(assumed\)$/);   // 1.3.0: no supplier lead set
+  /* L3 (1.3.0): the counted part (High / Medium, not 30+ d not restocked); the rest apart, both add up to every out row */
+  const out = r.products.filter((p) => p.stock <= 0), sure = out.filter((p) => ['high', 'medium'].includes(p.confidence) && !p.notRestocked);
+  assert.equal(r.totals.stillOutPerDay, sure.reduce((s, p) => s + Math.round(p.perDay * p.price), 0));
+  assert.equal(r.totals.stillOutPerDay + r.totals.stillOutPerDayApart, out.reduce((s, p) => s + Math.round(p.perDay * p.price), 0));
+  assert.ok(out.some((p) => !sure.includes(p) && p.perDay > 0), 'the fixture has an out row left out (Z: 1 sale, low)');
   assert.ok(r.totals.stillOutPerDay >= Math.round(a.perDay * 1000));
   assert.ok(r.reorder.every((p) => typeof p.why === 'string' && p.why));
 });

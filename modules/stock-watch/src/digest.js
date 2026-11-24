@@ -28,7 +28,8 @@ const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct
 const dateLabel = (t, zone) => { const d = TZ.local(t, zone); return `${WD[d.getUTCDay()]} ${d.getUTCDate()} ${MON[d.getUTCMonth()]}`; };
 
 /** ₹ of sales a day the products that are out of stock right now are missing: in-stock rate × price paid.
- *  Same sum as the Stock-outs headline (helpers.enrich → totals.stillOutPerDay, LOGIC.md §15a). */
+ *  Same sum as the Stock-outs headline (helpers.enrich → totals.stillOutPerDay, LOGIC.md §15a): 1.3.0, the part the
+ *  headline counts; estimates, not restocked and allocation items are totals.stillOutPerDayApart. */
 function stillOutPerDay(r) {
   if (r.totals && r.totals.stillOutPerDay != null) return r.totals.stillOutPerDay;
   return r.products.filter((p) => p.stock != null && p.stock <= 0 && p.status !== 'Inactive').reduce((s, p) => s + Math.round((+p.perDay || 0) * (+p.price || 0)), 0);
@@ -49,7 +50,8 @@ const L = {
   },
   stillOut(r) {
     const n = r.totals.stillOut;
-    return n ? `Still out of stock: ${plural(n, 'product')}, costing about ${money(stillOutPerDay(r))} a day in sales.` : 'Nothing is out of stock right now.';
+    const apart = r.totals.stillOutPerDayApart > 0 ? ` (+${money(r.totals.stillOutPerDayApart)} a day on estimates and items not restocked, not counted)` : '';
+    return n ? `Still out of stock: ${plural(n, 'product')}, costing about ${money(stillOutPerDay(r))} a day in sales${apart}.` : 'Nothing is out of stock right now.';
   },
   yesterday(y) {
     if (!y) return null;
@@ -63,7 +65,7 @@ const L = {
     const t = r.totals;
     let s = `Sales lost to stock-outs, last ${r.days} days: ${money(t.lost)} (${n1(t.lostPct)}% of demand)`;
     /* LOGIC.md §4c: estimates from few sales and 30+ d not restocked are apart from the headline, named when there are any */
-    const apart = [t.lostEstimate > 0 ? `+${money(t.lostEstimate)} estimate` : '', t.lostNotRestocked > 0 ? `+${money(t.lostNotRestocked)} not restocked` : ''].filter(Boolean);
+    const apart = [t.lostEstimate > 0 ? `+${money(t.lostEstimate)} est.` : '', t.lostNotRestocked > 0 ? `+${money(t.lostNotRestocked)} after day ${t.notRestockedDays || 30}, ${plural(t.lostNotRestockedProducts || 0, 'item')} not restocked` : ''].filter(Boolean);   // 1.3.0 wording (UI-4); refill gaps (§6) stay on the page
     if (prev) {
       const p = prev.totals.lost;
       s += t.lost > p ? `, up from ${money(p)} the ${r.days} days before` : t.lost < p ? `, down from ${money(p)} the ${r.days} days before` : `, same as the ${r.days} days before`;

@@ -49,6 +49,7 @@ const capacity = require('./src/capacity'); // size, rows and disk warnings (SW-
 const sheetFetch = require('./src/sheet-fetch');   // Sheet sync: fenced redirects, size cap, timeout (SW-052)
 const people = require('./src/people');   // per-store sign-ins made by the owner (SW-062, ADR-0016)
 const history = require('./src/history');   // SW-063: past stock rebuilt from Shopify's change log
+const weeks = require('./src/weeks');       // 1.3.0: weekly sales per variant (ShopifyQL) for confidence (LOGIC §4c)
 const tokenScopes = require('./src/token-scopes');   // refuse our own apps' write scopes; note Performity's (SW-051)
 const csvmap = require('./src/csvmap');     // import preview + column mapping, Shopify exports (SW-045)
 const apiv1 = require('./src/apiv1');       // /api/v1: every /api route + summary and paginated rows (SW-050)
@@ -65,8 +66,9 @@ const VIEW_PASSWORD = process.env.VIEW_PASSWORD || '';
 const PASSWORDS = { admin: PASSWORD, view: VIEW_PASSWORD };
 const PUBLIC = path.join(__dirname, 'public');
 // How often to pull (minutes). Default 120: each pull asks Performity for a token, and the user
-// wants few token calls (20 Nov 2026). Exact stock-out hours still come from Shopify's change log
-// (SW-063), so a 2-hour pull doesn't blur ₹ lost. SYNC_MINUTES env overrides (5..1440).
+// wants few token calls (20 Nov 2026). Stock rows from a pull carry the pull's time, so after the first read a
+// stock-out's start and end are each 0–2 h late (the change log only times the history before the first read,
+// SW-063; LOGIC §1c, §2). The engine is told the interval (afterLastSale). SYNC_MINUTES env overrides (5..1440).
 const SYNC_MIN = Math.min(1440, Math.max(5, Number(process.env.SYNC_MINUTES) || 120));
 const SYNC_EVERY = SYNC_MIN * 60e3;
 const STORE_COOKIE = 'sw_store';   // the store last chosen in the picker (public/stores.js); ?store= wins
@@ -336,6 +338,7 @@ async function pullOne(id) {
     runs.finish(store.load(), run);
     store.setShopify({ lastSync: Date.now(), lastTry: started, lastError: null });
     if (history.due(store.load().shopify)) await history.run().catch((e) => console.warn('history:', e.message));   // SW-063: once per store and rules version (1.1.1 redoes 1.1.0's), never fails the pull
+    if (weeks.due(store.load().shopify, Date.now(), TZ.zoneOf(store.load().settings))) await weeks.run().catch((e) => console.warn('weeks:', e.message));   // 1.3.0: once a day per store, after the pull is saved; never fails it
     await catalog.refreshCollections().catch((e) => console.warn('collections:', e.message));   // Group by (SW-022): once a day, resumable
     log.info('shopify pull done', { store: id, stockChanges: stock, orderLines: orders, seconds: Math.round((Date.now() - started) / 1000) });
     alert.syncResult(true, '', { store: storeName(id), key: id }).catch(() => {});
@@ -441,7 +444,9 @@ const digestCtx = {
     /* today's digest: the same options as /api/report (catalog snapshot, Mark ordered); a past "7 days before" comparison
        uses the rows as they stood then, plus only the catalog's inactive flags from before then (today's stock and price
        would be wrong for a past date; without the flags an archived-while-out variant never ends its stock-out, §17) */
-    const live = Math.abs(Date.now() - now) < 36e5 ? { catalog: d.catalog, onOrder: onorder.all(), suppliers: supplierOf(d), reversals: d.reversals } : { catalog: period.catalogAsOf(d.catalog, now), suppliers: supplierOf(d), reversals: d.reversals };
+    const base = { suppliers: supplierOf(d), reversals: d.reversals, weekSales: weeks.forReport(d.shopify), syncMinutes: SYNC_MIN };
+    const live = Math.abs(Date.now() - now) < 36e5 ? { ...base, catalog: d.catalog, onOrder: onorder.all() }
+      : { ...base, catalog: period.catalogAsOf(d.catalog, now), onOrder: onorder.asOf(now) };   // L7 (1.3.0): Mark ordered as it stood then, as weekly.compute does
     const { period: _kind, ...span } = period.range(days, now, TZ.zoneOf(d.settings));   // calendar days, as on the page (1.1.5)
     const r = helpers.enrich(engine.report(rowsAt.stock, rowsAt.orders, d.settings, { ...span, now, ...live }));   // still-out ₹/day, Pause list: the page's numbers (§15)
     r.yesterday = period.yesterdayFor(rowsAt.stock, rowsAt.orders, d.settings, r, live);
@@ -527,7 +532,7 @@ async function storeApi(req, res, url, role, id) {
   /* SW-032: decisions are based on, and checked against, sales per day on the saved settings (never trial values) */
   /* Every report-shaped answer (report, groups, product, CSV) uses the same options, so their numbers agree. */
   const sups = supplierOf(d);   // SW-040: each variant's supplier and terms (lead time, MOQ, case pack)
-  const reportOpts = (extra = {}) => ({ ...span, catalog: d.catalog, onOrder: onorder.all(), suppliers: sups, reversals: d.reversals, ...extra });   // span: { days } or { from } (SW-027)
+  const reportOpts = (extra = {}) => ({ ...span, catalog: d.catalog, onOrder: onorder.all(), suppliers: sups, reversals: d.reversals, weekSales: weeks.forReport(d.shopify), syncMinutes: SYNC_MIN, ...extra });   // span: { days } or { from } (SW-027)
   const savedRates = () => new Map(engine.report(d.stock, d.orders, d.settings, { days: 30, catalog: d.catalog, onOrder: onorder.all() }).products.map((x) => [String(x.id), x.perDay]));
   const dc = await decide.handle(req, p, readBody, (id) => savedRates().get(id));
   if (dc) return send(res, dc.code, dc.body);
@@ -546,7 +551,7 @@ async function storeApi(req, res, url, role, id) {
   if (sp) return send(res, sp.code, sp.body, sp.type, sp.headers);
   /* sprint 3 B-review: weekly review (SW-043), targets on groups (SW-042), saved lists (SW-044); month-to-date groups on the saved settings */
   const now = Date.now(), from = period.monthStart(now, TZ.zoneOf(d.settings));
-  const monthGroups = (lens) => groups.build(engine.report(d.stock, d.orders, d.settings, { from, now, catalog: d.catalog, onOrder: onorder.all() }).products, catalog.current(d.source, d.catalog), lens);
+  const monthGroups = (lens) => groups.build(engine.report(d.stock, d.orders, d.settings, { from, now, catalog: d.catalog, onOrder: onorder.all(), weekSales: weeks.forReport(d.shopify), syncMinutes: SYNC_MIN }).products, catalog.current(d.source, d.catalog), lens);
   for (const h of [weekly, targets, lists]) { const x = await h.handle(req, url, readBody, { role, by: whoOf(req, role), monthGroups, from, now, offMin: TZ.zoneOf(d.settings) }); if (x) return send(res, x.code, x.body); }
   if (p === '/api/report' && req.method === 'GET') {
     const S = settingsFor(url, d.settings), trial = Object.keys(LIMITS).some((k) => S[k] !== d.settings[k]);

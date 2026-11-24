@@ -52,22 +52,38 @@ const tabOf = (s) => (ORDER_TODAY.includes(s) ? 'today' : s === 'Order this week
  *   costPerDay (out of stock only) = sales per day × average price paid.
  *   outLost = this open stock-out's ₹ lost; without it the sentence leaves ₹ out (the Sales lost column has the period's).
  */
-/** LOGIC.md §4c: an open stock-out past 30 days with nothing marked ordered. */
+/** LOGIC.md §4c: an open stock-out past 30 days (1.3.0: or lead + buffer + 14 when longer) with nothing marked ordered. */
 const NOT_RESTOCKED_WHY = 'Out 30+ days, not restocked: restock or drop?';
+const notRestockedWhy = (days = 30) => `Out ${days}+ days, not restocked: restock or drop?`;
+/** §6 (1.3.0): a website allocation the warehouse tops up. Warehouse stock isn't in Shopify, so no reorder is sized. */
+const ALLOCATION_STATUS = 'Top-up from warehouse';
+const allocationWhy = (level) => `Shopify shows a website allocation (~${level} pcs, refilled from the warehouse). Warehouse stock isn’t in Shopify, so we can’t size a reorder: check the warehouse.`;
+/** §4c G26 (1.3.0): the evidence behind the confidence, "sold in 10 of 25 weeks" (null when it came from units). */
+const weeksText = (p) => (p && p.weeksLive ? `sold in ${p.weeksSold || 0} of ${p.weeksLive} weeks` : null);
+/** §3 floor (1.3.0): a product out the whole time we hold, priced from Shopify's 26 weeks before. */
+const counted = (p) => (p.confidence === 'high' || p.confidence === 'medium') && !p.notRestocked && !p.allocation && p.floorPerDay == null;
 function why(p, S, now, outSince = null, outLost = null) {
-  const off = TZ.zoneOf(S), lead = +(p.leadDays ?? S.leadDays) || 0, safety = +S.safetyDays || 0;   // the supplier's lead time when set (SW-040)
+  const off = TZ.zoneOf(S), safety = +S.safetyDays || 0;
+  const lead = +(p.leadDays ?? S.leadDays) || 0, assumed = p.leadDays == null ? ' (assumed)' : '';   // the supplier's lead time when set (SW-040); 1.3.0: the store default is a guess, say so
   const res = { why: '', runsOut: null, orderBy: null, outSince: null, costPerDay: 0 };
   if (p.status === 'Inactive') { res.why = 'Archived or not tracked'; return res; }
+  if (p.status === ALLOCATION_STATUS && p.allocation) {
+    res.why = allocationWhy(p.allocation.level);
+    if (p.stock != null && p.stock <= 0) { res.outSince = outSince; res.costPerDay = Math.round((+p.perDay || 0) * (+p.price || 0)); }
+    return res;
+  }
   if (p.status === 'Ordered' && p.onOrder && p.onOrder.eta) { res.why = `Ordered · lands ${dateShort(p.onOrder.eta, off)}`; return res; }
   if (p.stock == null) { res.why = 'No stock data'; return res; }
   if (p.stock <= 0) {
     res.outSince = outSince;
-    res.costPerDay = Math.round((+p.perDay || 0) * (+p.price || 0));
+    res.costPerDay = Math.round((+p.perDay || +p.floorPerDay || 0) * (+p.price || 0));
     const h = outSince != null ? Math.max(0, now - outSince) / HOUR : null;
     /* SIMP-6: out at the first stock record we have → it was out before then too; we don't know how long */
     const len = h == null ? '' : p.historyFrom != null && outSince <= p.historyFrom ? ` since before ${dateShort(p.historyFrom, off)}`
       : Math.round(h) < 24 ? ` ${Math.max(1, Math.round(h))} h` : ` ${Math.round(h / 24)} d`;
-    res.why = p.notRestocked ? NOT_RESTOCKED_WHY : `Out${len}${outLost > 0 ? ` · lost ${money(outLost)} this stock-out` : ''}`;   // §4c
+    const wk = weeksText(p);
+    if (p.floorPerDay != null) res.why = `Out${len || ' since before our data'} · sold ${p.units26} in 26 w${p.notRestocked ? ': restock or drop?' : ''}`;   // §3 floor (1.3.0)
+    else res.why = `${p.notRestocked ? notRestockedWhy(p.nrDays) : `Out${len}${outLost > 0 ? ` · lost ${money(outLost)} this stock-out` : ''}`}${wk ? ` · ${wk}` : ''}`;   // §4c
     return res;
   }
   if (!(p.perDay > 0) || p.daysLeft == null) { res.why = 'No sales lately'; return res; }
@@ -75,7 +91,7 @@ function why(p, S, now, outSince = null, outLost = null) {
   res.runsOut = now + p.daysLeft * DAY;
   res.orderBy = ORDER_TODAY.includes(p.status) ? now : Math.max(nextDayStart(now, off), res.runsOut - (lead + safety) * DAY);
   const when = (t) => (localDay(t, off) === localDay(now, off) ? 'today' : dayName(t, off));
-  res.why = `Runs out ${when(res.runsOut)} · order by ${when(res.orderBy)} · supplier takes ${lead} d`;
+  res.why = `Runs out ${when(res.runsOut)} · order by ${when(res.orderBy)} · supplier takes ${lead} d${assumed}`;
   return res;
 }
 
@@ -146,8 +162,12 @@ function enrich(r, { decisions = {}, rates = null } = {}) {
     if (item.decision && !salesChanged(rec.base, rates ? rates.get(String(p.id)) : p.perDay)) decided.push(item); else decide.push(item);
   }
   decide.sort((a, b) => b.value - a.value); decided.sort((a, b) => b.value - a.value);
+  /* L3 (1.3.0): "still out, costing ₹X/day" counts what the headline counts (High / Medium, not 30+ d not restocked, not a
+     website allocation or a floor rate); the rest is apart, as ₹ lost is (LOGIC.md §15a) */
   Object.assign(r.totals, {
-    stillOutPerDay: out.reduce((s, p) => s + (p.costPerDay || 0), 0),
+    stillOutPerDay: out.filter(counted).reduce((s, p) => s + (p.costPerDay || 0), 0),
+    stillOutPerDayApart: out.filter((p) => !counted(p)).reduce((s, p) => s + (p.costPerDay || 0), 0),
+    stillOutCounted: out.filter((p) => counted(p) && p.costPerDay > 0).length,
     pause: pause.length,
     pauseReorder: pause.filter((p) => p.orderQty > 0).length,
     pauseSlow: pause.filter((p) => p.status === 'Slow seller').length,
@@ -246,6 +266,6 @@ const csvText = (lines, cell = csvCell) => '﻿' + lines.map((l) => l.map(cell).
 const fileDate = (now, zone = TZ.DEFAULT_ZONE) => localDay(now, zone);
 
 module.exports = {
-  NOT_RESTOCKED_WHY, money, dayName, dateShort, statusLabel, tabOf, why, mktList, backIn, mktSort, decideKind, salesChanged, DECIDE_CHANGE, DECIDE_FLOOR, DECISIONS,
+  NOT_RESTOCKED_WHY, notRestockedWhy, ALLOCATION_STATUS, allocationWhy, weeksText, money, dayName, dateShort, statusLabel, tabOf, why, mktList, backIn, mktSort, decideKind, salesChanged, DECIDE_CHANGE, DECIDE_FLOOR, DECISIONS,
   enrich, enrichDetail, vendorMap, reorderRows, onOrderRows, onOrderSummary, poLines, PO_HEAD, csvCell, csvText, fileDate,
 };

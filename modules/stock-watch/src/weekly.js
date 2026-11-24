@@ -25,6 +25,7 @@ const onorder = require('./onorder');
 const scope = require('./scope');
 const { sideFile } = require('./sidefile');
 const TZ = require('./tz');   // the store's time zone (SW-049): store days follow daylight saving
+const weeks = require('./weeks');   // 1.3.0: weekly sales for confidence (LOGIC §4c)
 
 const DAY = engine.DAY;
 const KEEP_DAYS = 400;
@@ -84,9 +85,10 @@ function compute(d, key, oo = {}, at = Date.now()) {
   const off = TZ.zoneOf(d.settings), t0 = startOf(key, off), t1 = endOf(key, off);
   const rows = period.asOf(d.stock, d.orders, t1);
   const onOrder = Object.fromEntries(Object.entries(oo || {}).filter(([, v]) => v && +v.at <= t1));
-  const r = engine.report(rows.stock, rows.orders, d.settings, { now: t1, from: t0, catalog: catalogAt(d.catalog, t1), onOrder });
+  const r = engine.report(rows.stock, rows.orders, d.settings, { now: t1, from: t0, catalog: catalogAt(d.catalog, t1), onOrder, weekSales: weeks.forReport(d.shopify) });
   const t = r.totals;
-  const lostBy = Object.fromEntries(r.products.filter((p) => p.lost > 0).sort((a, b) => b.lost - a.lost).slice(0, TOP_LOST).map((p) => [String(p.id), p.lost]));
+  /* L6 (1.3.0): movers on the headline's part (lostCounted), the same ₹ as the weekly total; estimates never show as movers */
+  const lostBy = Object.fromEntries(r.products.filter((p) => p.lostCounted > 0).sort((a, b) => b.lostCounted - a.lostCounted).slice(0, TOP_LOST).map((p) => [String(p.id), p.lostCounted]));
   return {
     at, src: 'day', sold: t.sold, lost: t.lost, lostProfit: t.lostProfit, ranOut: r.stockouts.filter((s) => !s.notSelling && s.start >= t0 && s.start < t1).length,
     stillOut: t.stillOut, excessValue: t.excessValue, toReorder: t.orderToday + t.orderWeek, orderToday: t.orderToday,

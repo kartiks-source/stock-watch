@@ -194,8 +194,41 @@ const confidenceOf = (units) => (units >= CONF_HIGH ? 'high' : units >= CONF_MED
 /** A stock-out still open after this many days with nothing marked ordered: its ₹ lost after day 30 is "not restocked"
  *  (likely dropped), shown apart from the headline (LOGIC.md §4c). With a PO marked it keeps counting. */
 const NOT_RESTOCKED_DAYS = 30;
+/** 1.3.0 (LOGIC.md §4c): the cutoff is never shorter than a reorder could take to land and sell: lead + buffer + 14 days. */
+const notRestockedDays = (lead, safety) => Math.max(NOT_RESTOCKED_DAYS, (+lead || 0) + (+safety || 0) + 14);
+/** 1.3.0 (LOGIC.md §4c, G26): confidence from Shopify's weekly sales (ShopifyQL, src/weeks.js): the share of the last full
+ *  weeks the variant was live in that had a sale. High ≥ 44% (4 of 9 weeks), medium ≥ 22% (2 of 9), else low. A variant live
+ *  under WEEKS_MIN_LIVE full weeks, or a store without the weekly data, keeps the units rule. */
+const WEEKS_HIGH = 0.44, WEEKS_MEDIUM = 0.22, WEEKS_MIN_LIVE = 8, WEEK = 7 * DAY;
+const confidenceOfWeeks = (sold, live) => (sold / live >= WEEKS_HIGH ? 'high' : sold / live >= WEEKS_MEDIUM ? 'medium' : 'low');
+/** Full weeks of the weekly data a variant was live in (created before the week ended); null when either is unknown. */
+function weeksLive(ws, createdAt) {
+  if (!ws || !(ws.weeks > 0) || !Number.isFinite(+ws.start) || createdAt == null || !Number.isFinite(+createdAt)) return null;
+  return Math.max(0, ws.weeks - Math.max(0, Math.floor((+createdAt - +ws.start) / WEEK)));
+}
+/** 1.3.0 (LOGIC.md §3): a product out the whole time we hold, with sales in Shopify's 26 weeks before: its floor rate is
+ *  those units ÷ FLOOR_DAYS (a calendar pace, so a floor), and its ₹ lost goes to "not restocked". */
+const FLOOR_DAYS = 182;
+/** 1.3.0 (LOGIC.md §1, §6): a website allocation. Shopify's stock is a small allocation the warehouse tops up: 3+ stock
+ *  increases in the last 14 days landing on the same level of at most 10 pcs, and every stock-out ended within 48 h. */
+const ALLOC_DAYS = 14, ALLOC_REFILLS = 3, ALLOC_MAX_LEVEL = 10, ALLOC_MAX_GAP_H = 48;
+const ALLOCATION_STATUS = 'Top-up from warehouse';
+function allocationOf(changes, now) {
+  const since = now - ALLOC_DAYS * DAY, at = new Map();
+  let outAt = null, gap = 0;
+  for (let i = 0; i < changes.length; i++) {
+    const c = changes[i], was = wasBefore(changes, i), is = num(c.now);
+    if (is <= 0 && (was > 0 || i === 0)) outAt = c.t;
+    if (is > was && c.t >= since && is > 0 && is <= ALLOC_MAX_LEVEL) at.set(is, (at.get(is) || 0) + 1);
+    if (is > 0) { if (outAt != null && c.t >= since) gap = Math.max(gap, c.t - outAt); outAt = null; }
+  }
+  if (outAt != null) gap = Math.max(gap, now - outAt);   // still out: a warehouse that hasn't topped it up in 48 h isn't one
+  let level = null, refills = 0;
+  for (const [l, n] of at) if (n > refills || (n === refills && l > level)) { level = l; refills = n; }
+  return refills >= ALLOC_REFILLS && gap < ALLOC_MAX_GAP_H * HOUR ? { level, refills } : null;
+}
 /** A product row's ₹ lost in the three buckets (rows from report()): counted (headline), estimate, notRestocked. */
-const lostSplit = (p) => ({ counted: p.lostCounted || 0, estimate: p.lostEstimate || 0, notRestocked: p.lostNotRestocked || 0 });
+const lostSplit = (p) => ({ counted: p.lostCounted || 0, estimate: p.lostEstimate || 0, notRestocked: p.lostNotRestocked || 0, allocation: p.lostAllocation || 0 });
 /** Returns (SW-064, LOGIC.md §9e): a % only from 5 units ordered; 15%+ is "high". */
 const RETURN_MIN_UNITS = 5, HIGH_RETURN_PCT = 15;
 /** Cancelled or refunded units in the period, per variant (SW-064, LOGIC.md §9e).
@@ -335,7 +368,7 @@ const CALC_VERSION = '1.3.0';   // 1.3.0: oversells and pull-timed restocks in a
 /** Order today rows (Out now, Critical, Order now) are one group, biggest ₹ of sales a day first (SIMP-2) */
 const TODAY_STATUS = ['Out now', 'Critical', 'Order now'];
 
-const STATUS = ['Out now', 'Critical', 'Order now', 'Order this week', 'Ordered', 'OK'];
+const STATUS = ['Out now', 'Critical', 'Order now', 'Order this week', 'Ordered', 'OK'];   // + ALLOCATION_STATUS (§6), never on the reorder list
 /** Reorder status and quantity for one product. */
 function plan({ stock, perDay, lead, cover, safety }) {
   const have = Math.max(0, stock);
@@ -386,6 +419,7 @@ const DEFAULT_SETTINGS = {
   demandWindowDays: 28,
   smallTopUpDays: 7,         // a top-up under this many days of sales is "small"
   minPerDay: 0.2,            // slower sellers are left out of alerts
+  allocationCheck: 1,        // 1.3.0: spot website allocations topped up from a warehouse (§6); 0 = off
 };
 
 /**
@@ -443,6 +477,7 @@ function report(stock, orders, settings = {}, opts = {}) {
     if (c.stock != null && Number.isFinite(+c.stock)) p.stock = num(c.stock);
     if (c.active === false) { p.inactive = c.status || 'INACTIVE'; p.inactiveSince = c.inactiveSince || now; }
     /* earlier inactive spells of a variant that is active again (draft while sold out, reactivated on restock) */
+    if (c.createdAt != null && Number.isFinite(+c.createdAt)) p.createdAt = +c.createdAt;   // 1.3.0: weeks live for G26 confidence (§4c)
     if (Array.isArray(c.spells)) p.spells = c.spells.map((x) => ({ from: +x.from, to: +x.to })).filter((x) => Number.isFinite(x.from) && x.to > x.from);
   }
 
@@ -456,13 +491,15 @@ function report(stock, orders, settings = {}, opts = {}) {
      chart adds up to the same totals as the product rows */
   const daily = {};
   const lastKey = dayKey(now, off);
-  for (const k of TZ.dayKeys(from, now, off)) { daily[k] = daily[k] || { sold: 0, lost: 0, lostEstimate: 0, lostNotRestocked: 0, units: 0, unitsLost: 0, outSkus: new Set() }; if (k === lastKey) break; }   // a 23- or 25-hour day is one day (SW-049)
+  for (const k of TZ.dayKeys(from, now, off)) { daily[k] = daily[k] || { sold: 0, lost: 0, lostEstimate: 0, lostNotRestocked: 0, lostAllocation: 0, units: 0, unitsLost: 0, outSkus: new Set() }; if (k === lastKey) break; }   // a 23- or 25-hour day is one day (SW-049)
   for (const o of orders) {
     if (o.t < from) continue;
     const d = daily[dayKey(o.t, off)]; if (!d) continue;
     d.sold += num(o.qty) * num(o.price); d.units += num(o.qty);
   }
 
+  /* 1.3.0: Shopify's weekly sales per variant (src/weeks.js, ShopifyQL): G26 confidence (§4c) and the floor rate (§3) */
+  const ws = opts.weekSales && typeof opts.weekSales === 'object' && opts.weekSales.by ? opts.weekSales : null;
   const products = [], reorder = [], stockouts = [];
   const excluded = { variants: 0, pcs: 0, byStatus: {} };
   for (const p of P.values()) {
@@ -477,7 +514,8 @@ function report(stock, orders, settings = {}, opts = {}) {
     const pFirst = Number.isFinite(p.first) ? p.first : demandFrom;
     const pFrom = Math.max(demandFrom, pFirst);   // a new launch isn't diluted by days before it existed
     /* a long stock-out (under 7 in-stock days in the window) looks further back, so it keeps its demand */
-    const rate = demandRate(p.lines, unsellable(eps, spells, now), { winFrom: pFrom, histFrom: Math.max(now - KEEP_DAYS * DAY, firstOrder, pFirst), now, wantDays: S.demandWindowDays, first: pFirst });
+    const histFrom = Math.max(now - KEEP_DAYS * DAY, firstOrder, pFirst), cantSell = unsellable(eps, spells, now);
+    const rate = demandRate(p.lines, cantSell, { winFrom: pFrom, histFrom, now, wantDays: S.demandWindowDays, first: pFirst });
     const units = rate.units;
     const revenue = rate.lines.reduce((s, o) => s + demandQty(o) * num(o.price), 0);
     const price = units ? revenue / units : p.price;
@@ -489,31 +527,45 @@ function report(stock, orders, settings = {}, opts = {}) {
       perDay = Math.min(perDay, all / Math.max(1, (now - firstSale) / DAY));
     }
     const perSellingHour = perDay / 24;
-    /* how sure ₹ lost is (LOGIC.md §4c): the units the rate rests on */
-    const confidence = confidenceOf(units);
+    /* how sure ₹ lost is (LOGIC.md §4c). 1.3.0: the share of Shopify's last full weeks with a sale (G26) when the variant was
+       live 8+ of them; else the units: those the rate rests on, or every unit held, whichever is more */
+    const wsRow = ws ? own(ws.by, p.id) : undefined, live = weeksLive(ws, p.createdAt);
+    const heldUnits = p.lines.reduce((s, o) => s + (o.t >= histFrom ? demandQty(o) : 0), 0);
+    let confidence, weeksSold = null;
+    if (live != null && live >= WEEKS_MIN_LIVE) { weeksSold = Math.min(live, wsRow ? Math.max(0, num(wsRow.s)) : 0); confidence = confidenceOfWeeks(weeksSold, live); }
+    else confidence = confidenceOf(Math.max(units, heldUnits));
     /* SW-040 (LOGIC.md §6c): the product's supplier; its lead time, when set, replaces the store's */
     const sup = own(opts.suppliers, p.id) || null, lead = sup && sup.leadDays != null ? sup.leadDays : S.leadDays;
     const oo = p.stock == null ? null : onOrderNow(own(opts.onOrder, p.id), p.changes, now, p.stock, perDay, lead);
+    const nrDays = notRestockedDays(lead, S.safetyDays);   // §4c
+    /* §3 floor (1.3.0): out the whole time we hold and nothing sold, but Shopify's 26 weeks show sales → a floor rate for ₹ lost
+       only (the order quantity keeps the product's own rate); all of it is "not restocked" (estimate when a PO is marked) */
+    const units26 = wsRow ? Math.max(0, num(wsRow.u)) : 0, lastEp = eps[eps.length - 1];
+    const seeded = !p.inactive && units === 0 && units26 > 0 && !!lastEp && lastEp.open && demandPerDay(0, histFrom, now, cantSell).rawDays < 1;
+    const lossPrice = seeded && num(wsRow.n) > 0 ? num(wsRow.n) / units26 : price;
+    const lossPerHour = seeded ? units26 / FLOOR_DAYS / 24 : perSellingHour;
+    /* §6 (1.3.0): Shopify's stock is a website allocation the warehouse tops up → no reorder from here; ₹ lost apart */
+    const alloc = +S.allocationCheck !== 0 && !p.inactive && p.stock != null ? allocationOf(p.changes, now) : null;
 
-    let lost = 0, unitsLost = 0, outs = 0, smallTopUps = 0, repeats = 0, lostNR = 0, lostLow = 0;
+    let lost = 0, unitsLost = 0, outs = 0, smallTopUps = 0, repeats = 0, lostNR = 0;
     eps.forEach((e, i) => {
       if (e.end <= from) return;
       const a = Math.max(e.start, from);
-      /* §4c: the part of a stock-out after its 30th day; still open and nothing marked ordered → "not restocked" */
-      const cut = Math.max(a, Math.min(e.end, e.start + NOT_RESTOCKED_DAYS * DAY));
+      /* §4c: the part of a stock-out after its nrDays-th day (30, or lead + buffer + 14 when longer); still open and nothing
+         marked ordered → "not restocked". A floor-rate product (seeded) is "not restocked" from the start */
+      const cut = Math.max(a, Math.min(e.end, e.start + nrDays * DAY));
       const h1 = sellingHours(a, cut, profile, off), h2 = sellingHours(cut, e.end, profile, off);
-      const nr = e.open && !oo;
-      const uLost = (h1.total + h2.total) * perSellingHour;
-      const vLost = uLost * price, vOver = h2.total * perSellingHour * price;
+      const nr = e.open && !oo, nrAll = seeded && nr;
+      const uLost = (h1.total + h2.total) * lossPerHour;
+      const vLost = uLost * lossPrice, vOver = nrAll ? vLost : h2.total * lossPerHour * lossPrice;
       lost += vLost; unitsLost += uLost; outs++;
       if (nr) lostNR += vOver;
-      if (confidence === 'low') lostLow += vLost - (nr ? vOver : 0);
       for (const [h, late] of [[h1, false], [h2, true]]) {
         for (const [k, w] of Object.entries(h.byDay)) {
           const d = daily[k]; if (!d) continue;
-          const v = w * perSellingHour * price;
-          if (late && nr) d.lostNotRestocked += v; else if (confidence === 'low') d.lostEstimate += v; else d.lost += v;
-          d.unitsLost += w * perSellingHour; d.outSkus.add(p.id);
+          const v = w * lossPerHour * lossPrice;
+          if ((late || nrAll) && nr) d.lostNotRestocked += v; else if (alloc) d.lostAllocation += v; else if (confidence === 'low' || seeded) d.lostEstimate += v; else d.lost += v;
+          d.unitsLost += w * lossPerHour; d.outSkus.add(p.id);
         }
       }
       const small = !e.open && !e.inactive && perDay > 0 && e.topUp < perDay * S.smallTopUpDays;
@@ -527,6 +579,7 @@ function report(stock, orders, settings = {}, opts = {}) {
         topUp: e.open || e.inactive ? null : e.topUp, topUpDays: !e.open && !e.inactive && perDay > 0 ? round(e.topUp / perDay, 1) : null,
         small, repeat, perDay: round(perDay, 2),
         confidence, lostOver30: Math.round(vOver), lostNotRestocked: nr ? Math.round(vOver) : 0,   // §4c
+        ...(alloc ? { allocation: true } : {}), ...(seeded ? { floor: true } : {}),   // §6, §3 (1.3.0)
       });
     });
 
@@ -539,7 +592,7 @@ function report(stock, orders, settings = {}, opts = {}) {
       status: pl ? (selling ? pl.status : 'Slow seller') : 'No stock data',
       orderQty: pl && selling ? pl.qty : 0, orderValue: pl && selling ? Math.round(pl.qty * (p.cost || price)) : 0,   // cash to commit: unit cost when known
       rateBasis: rate.basis, rateFrom: rate.from,   // which sales the rate was measured on (LOGIC.md §3)
-      rateUnits: units, confidence,   // §4c: units the rate rests on, and how sure ₹ lost is
+      rateUnits: units, confidence, heldUnits, weeksSold, weeksLive: live != null && live >= WEEKS_MIN_LIVE ? live : null, confBasis: live != null && live >= WEEKS_MIN_LIVE ? 'weeks' : 'units', nrDays,   // §4c: how sure ₹ lost is, on what
       lost: Math.round(lost), unitsLost: round(unitsLost, 1), outs, smallTopUps, repeats,
       sold: Math.round(p.lines.filter((o) => o.t >= from).reduce((s, o) => s + num(o.qty) * num(o.price), 0)),
       unitsSold: p.lines.filter((o) => o.t >= from).reduce((s, o) => s + num(o.qty), 0),
@@ -549,10 +602,14 @@ function report(stock, orders, settings = {}, opts = {}) {
     const rt = returns.get(String(p.id)) || { ordered: 0, returned: 0, value: 0, cancelled: 0 };
     Object.assign(row, { unitsOrdered: rt.ordered, unitsReturned: rt.returned, unitsCancelled: rt.cancelled, returnPct: returnPct(rt.ordered, rt.returned), refundValue: Math.round(rt.value) });
     if (lowData) row.lowData = true;
-    /* §4c: the row's ₹ lost in three buckets that add up to lost (headline = lostCounted) */
+    if (seeded) { row.floorPerDay = round(units26 / FLOOR_DAYS, 3); row.units26 = units26; }   // §3 floor (1.3.0)
+    /* §4c: the row's ₹ lost in four buckets that add up to lost (headline = lostCounted): not restocked, allocation refill
+       gaps (§6), estimate, counted */
     row.lostNotRestocked = Math.min(row.lost, Math.round(lostNR));
-    row.lostEstimate = confidence === 'low' ? Math.max(0, row.lost - row.lostNotRestocked) : 0;
-    row.lostCounted = row.lost - row.lostNotRestocked - row.lostEstimate;
+    row.lostAllocation = alloc ? Math.max(0, row.lost - row.lostNotRestocked) : 0;
+    row.lostEstimate = !alloc && (confidence === 'low' || seeded) ? Math.max(0, row.lost - row.lostNotRestocked) : 0;
+    row.lostCounted = row.lost - row.lostNotRestocked - row.lostAllocation - row.lostEstimate;
+    if (alloc && pl) Object.assign(row, { status: ALLOCATION_STATUS, allocation: alloc, orderQty: 0, orderValue: 0 });   // §6: no reorder sized on an allocation
     row.lostConfidence = row.lost > 0 ? confidence : null;
     if (row.lostNotRestocked > 0) row.notRestocked = true;
     /* the product's first stock record (UI-1): before it there's no stock history, so ₹ lost there is unknown, not 0 */
@@ -584,7 +641,7 @@ function report(stock, orders, settings = {}, opts = {}) {
       continue;
     }
     products.push(row);
-    if (pl && selling && row.status !== 'OK') reorder.push(row);
+    if (pl && selling && row.status !== 'OK' && !row.allocation) reorder.push(row);
   }
 
   /* best sellers (ABC by ₹ demand a day: the sales rate × average price paid, both from the demand
@@ -640,13 +697,14 @@ function report(stock, orders, settings = {}, opts = {}) {
   products.sort((a, b) => b.lost - a.lost || b.sold - a.sold);
 
   const dailyRows = Object.entries(daily).map(([day, d]) => ({
-    day, sold: Math.round(d.sold), lost: Math.round(d.lost), lostEstimate: Math.round(d.lostEstimate), lostNotRestocked: Math.round(d.lostNotRestocked), units: d.units, unitsLost: round(d.unitsLost, 1), outSkus: d.outSkus.size,
+    day, sold: Math.round(d.sold), lost: Math.round(d.lost), lostEstimate: Math.round(d.lostEstimate), lostNotRestocked: Math.round(d.lostNotRestocked), lostAllocation: Math.round(d.lostAllocation), units: d.units, unitsLost: round(d.unitsLost, 1), outSkus: d.outSkus.size,
   }));
   /* totals come from the product rows, so they always equal what the Products page adds up to */
   const sold = products.reduce((s, p) => s + p.sold, 0);
   /* §4c: the headline counts high and medium confidence; estimates and 30+ d not restocked are apart; lostAll = all three */
   const lost = products.reduce((s, p) => s + p.lostCounted, 0);
   const lostEstimate = products.reduce((s, p) => s + p.lostEstimate, 0), lostNotRestocked = products.reduce((s, p) => s + p.lostNotRestocked, 0);
+  const lostAllocation = products.reduce((s, p) => s + (p.lostAllocation || 0), 0);   // §6 (1.3.0): refill gaps on allocation items
   /* out but not selling (LOGIC.md §1c): no units, no sales and no sales lost in the period; counted apart from "still out" */
   const rowOf = new Map(products.map((p) => [String(p.id), p]));
   const notSelling = (id) => { const p = rowOf.get(String(id)); return !!p && !p.unitsSold && !p.sold && !p.lost; };
@@ -657,7 +715,9 @@ function report(stock, orders, settings = {}, opts = {}) {
     generatedAt: now, days, from, settings: S,
     totals: {
       sold, lost, lostPct: sold + lost ? round((lost / (sold + lost)) * 100, 1) : 0,
-      lostEstimate, lostNotRestocked, lostAll: lost + lostEstimate + lostNotRestocked,
+      lostEstimate, lostNotRestocked, lostAllocation, lostAll: lost + lostEstimate + lostNotRestocked + lostAllocation,
+      lostAllocationProducts: products.filter((p) => p.lostAllocation > 0).length, allocation: products.filter((p) => p.status === ALLOCATION_STATUS).length,
+      notRestockedDays: notRestockedDays(S.leadDays, S.safetyDays), weekSales: ws ? { weeks: ws.weeks, at: ws.at || null } : null,
       lostEstimateProducts: products.filter((p) => p.lostEstimate > 0).length, lostNotRestockedProducts: products.filter((p) => p.lostNotRestocked > 0).length,
       unitsLost: round(dailyRows.reduce((s, d) => s + d.unitsLost, 0), 0),
       outNow: products.filter((p) => p.status === 'Out now' || (p.status === 'Ordered' && p.stock <= 0)).length,
@@ -729,4 +789,4 @@ function productDetail(id, stock, orders, settings = {}, opts = {}) {
 }
 
 module.exports = {
-  CALC_VERSION, TODAY_STATUS, CONF_HIGH, CONF_MEDIUM, NOT_RESTOCKED_DAYS, confidenceOf, lostSplit, RETURN_MIN_UNITS, HIGH_RETURN_PCT, returnsOf, demandQty, afterLastSale, oversold, SYNC_MINUTES, trend, trendCall, storeTrend, TREND_MIN_UNITS, LOW_UNITS, LOW_DAYS, PACE_DROP, minMax, report, productDetail, episodes, demandPerDay, demandRate, inStockStart, KEEP_DAYS, MIN_IN_STOCK_DAYS, plan, onOrderNow, hourProfile, sellingHours, dayKey, DEFAULT_SETTINGS, HOUR, DAY };
+  CALC_VERSION, TODAY_STATUS, CONF_HIGH, CONF_MEDIUM, NOT_RESTOCKED_DAYS, notRestockedDays, confidenceOf, confidenceOfWeeks, weeksLive, WEEKS_HIGH, WEEKS_MEDIUM, WEEKS_MIN_LIVE, FLOOR_DAYS, allocationOf, ALLOCATION_STATUS, ALLOC_DAYS, ALLOC_REFILLS, ALLOC_MAX_LEVEL, ALLOC_MAX_GAP_H, lostSplit, RETURN_MIN_UNITS, HIGH_RETURN_PCT, returnsOf, demandQty, afterLastSale, oversold, SYNC_MINUTES, trend, trendCall, storeTrend, TREND_MIN_UNITS, LOW_UNITS, LOW_DAYS, PACE_DROP, minMax, report, productDetail, episodes, demandPerDay, demandRate, inStockStart, KEEP_DAYS, MIN_IN_STOCK_DAYS, plan, onOrderNow, hourProfile, sellingHours, dayKey, DEFAULT_SETTINGS, HOUR, DAY };
