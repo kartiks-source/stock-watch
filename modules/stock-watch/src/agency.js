@@ -34,7 +34,8 @@ const SEASON_MIN = 7;         // under this many in-stock days in a month: the s
 const SEASON_CAP = [0.5, 2];
 const MONTHS = 12;
 const OVERSELL = 2;            // stock may sit this far below min(now, 0) after checkout races before a walk counts as broken
-const SEASON_UNITS = 12;      // a variant that sold fewer than this in the year follows the shop's season (its own months are noise)
+const SEASON_UNITS = 12;
+const SHOP_MIN_DAYS = 60;     // in-stock product-days a month needs before the shop's index uses them (else its sales a day)      // a variant that sold fewer than this in the year follows the shop's season (its own months are noise)
 
 const keyPlus = (key, n) => new Date(Date.parse(`${key}T00:00:00Z`) + n * DAY).toISOString().slice(0, 10);
 const monthOf = (k) => k.slice(0, 7);
@@ -103,6 +104,27 @@ function shopSeason(y, keys) {
   return out;
 }
 
+/** The shop's index per month from every variant's in-stock days (units on in-stock days ÷ in-stock days that month, ÷ the
+ *  same over the span), so months with many stock-outs don't look quiet; capped. Without any (e.g. no variants): sales.all. */
+function shopSeasonOf(lists, keys, y) {
+  const per = new Map(); let tu = 0, td = 0;
+  for (const list of lists) for (const x of list) {
+    if (!(x.inF > 0)) continue;
+    const m = monthOf(x.k), p = per.get(m) || { u: 0, d: 0 };
+    p.u += x.u - x.over; p.d += x.inF; per.set(m, p); tu += x.u - x.over; td += x.inF;
+  }
+  if (!(td > 0) || !(tu > 0)) return shopSeason(y, keys);
+  const avg = tu / td, out = {}, raw = shopSeason(y, keys);
+  const daysIn = new Map(); for (const k of keys) daysIn.set(monthOf(k), (daysIn.get(monthOf(k)) || 0) + 1);
+  for (const [m, n] of daysIn) {
+    const p = per.get(m);
+    out[m] = n < SEASON_MIN ? 1 : p && p.d >= SHOP_MIN_DAYS ? r2(clamp(p.u / p.d / avg, SEASON_CAP)) : raw[m];   // too few in-stock product-days: the shop's sales a day
+  }
+  return out;
+}
+/** A month's index; a month not held yet (the 1st of a month) uses the same month a year before. */
+const seasonFor = (season, m) => season[m] ?? season[`${+m.slice(0, 4) - 1}${m.slice(4)}`] ?? 1;
+
 /** Pace and season for one variant's days. paceFrom = first day of the pace window. */
 function paceOf(list, paceFrom, shop) {
   const all = { u: 0, d: 0 }, win = { u: 0, d: 0 }, per = new Map();
@@ -156,10 +178,9 @@ function build(y, catalog = {}, { paceMonths = 6, bestShare = 0.8, links = () =>
   const sp = spanOf(y);
   if (!sp) return { ok: false, reason: !y || !y.anchor ? 'none' : 'short' };
   const keys = dayKeys(sp.from, sp.through);
-  const shop = shopSeason(y, keys);
   const paceFrom = keyPlus(sp.through, -Math.round(paceMonths * 30.44) + 1);
   /* months: the 12 calendar months ending with the month of `through` (the first may be part-held) */
-  const lastM = monthOf(sp.through), monthKeys = [];
+  const lastM = monthOf(sp.through), nowM = monthOf(keyPlus(sp.through, 1)), monthKeys = [];   // nowM: the month of the day after the last full day (today's)
   for (let i = MONTHS - 1; i >= 0; i--) { const d = new Date(Date.UTC(+lastM.slice(0, 4), +lastM.slice(5, 7) - 1 - i, 1)); monthKeys.push(d.toISOString().slice(0, 7)); }
   const inMonths = new Set(monthKeys);
   /* store sales per month (every sales row: the total Shopify shows) */
@@ -170,29 +191,36 @@ function build(y, catalog = {}, { paceMonths = 6, bestShare = 0.8, links = () =>
     m.sold += Number(t[1]) || 0; m.units += Number(t[0]) || 0; m.days++;
     if (!m.from) m.from = k; m.to = k;
   }
-  /* variants → products */
-  const variants = [], dropped = [];
+  /* variants: their days first (live from max(created, published) inside the span), then the shop's season from them */
+  const vlist = [], dropped = [];
   for (const [id, c] of Object.entries(catalog || {})) {
     if (!c || c.active === false || c.tracked === false) continue;
-    const createdDay = c.createdAt && dayOf ? dayOf(c.createdAt) : null;
-    const ds = days(y, id, keys, createdDay);
+    const liveMs = Math.max(+c.createdAt || 0, +c.publishedAt || 0);
+    const ds = days(y, id, keys, liveMs && dayOf ? dayOf(liveMs) : null);
     if (!ds) continue;
-    if (ds.dropped) { dropped.push(id); continue; }
+    if (ds.dropped) dropped.push(id);   // unsure: its sales still count (best-seller rank, sold), no days, no ₹
+    vlist.push({ id, c, ds: ds.dropped ? { list: [], live: null, unsure: true } : ds });
+  }
+  const shop = shopSeasonOf(vlist.map((v) => v.ds.list), keys, y);
+  const variants = [];
+  for (const { id, c, ds } of vlist) {
     const sl = (y.sales.by && y.sales.by[id]) || {};
     let su = 0, sn = 0;
     for (const k of keys) { const x = sl[k]; if (x) { su += Number(x[0]) || 0; sn += Number(x[1]) || 0; } }
     const price = su > 0 && sn > 0 ? sn / su : Number(c.price) || 0;
     const pace = paceOf(ds.list, paceFrom, shop);
+    const isApart = !!(apart && apart.has(String(id)));
     const perMonth = {};
     for (const x of ds.list) {
       const m = monthOf(x.k); if (!inMonths.has(m)) continue;
-      const pm = perMonth[m] || (perMonth[m] = { out: 0, outDays: [], units: 0, lost: 0, inDays: 0 });
+      const pm = perMonth[m] || (perMonth[m] = { out: 0, outDays: [], units: 0, lost: 0, apart: 0, inDays: 0 });
       const outF = 1 - x.inF; pm.inDays += x.inF;
       if (outF <= 0) continue;
       const exp = pace.level > 0 ? pace.perDay * (pace.season[m] ?? 1) / pace.level : pace.perDay;
       pm.out += outF; pm.outDays.push(x.k); pm.units += outF * exp; pm.lost += outF * exp * price;
+      if (isApart) pm.apart += outF * exp * price;   // §6: a website allocation's refill gaps
     }
-    variants.push({ id, c, ds, price, pace, perMonth, sold: sn, units: su, dayMap: ds.list });
+    variants.push({ id, c, ds, price, pace, perMonth, sold: sn, units: su, dayMap: ds.list, isApart });
   }
   const byP = new Map();
   for (const v of variants) {
@@ -211,24 +239,25 @@ function build(y, catalog = {}, { paceMonths = 6, bestShare = 0.8, links = () =>
     const selling = p.variants.filter((v) => v.pace.perDay > 0);
     const pm = {};
     for (const m of monthKeys) {
-      let lost = 0, units = 0; const dayOut = new Map();
-      for (const v of p.variants) { const x = v.perMonth[m]; if (!x) continue; lost += x.lost; units += x.units; }
-      for (const v of selling) for (const x of v.dayMap) { if (monthOf(x.k) !== m || x.inF >= 1) continue; dayOut.set(x.k, Math.max(dayOut.get(x.k) || 0, 1 - x.inF)); }
+      let lost = 0, units = 0, ap = 0; const dayOut = new Map();
+      for (const v of p.variants) { const x = v.perMonth[m]; if (!x) continue; lost += x.lost; units += x.units; ap += x.apart; }
+      for (const v of selling) for (const x of v.dayMap) { if (v.isApart || monthOf(x.k) !== m || x.inF >= 1) continue; dayOut.set(x.k, Math.max(dayOut.get(x.k) || 0, 1 - x.inF)); }
       const ks = [...dayOut.keys()].sort();
       const daysOut = [...dayOut.values()].reduce((s, f) => s + f, 0);
-      if (lost > 0 || daysOut > 0) pm[m] = { daysOut: r2(daysOut), dates: ks, range: ranges(ks), units: r2(units), lost: Math.round(lost) };
+      if (lost > 0 || daysOut > 0) pm[m] = { daysOut: r2(daysOut), dates: ks, range: ranges(ks), units: r2(units), lost: Math.round(lost), ...(ap > 0 ? { apart: Math.round(ap) } : {}) };
     }
     const tp = top.pace;
     out.push({
       productId: p.productId, name: p.name, sku: top.c.sku || '', variantId: top.id, variants: p.variants.length, best: p.best,
-      ids: p.variants.map((v) => v.id), outFrom: Object.fromEntries(p.variants.map((v) => [v.id, outRun(v.dayMap)])), variantPace: Object.fromEntries(p.variants.map((v) => [v.id, r2(v.pace.perDay * (v.pace.season[lastM] ?? 1) / (v.pace.level || 1))])),
+      ids: p.variants.map((v) => v.id), outFrom: Object.fromEntries(p.variants.map((v) => [v.id, outRun(v.dayMap)])), variantPace: Object.fromEntries(p.variants.map((v) => [v.id, r2(v.pace.perDay * seasonFor(v.pace.season, nowM) / (v.pace.level || 1))])),
       sold: Math.round(p.sold), units: p.units, share: r2(p.share * 100),
       price: Math.round(top.price), pace: { perDay: r2(selling.reduce((s, v) => s + v.pace.perDay, 0)), basis: tp.basis, few: selling.every((v) => v.pace.few), inDays: tp.inDays, months: paceMonths },
       season: tp.season, months: pm,
       lost: Object.values(pm).reduce((s, x) => s + x.lost, 0), daysOut: r2(Object.values(pm).reduce((s, x) => s + x.daysOut, 0)),
       stockNow: p.variants.reduce((s, v) => s + Math.max(0, Number(y.anchor.levels[v.id]) || 0), 0),
       ...links(top.c),
-      ...(apart && p.variants.some((v) => apart.has(String(v.id))) ? { allocation: true } : {}),
+      ...(p.variants.some((v) => v.isApart) ? { allocation: true } : {}),
+      ...(p.variants.some((v) => v.ds.unsure) ? { unsure: p.variants.filter((v) => v.ds.unsure).length } : {}),
     });
   }
   for (const p of out) {
@@ -236,8 +265,8 @@ function build(y, catalog = {}, { paceMonths = 6, bestShare = 0.8, links = () =>
       const row = months.get(m); if (!row) continue;
       row.lostAll += x.lost;
       if (!p.best) continue;
-      if (p.allocation) { row.lostApart += x.lost; continue; }   // §6: a website allocation's refill gaps, apart
-      row.lost += x.lost; row.lostUnits += x.units;
+      const ap = x.apart || 0;   // §6: a website allocation's refill gaps, apart
+      row.lostApart += ap; row.lost += x.lost - ap; row.lostUnits += x.units * (x.lost > 0 ? (x.lost - ap) / x.lost : 1);
       if (x.daysOut > 0) { row.bestOut++; row.daysOut += x.daysOut; }
     }
   }
@@ -245,7 +274,7 @@ function build(y, catalog = {}, { paceMonths = 6, bestShare = 0.8, links = () =>
   const best = out.filter((p) => p.best);
   const sum = (k) => mlist.reduce((s, m) => s + m[k], 0);
   const headline = { from: mlist.find((m) => m.days)?.from || sp.from, through: sp.through, sold: sum('sold'), lost: sum('lost'), lostAll: sum('lostAll'), daysOut: r2(sum('daysOut')),
-    bestsellers: best.length, bestRanOut: best.filter((p) => p.daysOut > 0 && !p.allocation).length, pct: 0, unsure: dropped.length,
+    bestsellers: best.length, bestRanOut: best.filter((p) => p.daysOut > 0).length, pct: 0, unsure: dropped.length,
     lostApart: sum('lostApart'), apart: best.filter((p) => p.allocation).length };
   headline.pct = headline.sold > 0 ? r2((headline.lost / headline.sold) * 100) : 0;
   return {
@@ -300,4 +329,4 @@ function fromRows(stock, orders, { dayOf, now = Date.now() } = {}) {
   return { v: 1, rows: true, at: now, sales: { ...sales, from: first, to: keyPlus(today, -1) }, moves: { ...moves, from: first, to: keyPlus(today, -1) }, anchor: { at: now, day: today, levels } };
 }
 
-module.exports = { outRun, OVERSELL, SEASON_UNITS, fromRows, build, variantYear, days, spanOf, shopSeason, paceOf, ranges, dayKeys, keyPlus, monthLabel, MIN_DAYS, FLOOR_DAYS, SEASON_K, SEASON_MIN, SEASON_CAP };
+module.exports = { shopSeasonOf, seasonFor, outRun, OVERSELL, SEASON_UNITS, fromRows, build, variantYear, days, spanOf, shopSeason, paceOf, ranges, dayKeys, keyPlus, monthLabel, MIN_DAYS, FLOOR_DAYS, SEASON_K, SEASON_MIN, SEASON_CAP };

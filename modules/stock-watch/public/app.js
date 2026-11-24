@@ -970,7 +970,7 @@
           <div class="tile ${p?.daysLeft != null && p.daysLeft <= 3 ? 'lost' : ''}"><b>${p?.daysLeft == null ? (p?.stock <= 0 ? '0' : '–') : n1(p.daysLeft)}</b><span>days left · ${p?.stock ?? '–'} in stock</span></div>
           <div class="tile"><b title="${n1(p?.perDay)} per in-stock day">${rate(p?.perDay)}</b><span>sells while in stock${p?.lowData ? ' · <abbr title="Under 5 units and 14 in-stock days to go on: capped at units ÷ days since its first sale, and never a best seller (LOGIC §3)">low data</abbr>' : ''}</span></div>
           ${gap ? `<div class="tile" id="lost-unknown" title="No stock record before ${esc(dateShort(gap))}, so stock-outs before then can’t be seen (Shopify’s change log didn’t add up for it)"><b>${p.lost ? money(p.lost) : 'Unknown'}</b><span>sales lost${p.lost ? ` since ${esc(dateShort(gap))}` : ''} · before ${esc(dateShort(gap))}: unknown</span></div>`
-    : `<div class="tile lost"><b>${money(p?.lost)}</b><span>sales lost${p?.lostProfit != null ? ` · ${money(p.lostProfit)} profit` : ''}${p && p.lost ? ` · confidence ${esc((CONF_LABEL[p.confidence] || '–').toLowerCase())}${weeksText(p) ? ` (${esc(weeksText(p))})` : ''}` : ''}</span>${p && p.lost ? lostSplitLine(p) : ''}</div>`}
+    : `<div class="tile lost"><b>${money(p?.lost)}</b><span>missed ${esc(inPeriod())} (${esc(periodDates(state.report))})${p?.lostProfit != null ? ` · ${money(p.lostProfit)} profit` : ''}${p && p.lost ? ` · confidence ${esc((CONF_LABEL[p.confidence] || '–').toLowerCase())}${weeksText(p) ? ` (${esc(weeksText(p))})` : ''}` : ''}</span>${p && p.lost ? lostSplitLine(p) : ''}</div>`}
           ${p?.returnPct != null ? `<div class="tile rtile" id="returns-tile" title="${esc(RETURNS_TIP)}"><span>Cancelled or refunded: <b class="${p.returnPct >= HIGH_RETURN ? 'amberv' : ''}">${n1(p.returnPct)}%</b> (${inr.format(p.unitsReturned)} of ${inr.format(p.unitsOrdered)} ordered${p.unitsCancelled ? `, ${inr.format(p.unitsCancelled)} cancelled` : ''}) · ${money(p.refundValue)} back</span></div>` : ''}
         </section>
         ${p && (viewOnly() ? p.onOrder : p.orderQty > 0 || p.onOrder) ? orderForm(p) : ''}
@@ -1243,7 +1243,7 @@
     if (e.key === 'Escape') closeDrawer();
     if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('.mcard[data-id], tr[data-id]')) { e.preventDefault(); if (e.target.closest('.groups')) { openGroup(e.target.dataset.id); return; } lastRow = e.target; openProduct(e.target.dataset.id); }
     if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('th[data-k]')) { e.preventDefault(); e.target.click(); }
-    if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('div[data-product]')) { e.preventDefault(); lastRow = e.target; openProduct(e.target.dataset.product); }   // Overview rows (critic UI-3)
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('[data-product][role=button]')) { e.preventDefault(); lastRow = e.target; openProduct(e.target.dataset.product); }   // Overview rows (critic UI-3)
   });
   $('#drawer').addEventListener('click', (e) => { if (e.target.id === 'drawer') closeDrawer(); });
   /* M7: phones get an opaque strip behind the sticky × once the drawer scrolls (styles.css .scrolled) */

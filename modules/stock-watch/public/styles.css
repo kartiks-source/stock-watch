@@ -965,8 +965,9 @@ body.no-period .top .range, body.no-period .top .rlabel, body.no-period .top .rd
   .m-hide { display: none; }
   .hrow { grid-template-columns: repeat(var(--mcols, 12), minmax(0, 1fr)); row-gap: 4px; }
   .hrow:not(.hhead) { padding: 6px 0; border-top: 1px solid var(--line); }
-  .hrow .hp { grid-row: 1; grid-column: 1 / 10; }
-  .hrow .hv { grid-row: 1; grid-column: 10 / 13; text-align: right; }
+  .hrow:not(.hhead) { position: relative; }
+  .hrow .hp { grid-row: 1; grid-column: 1 / -1; padding-right: 116px; }
+  .hrow .hv { position: absolute; top: 8px; right: 0; text-align: right; }
   .hhead > span { display: none; }
   .hc { height: 24px; font-size: 11px; }
   .hm { padding: 6px 0; font-size: 11px; }
@@ -976,3 +977,14 @@ body.no-period .top .range, body.no-period .top .rlabel, body.no-period .top .rd
   .mtable td small { display: block; }
 }
 .best.tu { color: var(--soft); background: #EEF1F5; }
+.bchart .mb.part .sold { fill-opacity: .55; }
+.bchart .mb:focus-visible .hit { stroke: var(--brand); stroke-width: 2; }
+.hc.h1 { background: #F7D3DB; }
+.ph-only { display: none; }
+@media (max-width: 759.98px) {
+  .ph-only { display: inline; color: var(--soft); font-size: 11px; }
+  .mtable tbody td { height: 44px; }
+  .hm { min-height: 44px; }
+  .chk { min-height: 44px; padding: 0 4px; }
+  .ads2 .pl1 .best { display: none; }
+}

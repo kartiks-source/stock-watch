@@ -61,7 +61,7 @@ test('parse: string rows, null variant rows kept for the store total only, zero 
   assert.deepEqual(m.rows, [{ day: '2026-11-01', variantId: '7', delta: -1 }]);
 });
 
-test('a first load reads 365 days back in windows under the cap, every day exactly once, over several runs; then only new days', async () => {
+test('a first load reads 365 full days back in windows under the cap, every day exactly once, over several runs; then only new days', async () => {
   useStore();
   const f = fakeShop({ perDay: 30 });   // 31 rows a day with the null row: ~25 days a read
   let r = await Y.run({ q: f.q, now: NOW, maxCalls: 6 });
@@ -71,7 +71,7 @@ test('a first load reads 365 days back in windows under the cap, every day exact
   for (let i = 0; i < 20 && !r.done; i++) r = await Y.run({ q: f.q, now: NOW, maxCalls: 6 });
   assert.equal(r.done, true);
   const y = Y.load();
-  const start = keyPlus('2026-11-24', -364);
+  const start = keyPlus('2026-11-24', -365);   // 365 full days and today
   assert.equal(y.sales.from, start); assert.equal(y.moves.from, start);
   assert.equal(y.sales.to, '2026-11-23'); assert.equal(y.moves.to, '2026-11-23');
   /* every day once: 30 variants × 1 unit, ₹100.5 each, + a −₹10 row without a variant */
@@ -118,4 +118,23 @@ test('without read_reports: skipped with a note, tried once a day, never throws'
   assert.equal(r.ok, false); assert.match(r.note, /needs read_reports/);
   assert.equal(Y.due(Y.load(), NOW + 3600e3, 'Asia/Kolkata'), false);
   assert.equal(f.calls.length, 1);
+});
+
+test('the anchor is only taken from a fresh stock read; a stale catalog keeps the last anchor', async () => {
+  useStore({ 101: { stock: 7, tracked: true, seenAt: NOW - 60 * 60e3 } });   // stock read an hour before
+  const f = fakeShop({ perDay: 1 });
+  const r = await Y.run({ q: f.q, now: NOW, maxCalls: 40, days: 30 });
+  assert.equal(r.anchorAt, null, 'no anchor from stock an hour old');
+  assert.equal(r.ok, false);
+});
+
+test('a failed refresh is tried again at the next pull (30 min on), a missing permission once a day', async () => {
+  useStore();
+  const ok = fakeShop({ perDay: 1 });
+  await Y.run({ q: ok.q, now: NOW, maxCalls: 40, days: 20 });
+  assert.equal(Y.load().done, true);
+  const bad = async () => { throw new Error('Shopify: HTTP 502'); };
+  await Y.run({ q: bad, now: NOW + 864e5, days: 20 });
+  assert.equal(Y.due(Y.load(), NOW + 864e5 + 10 * 60e3, 'Asia/Kolkata'), false);
+  assert.equal(Y.due(Y.load(), NOW + 864e5 + 31 * 60e3, 'Asia/Kolkata'), true);
 });

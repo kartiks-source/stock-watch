@@ -86,7 +86,7 @@ test('1440: Best sellers now, Ads push / pause, drawer with 12 months on the she
   assert.match(await pg.textContent('#drawer .ycal'), /Normal pace: [\d.]+ a day \(about \d+ a week, \d+ a month\)/);
   await pg.keyboard.press('Escape');
   await pg.goto(base + '/?store=sammsara-demo#ads'); await pg.waitForSelector('.ads2 .arow');
-  assert.match(await pg.textContent('#view .headline h1'), /^Push \d+ in stock\. Pause \d+ that can’t be bought\.$/);
+  assert.match(await pg.textContent('#view .headline h1'), /^Push \d+ in stock\. Pause \d+: \d+ out, \d+ about to run out\.$/);
   assert.ok((await pg.$$('.ads2 .panel:first-child .arow')).length > 0);
   assert.match(await pg.textContent('.ads2 .panel:first-child .arow .af small'), /\d+ weeks of stock/);
   const [dl] = await Promise.all([pg.waitForEvent('download'), pg.click('[data-ads-csv="push"]')]);

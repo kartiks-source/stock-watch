@@ -378,9 +378,12 @@ async function pullOne(id) {
 
 /** 1.4.0: Data → Read 12 months now (admin). Queued like a pull; a bigger budget than the read after a pull. */
 function readYear(id) {
-  const p = pullQueue.then(() => inStore(id, () => year.run({ maxCalls: 60, maxMs: 20 * 60e3 })));
-  pullQueue = p.catch(() => {});
-  return p;
+  /* a pull first, so the stock the walk starts from is minutes old (LOGIC §20), then up to 60 reads */
+  return syncShopify(id).catch((e) => console.warn('year: pull before the read failed:', e.message)).then(() => {
+    const p = pullQueue.then(() => inStore(id, () => year.run({ maxCalls: 60, maxMs: 20 * 60e3 })));
+    pullQueue = p.catch(() => {});
+    return p;
+  });
 }
 
 /** SW-063: Data → Rebuild stock history. Queued like a pull, so it never runs beside one. */

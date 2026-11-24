@@ -10,7 +10,7 @@ const shop = { domain: 'sammsara.myshopify.com', web: 'https://www.sammsara.com'
 test('stock query reads picture, handle and website address; only Shopify CDN pictures and https links are kept', () => {
   assert.ok(S.IMG_PX >= 96 && S.IMG_PX <= 400, 'a small picture');
   const pr = { handle: 'chess-set', onlineStoreUrl: 'https://www.sammsara.com/products/chess-set', publishedAt: '2020-01-01T00:00:00Z', featuredMedia: { preview: { image: { url: 'https://cdn.shopify.com/s/files/1/x_320x.jpg?v=1' } } } };
-  assert.deepEqual(S.productLinks(pr), { image: 'https://cdn.shopify.com/s/files/1/x_320x.jpg?v=1', handle: 'chess-set', web: 'https://www.sammsara.com/products/chess-set', published: true });
+  assert.deepEqual(S.productLinks(pr), { image: 'https://cdn.shopify.com/s/files/1/x_320x.jpg?v=1', handle: 'chess-set', web: 'https://www.sammsara.com/products/chess-set', published: true, publishedAt: Date.parse('2020-01-01T00:00:00Z') });
   assert.deepEqual(S.productLinks({ handle: 'a b', onlineStoreUrl: 'javascript:alert(1)', featuredMedia: { preview: { image: { url: 'https://evil.example/x.jpg' } } } }), {});
   assert.deepEqual(S.productLinks(null), {});
 });

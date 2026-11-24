@@ -180,7 +180,7 @@ function productLinks(pr) {
   if (typeof img === 'string' && /^https:\/\/cdn\.shopify\.com\//.test(img)) out.image = img;
   if (typeof pr?.handle === 'string' && /^[a-z0-9][a-z0-9-]*$/i.test(pr.handle)) out.handle = pr.handle;
   if (typeof pr?.onlineStoreUrl === 'string' && /^https:\/\//.test(pr.onlineStoreUrl)) out.web = pr.onlineStoreUrl;
-  if (pr && pr.publishedAt) out.published = true;
+  if (pr && pr.publishedAt) { out.published = true; const t = Date.parse(pr.publishedAt); if (Number.isFinite(t)) out.publishedAt = t; }   // when it went on the online store (the brand report counts from then, LOGIC §20)
   return out;
 }
 

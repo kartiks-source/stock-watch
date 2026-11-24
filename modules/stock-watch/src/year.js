@@ -28,13 +28,16 @@ const TZ = require('./tz');
 const { sideFile } = require('./sidefile');
 
 const VERSION = 1;
-const DAYS = 365;             // the last 365 store days, today included
+const DAYS = 366;             // the last 365 full store days and today (so the oldest of the 12 months is whole on the 1st)
 const CAP = 1000;             // ShopifyQL's row cap
 const TARGET_ROWS = 800;      // aim per read, under the cap
 const MAX_WINDOW = 62;        // days per read at most
 const QL_VERSION = '2025-10';
 const MAX_CALLS = Math.max(1, Number(process.env.YEAR_CALLS_PER_RUN) || 8);   // per run (after a pull); a first load spreads over pulls
 const MAX_MS = 4 * 60e3;      // and no new read after 4 minutes
+const FRESH_READS = 20;       // the new days are always read in full (up to this many reads), so the anchor matches them
+const ANCHOR_AGE = 15 * 60e3; // the catalog's stock must be this fresh to anchor the walk (else the last anchor stays)
+const RETRY_MS = 30 * 60e3;   // a failed read is tried again at the next pull after this long
 const Q = 'query Year($q: String!) { shopifyqlQuery(query: $q) { tableData { columns { name } rows } parseErrors } }';
 const DAY = 864e5;
 
@@ -163,6 +166,7 @@ const save = (d) => file.write(d);
 function due(y, now = Date.now(), zone = TZ.DEFAULT_ZONE) {
   if (!y || y.v !== VERSION) return true;
   if (!y.done) return true;
+  if (y.error && y.error !== 'scope' && y.error !== 'cap' && now - (+y.triedAt || 0) > RETRY_MS) return true;   // a failed refresh: again at the next pull
   const last = Math.max(+y.at || 0, +y.triedAt || 0);
   return TZ.dayKey(last, zone) !== TZ.dayKey(now, zone);
 }
@@ -201,7 +205,9 @@ async function run({ q, now = Date.now(), days = DAYS, maxCalls = MAX_CALLS, max
     for (const kind of ['sales', 'moves']) {
       const s = y[kind];
       if (!s.to) continue;   // nothing yet: the backfill below starts at today
+      const keep = budget.calls; budget.calls = Math.max(budget.used + FRESH_READS, keep);   // the new days in full, outside the budget
       const r = await readRange(ask, kind, s, s.to, today, 'fwd', budget);
+      budget.calls = keep;
       if (r.hi) s.to = r.hi >= today ? keyPlus(today, -1) : r.hi;
       if (!r.done) fresh = false;
     }
@@ -221,18 +227,21 @@ async function run({ q, now = Date.now(), days = DAYS, maxCalls = MAX_CALLS, max
         if (budget.used > before && s.from !== start) more = true;
       }
     }
-    if (fresh && y.moves.to && (!y.anchor || y.moves.to >= keyPlus(today, -1))) {
+    let seen = 0; for (const c of Object.values(d.catalog || {})) if (+c.seenAt > seen) seen = +c.seenAt;
+    const stale = !(seen > 0) || now - seen > ANCHOR_AGE;   // the stock was read long before today's changes: the walk would shift
+    if (fresh && !stale && y.moves.to && (!y.anchor || y.moves.to >= keyPlus(today, -1))) {
       const levels = {};
       for (const [id, c] of Object.entries(d.catalog || {})) if (c && c.tracked !== false && Number.isFinite(Number(c.stock)) && c.stock != null) levels[id] = Number(c.stock);
-      let seen = 0; for (const c of Object.values(d.catalog || {})) if (+c.seenAt > seen) seen = +c.seenAt;
-      y.anchor = { at: seen || now, day: today, levels };
+      y.anchor = { at: seen, day: today, levels };
     }
+    y.error = undefined;
     y.done = y.sales.from === start && y.moves.from === start && y.sales.to >= keyPlus(today, -1) && y.moves.to >= keyPlus(today, -1);
     y.ok = !!y.anchor; y.at = now; y.triedAt = now; y.note = y.done ? null : `Reading 12 months from Shopify: ${y.sales.from || today} to today so far; the rest follows at the next pulls.`;
   } catch (e) {
     console.warn('year: 12-month read stopped:', e.message);
     y.triedAt = now; y.note = noteFor(e); y.error = e.code || 'error';
-    if (/read_reports|scope|permission|access denied/i.test(String(e.message))) y.done = true;   // not every pull: once a day
+    if (/read_reports|scope|permission|access denied/i.test(String(e.message))) { y.done = true; y.error = 'scope'; }   // not every pull: once a day
+    if (e.code === 'cap') y.done = true;   // a day over the cap won't change: keep what is held, try again tomorrow
   }
   y.calls = y.calls || { total: 0, runs: [] };
   y.calls.last = budget.used; y.calls.total = (y.calls.total || 0) + budget.used;
