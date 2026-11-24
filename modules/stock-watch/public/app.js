@@ -955,23 +955,50 @@
   const field = (k, label, v, hint, type = 'number') => `<div class="field"><label for="f-${k}">${esc(label)}</label><input id="f-${k}" data-setting="${k}" ${type === 'number' ? `type="text" inputmode="decimal" autocomplete="off" data-trial="${k}"` : `type="${type}"`} value="${esc(type === 'number' ? window.SW_TRIAL?.typed(`f-${k}`) ?? v : v)}"><small>${esc(hint)}</small></div>`;   // SW-057: numbers keep what you type
 
   /* ---------- product drawer ---------- */
+  /* 1.4.3: the drawer opens at once from the row the page already has (picture, name, code, links, status, stock) with
+     placeholders for the rest, then fills in when /api/product answers. Answers are kept per product, period and data version
+     (rev), fetched ahead on row hover / focus (debounced), so a second open is instant. */
+  const productCache = new Map();   // key → Promise of the answer
+  const productKey = (id) => `${id}|${state.days}|${whatQs()}|${state.report && state.report.rev}|${window.SW_STORES ? SW_STORES.current() : ''}`;
+  function fetchProduct(id) {
+    const k = productKey(id);
+    if (!productCache.has(k)) {
+      if (productCache.size > 30) productCache.delete(productCache.keys().next().value);
+      productCache.set(k, api(`/api/product/${encodeURIComponent(id)}?days=${state.days}${whatQs()}`).catch((e) => { productCache.delete(k); throw e; }));
+    }
+    return productCache.get(k);
+  }
+  let prefetchT = null;
+  const prefetch = (id) => { clearTimeout(prefetchT); prefetchT = setTimeout(() => { fetchProduct(id).catch(() => {}); }, 150); };
+  document.addEventListener('pointerover', (e) => { const t = e.target.closest && e.target.closest('tr[data-id], .mcard[data-id], [data-product]'); if (t && !t.closest('.groups')) prefetch(t.dataset.id || t.dataset.product); }, { passive: true });
+  document.addEventListener('focusin', (e) => { const t = e.target.closest && e.target.closest('tr[data-id], .mcard[data-id], [data-product]'); if (t && !t.closest('.groups')) prefetch(t.dataset.id || t.dataset.product); });
+  const rowOf = (id) => (state.report && state.report.products.find((x) => String(x.id) === String(id))) || null;
+  const nowHtmlOf = (p, prof) => (!p ? '' : p.stock != null && p.stock <= 0 ? `<span class="st g-today">Out${prof && prof.ok && prof.outs.open && prof.outs.since ? ` since ${esc(dateShort(Date.parse(prof.outs.since + 'T12:00:00Z') - off()))}` : p.outSince ? ` since ${esc(dateShort(p.outSince))}` : ''}</span>` : p.stock != null ? `<span class="st ok">In stock · ${inr.format(p.stock)}</span>` : '');
+  const HOUR_FOLD = 'sw-hourfold';   // 'closed' when the reader closed "Last N days, to the hour" (this browser)
+  const hourFoldOpen = () => { try { return localStorage.getItem(HOUR_FOLD) !== 'closed'; } catch { return true; } };
   async function openProduct(id) {
     const dr = $('#drawer'), body = $('#drawer-body');
     if (dr.hidden) { try { history.pushState({ drawer: 1 }, ''); } catch { /* sandboxed */ } }   // Back closes the drawer
-    body.innerHTML = '<p class="muted">Loading…</p>'; dr.hidden = false;
+    const row = rowOf(id);
+    body.dataset.id = id;
+    body.innerHTML = row && window.SW_PROFILE
+      ? `${manyStores() ? `<p class="dstore">${esc(SW_STORES.name())}</p>` : ''}${SW_PROFILE.top(row, null, nowHtmlOf(row, null) + status(row))}${SW_PROFILE.skeleton()}`
+      : '<p class="muted">Loading…</p>';
+    dr.hidden = false;
     try {
-      const d = await api(`/api/product/${encodeURIComponent(id)}?days=${state.days}${whatQs()}`);
-      const p = d.product, now = state.report.generatedAt, from = state.report.from, gap = noHistory(p, from);
+      const d = await fetchProduct(id);
+      if (body.dataset.id !== String(id) || dr.hidden) return;   // another product was opened meanwhile
+      const p = d.product;
       const prof = d.profile;
-      /* 1.4.1: the drawer is the product's 12-month profile (public/profile.js, LOGIC §24); 30-day hour detail under More */
-      const nowHtml = !p ? '' : p.stock != null && p.stock <= 0 ? `<span class="st g-today">Out${prof && prof.ok && prof.outs.open && prof.outs.since ? ` since ${esc(dateShort(Date.parse(prof.outs.since + 'T12:00:00Z') - off()))}` : p.outSince ? ` since ${esc(dateShort(p.outSince))}` : ''}</span>` : p.stock != null ? `<span class="st ok">In stock · ${inr.format(p.stock)}</span>` : '';
+      /* 1.4.1: the drawer is the product's 12-month profile (public/profile.js, LOGIC §24); 30-day hour detail in one fold */
       body.innerHTML = `
-        ${manyStores() ? `<p class="dstore">${esc(SW_STORES.name())}</p>` : ''}${p ? (window.SW_PROFILE ? SW_PROFILE.top(p, prof, nowHtml + status(p)) : SW_PROD.hero(p, `<div class="toolbar">${status(p) + bestTag(p)}</div>`)) : `<h2 id="drawer-title">${esc(id)}</h2>`}
+        ${manyStores() ? `<p class="dstore">${esc(SW_STORES.name())}</p>` : ''}${p ? (window.SW_PROFILE ? SW_PROFILE.top(p, prof, nowHtmlOf(p, prof) + status(p)) : SW_PROD.hero(p, `<div class="toolbar">${status(p) + bestTag(p)}</div>`)) : `<h2 id="drawer-title">${esc(id)}</h2>`}
         ${window.SW_PROFILE ? SW_PROFILE.body(prof, p, p && (viewOnly() ? p.onOrder : p.orderQty > 0 || p.onOrder) ? orderForm(p) : '') : ''}
-        <details class="panel fold"><summary><b>Last ${state.report.days || 30} days, to the hour</b> <span class="muted">${esc(periodDates(state.report))}</span></summary>
+        <details class="panel fold" id="hour-fold" ${hourFoldOpen() ? 'open' : ''}><summary><b>Last ${state.report.days || 30} days, to the hour</b> <span class="muted">${esc(periodDates(state.report))}</span></summary>
         ${p?.why ? `<p class="dwhy">${whyCell(p)}</p>` : ''}
-        <p class="small">Sales lost in these days: <b class="lostv">${money(p?.lost)}</b>${p && p.lost ? ` · how sure: ${esc((CONF_LABEL[p.confidence] || '–').toLowerCase())}${weeksText(p) ? ` (${esc(weeksText(p))})` : ''}` : ''}. Sells ${esc(rate(p?.perDay))} on days in stock (last 28 days).</p>${p && p.lost ? lostSplitLine(p) : ''}
+        <p class="small">Money missed in these days: <b class="lostv">${money(p?.lost)}</b>${p && p.lost ? ` · how sure: ${esc((CONF_LABEL[p.confidence] || '–').toLowerCase())}${weeksText(p) ? ` (${esc(weeksText(p))})` : ''}` : ''}. ${p && p.lossPace != null ? `Valued at ${esc(rate(p.lossPace))} (its usual pace for this month, as in the 12 months above). ` : ''}Sells ${esc(rate(p?.perDay))} on days in stock lately (last 28 days: sets the order).</p>${p && p.lost ? lostSplitLine(p) : ''}
         <div><h3 class="small">Every stock-out</h3>${d.stockouts.length ? `<div>${d.stockouts.map((s) => `<div class="ep"><span>${dt(s.start)} → ${s.open ? '<span class="st open">still out</span>' : dt(s.end)}</span><span class="muted">${dur(s.hours)}</span><b style="color:#E0506E">${money(s.lost)}</b>${s.topUp != null ? `<span>refilled ${s.topUp} pcs</span>` : ''}${s.small ? '<span class="st small">Small top-up</span>' : ''}${s.repeat ? '<span class="st again">Out again</span>' : ''}</div>`).join('')}</div>` : '<p class="muted">None in these days.</p>'}</div></details>`;
+      $('#hour-fold')?.addEventListener('toggle', (e) => { try { if (e.target.open) localStorage.removeItem(HOUR_FOLD); else localStorage.setItem(HOUR_FOLD, 'closed'); } catch { /* private window */ } });
       if (window.SW_PROFILE) SW_PROFILE.charts(body, prof);
       $('#drawer-close').focus();
     } catch (e) { body.innerHTML = `<p>Couldn’t load this product: ${esc(e.message)}</p>`; }

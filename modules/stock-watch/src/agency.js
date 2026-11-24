@@ -291,13 +291,17 @@ function build(y, catalog = {}, { paceMonths = 6, bestShare = 0.8, links = () =>
     bestsellers: best.length, bestRanOut: best.filter((p) => p.daysOut > 0 && !p.allApart).length, pct: 0, unsure: dropped.length,
     lostApart: sum('lostApart'), apart: best.filter((p) => p.allocation).length };
   headline.pct = headline.sold > 0 ? r2((headline.lost / headline.sold) * 100) : 0;
-  const dv = detail ? variants.find((v) => v.id === String(detail)) : null;
-  return {
-    ...(dv ? { detail: { id: dv.id, list: dv.dayMap, pace: dv.pace, perMonth: dv.perMonth, price: dv.price, sold: dv.sold, units: dv.units, isApart: dv.isApart, unsure: !!dv.ds.unsure, monthKeys, nowM } } : {}),
+  const dv = detail && detail !== true ? variants.find((v) => v.id === String(detail)) : null;
+  const det = (v) => ({ id: v.id, list: v.dayMap, pace: v.pace, perMonth: v.perMonth, price: v.price, sold: v.sold, units: v.units, isApart: v.isApart, unsure: !!v.ds.unsure, monthKeys, nowM });
+  const res = {
+    ...(dv ? { detail: det(dv) } : {}),
     ok: true, span: { from: sp.from, through: sp.through, days: keys.length }, asOf: { readAt: y.at || null, stockAt: y.anchor.at || null, through: sp.through },
     settings: { paceMonths, bestShare }, months: mlist, headline, shopSeason: shop,
     products: out.sort((a, b) => b.lost - a.lost || b.sold - a.sold), dropped,
   };
+  /* 1.4.3: detail: true keeps every variant's days for the drawer (not sent: non-enumerable) */
+  if (detail === true) Object.defineProperty(res, 'details', { value: Object.fromEntries(variants.map((v) => [v.id, det(v)])), enumerable: false });
+  return res;
 }
 
 /**
@@ -308,7 +312,7 @@ function build(y, catalog = {}, { paceMonths = 6, bestShare = 0.8, links = () =>
  */
 function profile(r, y, catalog, id) {
   if (!r || !r.ok) return { ok: false, reason: (r && r.reason) || 'none' };
-  const d = r.detail;
+  const d = r.detail && r.detail.id === String(id) ? r.detail : r.details && r.details[String(id)];
   if (!d) return { ok: false, reason: 'none' };
   if (d.unsure) return { ok: false, reason: 'unsure' };
   const c = catalog[id] || {};
@@ -378,7 +382,7 @@ function profile(r, y, catalog, id) {
     missed: { value: Math.round(missed), units: r2(missedUnits) },
     lastRestock, price, months,
     calendar: list.map((x) => [x.k, x.inF]),
-    stock: list.map((x) => [x.k, x.end]), restocks: Object.entries(mv).filter(([k, q]) => k >= first && k <= through && +q > 0).map(([k, q]) => [k, +q]).sort(),
+    stock: list.map((x) => [x.k, x.end, x.u, +(mv[x.k] || 0)]), restocks: Object.entries(mv).filter(([k, q]) => k >= first && k <= through && +q > 0).map(([k, q]) => [k, +q]).sort(),
     season,
   };
   return out;

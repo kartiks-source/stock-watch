@@ -793,7 +793,7 @@ function productDetail(id, stock, orders, settings = {}, opts = {}) {
   for (const k of TZ.dayKeys(first, now, zone)) units[k] = 0;
   for (const o of lines) if (o.t >= from) { const k = dayKey(o.t, zone); if (k in units) units[k] += num(o.qty); }
   /* same numbers as the main report (the store-wide hourly pattern), this product only */
-  const r = report(stock, orders, S, { ...opts, now, from, days: opts.from != null ? opts.days : undefined });   // every report option (catalog, Mark ordered, suppliers, reversals, pull interval, weekly sales)
+  const r = opts.report || report(stock, orders, S, { ...opts, now, from, days: opts.from != null ? opts.days : undefined });   // 1.4.3: the cached report of the same options when given; every report option (catalog, Mark ordered, suppliers, reversals, pull interval, weekly sales)
   const c = own(opts.catalog, String(id));
   if (!timeline.length && c && c.stock != null) timeline.push({ t: from, stock: num(c.stock) }, { t: now, stock: num(c.stock) });   // never moved: flat at its stock now
   return { id, product: r.products.find((p) => String(p.id) === String(id)) || null, timeline,

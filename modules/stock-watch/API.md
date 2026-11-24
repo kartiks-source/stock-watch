@@ -4,6 +4,8 @@ Every HTTP route `server.js` answers, version 1.1.0. Source of truth: `server.js
 
 ## Conventions
 
+- 1.4.3: JSON answers over 1 KB are sent gzipped when the request accepts it (`Content-Encoding: gzip`). `/api/report`, `/api/product/:id` and `/api/brand` carry `rev`, the store's data version (LOGIC §25); answers are cached per store until it changes.
+
 - **Auth** column: **open** (no login), **key** (ingest key header), **view** (any signed-in role: admin or view-only), **admin** (admin only).
 - Sign in with the `sw_session` cookie from `POST /login`, or HTTP Basic auth with any user name and the password. With no `ADMIN_PASSWORD` set (local only), every request is admin.
 - **People** (SW-062): a person's own password (Data → People) signs in the same ways, as admin or view, for their stores only: `?store=` outside their list → **403** `This store isn’t open to your sign-in` (also for unknown ids); `GET /api/stores` lists only theirs. `ADMIN_PASSWORD` (the owner) and `VIEW_PASSWORD` open every store.

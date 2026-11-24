@@ -59,3 +59,23 @@ test('a year.json from Shopify is preferred over the rows held', async () => {
   assert.equal(j.basis, 'shopify');
   assert.equal(j.span.from, '2026-01-01');
 });
+
+/* 1.4.3: speed. The report, the 12-month build and the brand report are kept per store version (src/cache.js): a second
+   product open doesn't work out the store again; answers are gzipped. */
+test('perf: a warm /api/product answers fast; Mark ordered (a write) refreshes it; JSON is gzipped', async () => {
+  const b = await get('/api/brand');
+  const id = b.now[0].id;
+  const t = async () => { const t0 = performance.now(); const j = await get(`/api/product/${id}?days=30`); return [performance.now() - t0, j]; };
+  const [cold, j1] = await t();
+  const [warm, j2] = await t();
+  const [warm2] = await t();
+  console.log(`perf demo: /api/product cold ${cold.toFixed(0)} ms, warm ${warm.toFixed(0)} / ${warm2.toFixed(0)} ms`);
+  assert.ok(Math.min(warm, warm2) < 100, `warm ${warm.toFixed(0)} ms`);
+  assert.equal(j1.rev, j2.rev, 'same data version');
+  await fetch(`${base}/api/onorder?store=sammsara-demo`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ items: [{ id, qty: 3, eta: new Date(Date.now() + 5 * 864e5).toISOString().slice(0, 10) }] }) });
+  const [, j3] = await t();
+  assert.ok(j3.rev > j2.rev, 'a write bumps the version');
+  assert.ok(j3.product.onOrder, 'and the answer is worked out again');
+  const raw = await new Promise((ok, no) => require('node:http').get(`${base}/api/report?days=30&store=sammsara-demo`, { headers: { 'accept-encoding': 'gzip' } }, (r) => { r.resume(); ok(r.headers); }).on('error', no));
+  assert.equal(raw['content-encoding'], 'gzip');
+});

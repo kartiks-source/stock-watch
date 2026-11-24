@@ -11,6 +11,14 @@ Older entries: [2026-11](devlog/2026-11.md)
 
 
 
+## 2026-11-24 · 1.4.3 · one pace for money missed; drawer instant, tooltips; cached answers
+stock-watch 1.4.3 (branch `feature/agency-proof`, main 1.4.2 merged; not pushed, not deployed).
+- Live inconsistency: brand report Oakwood Nov ≈ ₹56k vs report 30 d ₹76,788 (28-day rate from 8 pre-Diwali shelf days, basis window; lossPace only on history/before-out). Engine now values every hour out at §21's pace of its month × the 12-month price (`opts.lossPace` per month, `opts.lossPrice`) on every page/period, digest, snapshots (retaken), v1, CSVs. Reorder/Sells/days left stay 28-day. Test: brand month = report lost for the same dates (±₹2).
+- Live before → after (same data): Oakwood 7 d ₹25,527 → ₹19,064, 30 d ₹76,847 → ₹57,391 (brand Nov ₹56,167); Nivaya 30 d ₹56,392 → ₹51,891, Nov 1–24 ₹44,969 → ₹41,988 (brand ₹40,885); Seville 30 d ₹36,941 → ₹31,886; Surrey 30 d ₹6,527 → ₹6,054; store headline 7 d ₹1,21,453 → ₹1,13,428, 30 d ₹5,08,354 → ₹4,87,491; all parts 30 d ₹8.06 L → ₹14.17 L (not restocked: long-out items at in-stock pace instead of the 26-week floor).
+- Drawer: opens at once from the row with placeholders; prefetch on hover/focus; client cache keyed by `rev`; "to the hour" fold open by default, closing remembered; tooltips on every chart (hover, tap, focus) inside the drawer.
+- Speed (local copy of live data): /api/product 0.19–0.40 s → 2–3 ms warm (0.24 s cold after a change); report 545 KB → 58.5 KB gzipped; brand 354 KB → 58 KB, 0.2 s → 5 ms warm. `src/cache.js`; build warmed after each pull.
+- Open: Railway CPU is ~4× slower than this machine: measure there after deploy; the report payload could shrink further (links derivable on the page).
+
 ## 2026-11-24 · 1.4.1 · product drawer = 12-month profile
 stock-watch 1.4.1 (branch `feature/agency-proof`, after merging main ec2fa1a; not pushed, not deployed). User (screenshot): the drawer still showed 30-day Trend 0,0,0 and a flat pink Stock level block.
 - Drawer rebuilt (`public/profile.js`): header with rank and status now; story line; key numbers; 12-month sold + "would have sold" ghost bars + days-out strip + season line; price and discount (MRP = compare-at, GST from ShopifyQL `taxes`); day calendar; 12-month stock level with restocks; busy/quiet months + same month last year; month sentences; details. 30-day hour detail under one fold. Charts lazy (IntersectionObserver), inline SVG, scroll inside their card on phones.

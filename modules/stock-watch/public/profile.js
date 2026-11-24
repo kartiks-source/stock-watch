@@ -85,7 +85,7 @@
   function calendar(prof) {
     const cal = prof.calendar || []; if (!cal.length) return '';
     const dow = (new Date(`${cal[0][0]}T00:00:00Z`).getUTCDay() + 6) % 7;
-    const cells = [...Array(dow).fill('<i class="cd e"></i>'), ...cal.map(([k, f]) => `<i class="cd ${f >= 1 ? 'in' : f > 0 ? 'half' : 'out'}" title="${esc(`${dayY(k)}: ${f >= 1 ? 'in stock' : f > 0 ? 'ran out or came back that day' : 'out of stock all day'}`)}"></i>`)].join('');
+    const cells = [...Array(dow).fill('<i class="cd e"></i>'), ...cal.map(([k, f], i) => { const u = prof.stock && prof.stock[i] ? prof.stock[i][2] : null; const tip = [dayY(k), f >= 1 ? 'In stock all day' : f > 0 ? 'Ran out or came back that day (about half the day out)' : 'Out of stock all day', u != null ? `${inr.format(u)} sold` : ''].filter(Boolean).join('\n'); return `<i class="cd ${f >= 1 ? 'in' : f > 0 ? 'half' : 'out'}" data-tip="${esc(tip)}"></i>`; })].join('');
     return `<section class="panel ycal"><div class="panel-head"><h2>Every day on the shelf</h2><span class="muted small">${esc(span(prof.span.from, prof.span.through))}</span></div>
       <div class="calwrap"><div class="cal" aria-label="One square per day, Monday at the top">${cells}</div></div>
       <p class="muted small"><i class="sw in"></i> could be bought all day <i class="sw half"></i> ran out or came back that day <i class="sw out"></i> nobody could buy it. One square per day, a column per week.</p></section>`;
@@ -129,6 +129,30 @@
       ${seasonBlock(prof)}${monthList(prof)}${details(prof)}`;
   }
 
+  const priceOf = (prof, key) => (prof.price && prof.price.byMonth ? prof.price.byMonth.find((m) => m.key === key) : null);
+
+  /* ---------- 1.4.3: details on hover, tap and keyboard focus: one small box inside the drawer, no library ---------- */
+  let tipEl = null, tipFor = null;
+  function showTip(el) {
+    const card = el.closest('.drawer-card'); if (!card) return;
+    if (!tipEl || !card.contains(tipEl)) { tipEl = document.createElement('div'); tipEl.className = 'ptip'; tipEl.setAttribute('role', 'tooltip'); tipEl.id = 'ptip'; card.append(tipEl); }
+    tipEl.innerHTML = String(el.getAttribute('data-tip') || '').split('\n').map((l, i) => (i ? `<div>${esc(l)}</div>` : `<b>${esc(l)}</b>`)).join('');
+    tipEl.hidden = false; tipFor = el;
+    const c = card.getBoundingClientRect(), r = el.getBoundingClientRect(), tw = tipEl.offsetWidth, th = tipEl.offsetHeight;
+    let left = r.left + r.width / 2 - c.left - tw / 2 + card.scrollLeft, top = r.top - c.top + card.scrollTop - th - 8;
+    left = Math.max(8, Math.min(card.clientWidth - tw - 8, left));
+    if (r.top - c.top - th - 8 < 0) top = r.bottom - c.top + card.scrollTop + 8;   // no room above: below
+    tipEl.style.left = `${left}px`; tipEl.style.top = `${top}px`;
+  }
+  const hideTip = () => { if (tipEl) tipEl.hidden = true; tipFor = null; };
+  document.addEventListener('pointerover', (e) => { const t = e.target.closest && e.target.closest('#drawer-body [data-tip]'); if (t) showTip(t); else if (tipFor && e.pointerType === 'mouse' && !(e.target.closest && e.target.closest('.ptip'))) hideTip(); });
+  document.addEventListener('focusin', (e) => { const t = e.target.closest && e.target.closest('#drawer-body [data-tip]'); if (t) showTip(t); else hideTip(); });
+  document.addEventListener('click', (e) => { const t = e.target.closest && e.target.closest('#drawer-body [data-tip]'); if (t) { if (tipFor === t && e.pointerType === 'touch') hideTip(); else showTip(t); } else if (!(e.target.closest && e.target.closest('.ptip'))) hideTip(); });
+  document.addEventListener('scroll', (e) => { if (e.target && e.target.classList && e.target.classList.contains('chartbox')) hideTip(); }, true);
+
+  /** Placeholders while the profile loads: the same blocks and heights, so nothing jumps when it arrives. */
+  const skeleton = () => `<div class="sk" style="height:64px"></div><div class="kgrid">${'<div class="kv sk" style="height:84px"></div>'.repeat(8)}</div><div class="panel"><div class="sk" style="height:250px"></div></div><div class="panel"><div class="sk" style="height:220px"></div></div>`;
+
   /* ---------- charts (inline SVG, drawn at the box's width when they scroll into view) ---------- */
   function niceStep(x) { const q = 10 ** Math.floor(Math.log10(Math.max(1e-9, x))); const m = x / q; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * q; }
   function monthsChart(prof, W) {
@@ -139,9 +163,11 @@
     const sy = (v) => T + (H - T - B) * (1 - (Math.min(2, Math.max(0.5, v)) - 0.5) / 1.5);
     const grid = []; for (let v = 0; v <= topV + 1e-9; v += step) grid.push(`<line class="gl" x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}"/><text x="${L - 5}" y="${y(v) + 4}" text-anchor="end">${inr.format(v)}</text>`);
     const bars = ms.map((m, i) => {
-      const x = L + i * bw + gap / 2, w = bw - gap, tip = `${mName(m.key)}: sold ${inr.format(m.units)}${m.days < 28 ? ` (${m.days} days held)` : ''}; out ${nDays(m.daysOut)}; would have sold about ${units(m.missedUnits)} more, ${rs(m.missed)} missed`;
+      const x = L + i * bw + gap / 2, w = bw - gap, pm = priceOf(prof, m.key);
+      const tip = [mName(m.key) + (m.days < 28 ? ` (${m.days} days held)` : ''), `Sold ${inr.format(m.units)} · ${rs(m.value)}`, m.daysOut ? `Out ${nDays(m.daysOut)}: would have sold about ${units(m.missedUnits)} more, ${rs(m.missed)} missed` : 'In stock all month',
+        `Busy-month index ×${n1(m.season)}${m.own ? '' : ' (the store’s)'}`, pm && pm.paidIn != null ? `Paid ₹${inr.format(pm.paidIn)} on average with GST${prof.price.mrp ? ` (${n1((1 - pm.paidIn / prof.price.mrp) * 100)}% off MRP)` : ''}` : ''].filter(Boolean).join('\n');
       const outW = m.days ? Math.min(w, (w * m.daysOut) / m.days) : 0;
-      return `<g><title>${esc(tip)}</title><rect class="hit" x="${L + i * bw}" y="${T}" width="${bw}" height="${H - T - 2}"/>
+      return `<g class="tipg" tabindex="0" role="img" aria-label="${esc(tip.replace(/\n/g, '. '))}" data-tip="${esc(tip)}"><rect class="hit" x="${L + i * bw}" y="${T}" width="${bw}" height="${H - T - 2}"/>
         <rect class="sold" x="${x}" y="${y(m.units)}" width="${w}" height="${Math.max(0, y(0) - y(m.units))}" rx="2"/>
         ${m.missedUnits > 0 ? `<rect class="ghost" x="${x}" y="${y(m.units + m.missedUnits)}" width="${w}" height="${Math.max(1, y(m.units) - y(m.units + m.missedUnits))}" rx="2"/>` : ''}
         <rect class="otrack" x="${x}" y="${H - B + 4}" width="${w}" height="5" rx="2"/>${outW > 0 ? `<rect class="out" x="${x}" y="${H - B + 4}" width="${Math.max(2, outW)}" height="5" rx="2"/>` : ''}
@@ -159,7 +185,8 @@
     if (!vals.length) return '';
     const hi = Math.max(...vals) * 1.05, lo = Math.min(...vals) * 0.9, maxU = Math.max(1, ...ms.map((m) => m.units));
     const y = (v) => T + (H - T - B) * (1 - (v - lo) / (hi - lo || 1)), bw = (W - L - R) / n;
-    const bars = ms.map((m, i) => `<rect class="ub" x="${L + i * bw + bw * 0.2}" y="${H - B - ((H - T - B) * 0.5 * m.units) / maxU}" width="${bw * 0.6}" height="${((H - T - B) * 0.5 * m.units) / maxU}"><title>${esc(`${mName(m.key)}: ${inr.format(m.units)} sold${m.paidIn != null ? ` at ₹${inr.format(m.paidIn)} on average (with GST)` : ''}`)}</title></rect><text x="${L + i * bw + bw / 2}" y="${H - 6}" text-anchor="middle">${mShort(m.key)}</text>`).join('');
+    const bars = ms.map((m, i) => { const tip = [mName(m.key), m.paidIn != null ? `Paid ₹${inr.format(m.paidIn)} with GST, ₹${inr.format(m.paidEx)} without` : 'No sales', m.paidIn != null && pr.mrp ? `${n1((1 - m.paidIn / pr.mrp) * 100)}% off MRP (₹${inr.format(pr.mrp)})` : '', `${inr.format(m.units)} sold`].filter(Boolean).join('\n');
+      return `<g class="tipg" tabindex="0" role="img" aria-label="${esc(tip.replace(/\n/g, '. '))}" data-tip="${esc(tip)}"><rect class="hit" x="${L + i * bw}" y="${T}" width="${bw}" height="${H - T}"/><rect class="ub" x="${L + i * bw + bw * 0.2}" y="${H - B - ((H - T - B) * 0.5 * m.units) / maxU}" width="${bw * 0.6}" height="${((H - T - B) * 0.5 * m.units) / maxU}"/><text x="${L + i * bw + bw / 2}" y="${H - 6}" text-anchor="middle">${mShort(m.key)}</text></g>`; }).join('');
     const pts = ms.map((m, i) => (m.paidIn == null ? null : `${L + i * bw + bw / 2},${y(m.paidIn)}`)).filter(Boolean).join(' ');
     const ref = (v, cls, lab) => (v ? `<line class="${cls}" x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}"/><text x="${L - 4}" y="${y(v) + 4}" text-anchor="end">${lab}</text>` : '');
     return `<svg class="pchart" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Price paid each month">${bars}${ref(pr.mrp, 'mrp', 'MRP')}${ref(pr.list, 'lst', 'List')}<polyline class="pline" points="${pts}"/>${ms.map((m, i) => (m.paidIn == null ? '' : `<circle class="pdot" cx="${L + i * bw + bw / 2}" cy="${y(m.paidIn)}" r="2.5"><title>₹${inr.format(m.paidIn)}</title></circle>`)).join('')}</svg>`;
@@ -174,9 +201,12 @@
     const grid = []; for (let v = 0; v <= topV + 1e-9; v += step) grid.push(`<line class="gl" x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}"/><text x="${L - 5}" y="${y(v) + 4}" text-anchor="end">${inr.format(v)}</text>`);
     const pts = st.map(([, v], i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
     const big = new Set(prof.restocks.slice().sort((a, b) => b[1] - a[1]).slice(0, 8).map(([k]) => k));
-    const rs2 = prof.restocks.map(([k, q]) => (idx.has(k) ? `<g><title>${esc(`${dayY(k)}: restocked +${inr.format(q)}`)}</title><path class="rmark" d="M${x(idx.get(k))},${T - 2} l-4,-7 h8 z"/>${big.has(k) && W > 420 ? `<text class="rlab" x="${Math.min(W - R - 14, Math.max(L + 10, x(idx.get(k))))}" y="${T - 10}" text-anchor="middle">+${inr.format(q)}</text>` : ''}</g>` : '')).join('');
+    const cw = (W - L - R) / n, cal = prof.calendar || [];
+    const hits = st.map(([k, v, u, mvv], i) => { const f = cal[i] ? cal[i][1] : 1; const tip = [dayY(k), `${inr.format(Math.max(0, v))} in stock at the day’s end${v < 0 ? ` (${v}: oversold)` : ''}`, `${inr.format(u || 0)} sold that day`, mvv > 0 ? `Restocked: stock up ${inr.format(mvv)} that day` : '', f >= 1 ? 'Could be bought all day' : f > 0 ? 'Ran out or came back that day' : 'Out of stock all day'].filter(Boolean).join('\n');
+      return `<rect class="hit tipg" x="${x(i) - cw / 2}" y="${T}" width="${cw + 0.3}" height="${H - T - B}" data-tip="${esc(tip)}"/>`; }).join('');
+    const rs2 = prof.restocks.map(([k, q]) => (idx.has(k) ? `<g><path class="rmark" d="M${x(idx.get(k))},${T - 2} l-4,-7 h8 z"/>${big.has(k) && W > 420 ? `<text class="rlab" x="${Math.min(W - R - 14, Math.max(L + 10, x(idx.get(k))))}" y="${T - 10}" text-anchor="middle">+${inr.format(q)}</text>` : ''}</g>` : '')).join('');
     const ticks = st.map(([k], i) => (k.slice(8) === '01' ? `<text x="${x(i)}" y="${H - 6}" text-anchor="middle">${mShort(k.slice(0, 7))}</text>` : '')).join('');
-    return `<svg class="pchart" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Stock at each day's end">${shade}${grid.join('')}<polyline class="stl" points="${pts}"/>${rs2}${ticks}</svg>`;
+    return `<svg class="pchart" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Stock at each day's end">${shade}${grid.join('')}<polyline class="stl" points="${pts}"/>${rs2}${ticks}${hits}</svg>`;
   }
   const DRAW = { months: monthsChart, price: priceChart, stock: stockChart };
   function draw(el, prof) {
@@ -192,5 +222,5 @@
     els.forEach((el) => io.observe(el));
   }
 
-  window.SW_PROFILE = { top, body, charts, monthsChart, priceChart, stockChart, story };
+  window.SW_PROFILE = { top, body, charts, skeleton, showTip, hideTip, monthsChart, priceChart, stockChart, story };
 })();

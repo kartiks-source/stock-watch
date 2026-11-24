@@ -56,6 +56,8 @@ const apiv1 = require('./src/apiv1');       // /api/v1: every /api route + summa
 const weekly = require('./src/weekly');     // sprint 3 B-review: daily snapshots, this week vs last week (SW-043)
 const targets = require('./src/targets');   // sprint 3 B-review: monthly targets on groups (SW-042)
 const lists = require('./src/lists');       // sprint 3 B-review: saved product lists (SW-044)
+const cache = require('./src/cache');       // 1.4.3: per-store answers in memory, keyed by the store's data version
+const zlib = require('node:zlib');
 const links = require('./src/links');       // 1.4.0: product image, Shopify admin and website links (LOGIC §19)
 const year = require('./src/year');         // 1.4.0: 12 months of daily sales + stock from ShopifyQL (LOGIC §20)
 const sell = require('./src/sell');         // 1.4.0: best sellers now, push / pause ads (LOGIC §23)
@@ -80,9 +82,13 @@ const KEEP_DAYS = 120;   // same as src/store.js: older rows would be pruned on 
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.ico': 'image/x-icon' };
 
 /* ---------- helpers ---------- */
+/* 1.4.3: answers over 1 KB are gzipped when the browser accepts it (the 30-day report: 545 KB → 59 KB on Sammsara) */
 const send = (res, code, body, type = 'application/json; charset=utf-8', extra = {}) => {
-  res.writeHead(code, { 'content-type': type, 'cache-control': 'no-store', ...extra });
-  res.end(type.startsWith('application/json') ? JSON.stringify(body) : body);
+  let out = type.startsWith('application/json') ? JSON.stringify(body) : body;
+  const gz = typeof out === 'string' && out.length > 1024 && /\bgzip\b/.test(String((res.req && res.req.headers['accept-encoding']) || ''));
+  if (gz) out = zlib.gzipSync(out, { level: 6 });
+  res.writeHead(code, { 'content-type': type, 'cache-control': 'no-store', ...(gz ? { 'content-encoding': 'gzip', vary: 'accept-encoding' } : {}), ...extra });
+  res.end(out);
 };
 const fail = (res, code, message) => send(res, code, { ok: false, error: message });
 const readBody = (req, limit = 25e6) => new Promise((resolve, reject) => {
@@ -246,13 +252,41 @@ function storeName(id = scope.id()) {
 const lossOpts = (m) => (m ? { lossPace: m.pace, lossPrice: m.price } : {});
 /** 1.4.0 (LOGIC §21): { variantId → units a day this month } from Shopify's 12 months (brand report pace × season), for
  *  ₹ lost of long stock-outs; cached per store until the year is read again or the pace setting changes. */
-const lossCache = new Map();
-function lossPaceOf(dir, d) {   // dir: the store's folder (the cache key)
+/** 1.4.3: what the brand report is built from: Shopify's 12 months (year.json) when read, else the rows held; the catalog
+ *  (or, without Shopify, names and product IDs from the rows). Cached per store version. */
+function brandInputs(d) {
+  return cache.memo('brandInputs', '', 10 * 60e3, () => {
+    const y = year.load(), zone = TZ.zoneOf(d.settings);
+    const shopY = y && y.anchor && y.sales && y.sales.from ? y : null;
+    const src = shopY || agency.fromRows(d.stock, d.orders, { dayOf: (t) => TZ.dayKey(t, zone) });
+    let cat = d.catalog || {};
+    if (!Object.keys(cat).length) {   // demo, Flow, Sheet, CSV: names and product IDs from the rows and the group catalog
+      const gc = catalog.current(d.source, d.catalog).variants || {}; cat = {};
+      for (const r of d.stock) { const id = String(r.variantId); cat[id] = { productId: (gc[id] && gc[id].productId) || id, product: r.product, variant: r.variant, sku: r.sku, price: r.price, active: true, tracked: true }; }
+    }
+    return { y: src, cat, basis: shopY ? 'shopify' : 'rows' };
+  });
+}
+/** The brand report's options on the saved settings (links added by the caller that sends products). */
+function brandOptsOf(d, extra = {}) {
+  const S = { ...engine.DEFAULT_SETTINGS, ...d.settings }, zone = TZ.zoneOf(d.settings), w = weeks.forReport(d.shopify);
+  return { paceMonths: Math.round(+S.paceMonths || 6), bestShare: (+S.bestShare || 80) / 100, dayOf: (t) => TZ.dayKey(t, zone),
+    rankBy: w ? Object.fromEntries(Object.entries(w.by).map(([k, v]) => [k, v.n])) : null, ...extra };   // 26 weeks, while the 12 months load
+}
+/** 1.4.3: the whole store's 12-month build with every variant's days (the drawer, ₹ lost pace), once per data version. */
+function yearBuild(d) {
+  const S = { ...engine.DEFAULT_SETTINGS, ...d.settings };
+  return cache.memo('yearBuild', `${S.paceMonths}|${S.bestShare}|${TZ.zoneOf(d.settings)}`, 10 * 60e3, () => {
+    const b = brandInputs(d);
+    return { b, r: agency.build(b.y, b.cat, brandOptsOf(d, { detail: true })) };
+  });
+}
+function lossPaceOf(dir, d) {   // dir: kept for the callers; the cache is per store (src/cache.js)
   const y = year.load();
   if (!y || !y.anchor || !y.sales || !y.sales.from) return null;
-  const S = { ...engine.DEFAULT_SETTINGS, ...d.settings }, key = `${y.at}|${S.paceMonths}|${S.bestShare}|${TZ.zoneOf(d.settings)}`;
-  const c = lossCache.get(dir); if (c && c.key === key) return c.map;
-  const r = agency.build(y, d.catalog || {}, { paceMonths: Math.round(+S.paceMonths || 6), bestShare: (+S.bestShare || 80) / 100, dayOf: (t) => TZ.dayKey(t, TZ.zoneOf(d.settings)) });
+  return cache.memo('lossPace', '', 10 * 60e3, () => lossMap(yearBuild(d).r));
+}
+function lossMap(r) {
   /* 1.4.3: { pace: { variantId: { 'YYYY-MM': units a day, _: this month } }, price: { variantId: ₹ ex GST } } for every variant
      the year holds (pace 0 included: a product that sold nothing in a year misses nothing) */
   const pace = {}, price = {};
@@ -260,9 +294,7 @@ function lossPaceOf(dir, d) {   // dir: the store's folder (the cache key)
     for (const [v, x] of Object.entries(p.monthPace || {})) pace[v] = x;
     for (const [v, x] of Object.entries(p.variantPrice || {})) if (x > 0) price[v] = x;
   }
-  const map = { pace, price };
-  lossCache.set(dir, { key, map });
-  return map;
+  return { pace, price };
 }
 
 weekly.useLossPace((d) => lossOpts(lossPaceOf(scope.dir(), d)), () => { const y = year.load(); return y && y.anchor ? 'y1' : ''; });   // snapshots use the same ₹ lost; retaken once the 12 months arrive
@@ -375,6 +407,7 @@ async function pullOne(id) {
     log.info('shopify pull done', { store: id, stockChanges: stock, orderLines: orders, seconds: Math.round((Date.now() - started) / 1000) });
     alert.syncResult(true, '', { store: storeName(id), key: id }).catch(() => {});
     weekly.catchUp();   // SW-043: the day's snapshot once the pull reaches past store-midnight (in the background; never throws)
+    setImmediate(() => { try { inStore(id, () => { const d2 = store.load(); yearBuild(d2); lossPaceOf(scope.dir(), d2); }); } catch (e) { console.warn('warm:', e.message); } });   // 1.4.3: the 12-month build ready before the first drawer opens
     return { stock, orders };
   } catch (e) {
     runs.finish(store.load(), run, e.message);
@@ -599,21 +632,22 @@ async function storeApi(req, res, url, role, id) {
   for (const h of [weekly, targets, lists]) { const x = await h.handle(req, url, readBody, { role, by: whoOf(req, role), monthGroups, from, now, offMin: TZ.zoneOf(d.settings) }); if (x) return send(res, x.code, x.body); }
   /* 1.4.0: the brand report (LOGIC §20–§22). Shopify's 12 months when read (year.json), else the rows we hold. */
   const dayOf = (t) => TZ.dayKey(t, TZ.zoneOf(d.settings));
-  const brandData = () => {
-    const y = year.load();
-    const shopY = y && y.anchor && y.sales && y.sales.from ? y : null;
-    const src = shopY || agency.fromRows(d.stock, d.orders, { dayOf });
-    let cat = d.catalog || {};
-    if (!Object.keys(cat).length) {   // demo, Flow, Sheet, CSV: names and product IDs from the rows and the group catalog
-      const gc = catalog.current(d.source, d.catalog).variants || {}; cat = {};
-      for (const r of d.stock) { const id = String(r.variantId); cat[id] = { productId: (gc[id] && gc[id].productId) || id, product: r.product, variant: r.variant, sku: r.sku, price: r.price, active: true, tracked: true }; }
-    }
-    return { y: src, cat, basis: shopY ? 'shopify' : 'rows' };
-  };
-  const S0 = { ...engine.DEFAULT_SETTINGS, ...d.settings };
-  const rankBy = () => { const w = weeks.forReport(d.shopify); return w ? Object.fromEntries(Object.entries(w.by).map(([k, v]) => [k, v.n])) : null; };   // 26 weeks, while the 12 months load
-  const brandOpts = () => ({ paceMonths: Math.round(+S0.paceMonths || 6), bestShare: (+S0.bestShare || 80) / 100, dayOf, links: (c) => links.of(c, shopLinks()), rankBy: rankBy() });
+  const brandData = () => brandInputs(d);
+  const brandOpts = () => brandOptsOf(d, { links: (c) => links.of(c, shopLinks()) });
+  /* 1.4.3: the report for a period and trial settings, cached per store version for a minute (open stock-outs accrue) */
+  const reportKey = (S) => JSON.stringify([span, Object.keys(LIMITS).map((k) => S[k]), S.timeZone]);
+  const cachedReport = (S, trial) => cache.memo('report', reportKey(S), 60e3, () => {
+    const r = helpers.enrich(engine.report(d.stock, d.orders, S, reportOpts()), { decisions: decide.all(), rates: trial ? savedRates() : null });
+    r.period = periodKind; r.yesterday = period.yesterdayFor(d.stock, d.orders, S, r, reportOpts());   // SW-027
+    links.annotateReport(r, d.catalog, shopLinks());   // 1.4.0: image + links on every product row
+    r.rev = cache.rev();
+    return r;
+  });
   if (p === '/api/brand' && req.method === 'GET') {
+    const body = cache.memo('brand', url.searchParams.get('full') === '1' ? 'full' : '', 60e3, () => brandBody());
+    return send(res, 200, { ...body, rev: cache.rev() });
+  }
+  function brandBody() {
     /* 1.4.0 (§23): today's report (30 days, saved settings): best sellers now, ads, and website allocations (§6, kept apart) */
     const rep = links.annotateReport(helpers.enrich(engine.report(d.stock, d.orders, d.settings, reportOpts({ days: 30, from: undefined }))), d.catalog, shopLinks());
     const b = brandData(), r = agency.build(b.y, b.cat, { ...brandOpts(), apart: new Set(rep.products.filter((x) => x.allocation).map((x) => String(x.id))) });
@@ -622,7 +656,7 @@ async function storeApi(req, res, url, role, id) {
     const now = r.ok ? sell.bestNow(r, rep.products, month) : [];
     const adl = sell.ads(r.ok ? r : null, rep.products, { ...engine.DEFAULT_SETTINGS, ...d.settings });
     const slim = (x) => { const { months: _m, season: _s, variantPace: _v, outFrom: _o, monthPace: _mp, variantPrice: _vp, ...rest } = x; return url.searchParams.get('full') === '1' ? x : { ...rest, months: x.best ? x.months : undefined }; };
-    return send(res, 200, { ok: true, ...r, products: (r.products || []).map(slim), now, ads: adl, basis: b.basis, year: year.summary(year.load()), store: here, generatedAt: Date.now(), app: version.current() });
+    return { ok: true, ...r, products: (r.products || []).map(slim), now, ads: adl, basis: b.basis, year: year.summary(year.load()), store: here, generatedAt: Date.now(), app: version.current() };
   }
   if (p === '/api/shopify/year' && req.method === 'POST') {   // 1.4.0: admin only; queued like a pull
     if (role !== access.ADMIN) return fail(res, 403, access.READ_ONLY);
@@ -632,22 +666,22 @@ async function storeApi(req, res, url, role, id) {
   }
   if (p === '/api/report' && req.method === 'GET') {
     const S = settingsFor(url, d.settings), trial = Object.keys(LIMITS).some((k) => S[k] !== d.settings[k]);
-    const r = helpers.enrich(engine.report(d.stock, d.orders, S, reportOpts()), { decisions: decide.all(), rates: trial ? savedRates() : null });
-    r.period = periodKind; r.yesterday = period.yesterdayFor(d.stock, d.orders, S, r, reportOpts());   // SW-027
-    links.annotateReport(r, d.catalog, shopLinks());   // 1.4.0: image + links on every product row
+    const r = cachedReport(S, trial);
     if (!readOnly()) setImmediate(() => weekly.catchUp());   // SW-043: the first report after store-midnight takes the day's snapshot (a read-only copy never writes, SW-055)
     return send(res, 200, { ok: true, ...r, store: here, source: d.source, lastSync: d.lastSync, lastSyncError: d.lastSyncError, shopify: shopifyStatus(), freshness: freshness(), app: version.current() });
   }
   if (p.startsWith('/api/product/') && req.method === 'GET') {
     let id; try { id = decodeURIComponent(p.slice('/api/product/'.length)); } catch { throw badRequest('Bad product ID in the address'); }
-    const S = { ...engine.DEFAULT_SETTINGS, ...settingsFor(url, d.settings) }, now = Date.now();
-    const det = helpers.enrichDetail(engine.productDetail(id, d.stock, d.orders, S, reportOpts({ now })), S, now);
+    const t0 = Date.now(), S0p = settingsFor(url, d.settings), trial = Object.keys(LIMITS).some((k) => S0p[k] !== d.settings[k]);
+    const S = { ...engine.DEFAULT_SETTINGS, ...S0p }, rep = cachedReport(S0p, trial), now = rep.generatedAt;   // 1.4.3: the cached report of the same period
+    const det = helpers.enrichDetail(engine.productDetail(id, d.stock, d.orders, S, reportOpts({ now, report: rep })), S, now);
     if (det && det.product) links.annotate([det.product], d.catalog, shopLinks());   // 1.4.0
+    det.rev = cache.rev();
     /* 1.4.1 (LOGIC §24): the product profile from the 12 months (whole catalog, so rank, share and season are the store's) */
     try {
-      const t0 = Date.now(), b = brandData(), vid = String(id);
-      const r = agency.build(b.y, b.cat, { ...brandOpts(), apart: det && det.product && det.product.allocation ? new Set([vid]) : null, detail: vid });
-      det.profile = agency.profile(r, b.y, b.cat, vid);
+      const yb = yearBuild(d), b = yb.b, vid = String(id);
+      det.profile = agency.profile(yb.r, b.y, b.cat, vid);
+      if (det.profile.ok && det.product && det.product.allocation) det.profile.allocation = true;
       det.profile.basis = b.basis;
       const c = b.cat[vid] || {}, gc = catalog.current(d.source, d.catalog);
       det.profile.details = { type: c.type || '', vendor: String(c.vendor || '').trim(), tags: c.tags || [], createdAt: c.createdAt || null, publishedAt: c.publishedAt || null, published: !!c.published,
@@ -764,8 +798,9 @@ function serveStatic(req, res, url) {
   let file = path.normalize(path.join(PUBLIC, url.pathname === '/' ? 'index.html' : url.pathname));
   if (file !== PUBLIC && !file.startsWith(PUBLIC + path.sep)) return send(res, 403, 'Forbidden', 'text/plain');   // not public-evil/…
   if (!fs.existsSync(file) || fs.statSync(file).isDirectory()) file = path.join(PUBLIC, 'index.html');
-  res.writeHead(200, { 'content-type': TYPES[path.extname(file)] || 'application/octet-stream', 'cache-control': 'no-cache' });
-  fs.createReadStream(file).pipe(res);
+  const ext = path.extname(file), gz = ['.js', '.css', '.html', '.svg'].includes(ext) && /\bgzip\b/.test(String(req.headers['accept-encoding'] || ''));   // 1.4.3
+  res.writeHead(200, { 'content-type': TYPES[ext] || 'application/octet-stream', 'cache-control': 'no-cache', ...(gz ? { 'content-encoding': 'gzip', vary: 'accept-encoding' } : {}) });
+  if (gz) fs.createReadStream(file).pipe(zlib.createGzip()).pipe(res); else fs.createReadStream(file).pipe(res);
 }
 
 /* ---------- security headers + same-origin writes ---------- */

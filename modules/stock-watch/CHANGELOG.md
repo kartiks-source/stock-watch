@@ -2,6 +2,14 @@
 
 User-facing changes, newest first. Semver: minor when a number's rule changes or a feature lands, patch for fixes. The version in `package.json` matches the top heading. Versions before 0.9.0 were reconstructed from `docs/DEVLOG.md` on 20 Nov 2026 (no tags existed); dates are the DEVLOG dates. Per DEVLOG, nothing from 0.6.0 on has been deployed yet. Since 1.0.0-rc.1, `/health`, `/status` and the page footer show the version and the build's commit (SW-056); `test/docs.test.js` checks the top heading matches `package.json`.
 
+## 1.4.3 · 2026-11-24 · one pace for money missed, a faster drawer with details on hover
+
+- **Money missed is the same everywhere.** Every page and period (Overview, Restock list, All products, Stock-outs, the daily chart, Yesterday, the digest, weekly review, `/api/v1/summary`, CSVs) now values each hour out at the product's usual pace for that month (6 months of days in stock × the season) and its 12-month average price, as the brand report does. Oakwood, 30 days: ₹76,847 → ₹57,391 (brand report November ₹56,167). *Sells*, days left and order quantities keep the last 28 days. Sammsara 30-day headline ₹5.08 L → ₹4.87 L; the "not restocked" part rises (long-out products now at their in-stock pace, not a 26-week calendar floor).
+- **The drawer opens at once** with the picture, name, code, links and stock from the list, and fills in the 12 months a moment later (placeholders, no jump). Products are fetched ahead when you hover or focus a row; a second open is instant.
+- **Faster answers:** the report, the 12-month build and the brand report are kept in memory per store until the data changes (a pull, an import, a setting, Mark ordered); answers are gzipped (30-day report 545 KB → 59 KB). On Sammsara's data: a product open 0.19–0.40 s → 2–3 ms warm (0.24 s the first time after a change).
+- **Details on hover, tap or keyboard focus** in every drawer chart: month (sold, ₹, would-have-sold, ₹ missed, days out, busy-month index, price paid and discount), price (with and without GST, off MRP, units), stock level (that day's stock, sold, restock, in or out) and the day calendar (in or out, sold).
+- **"Last N days, to the hour"** is open by default; closing it is remembered on this browser.
+
 ## 1.4.2 · 2026-11-24 · long product names
 
 - Fix: rows with a long product name showed only “…” (picture, name, code and links all hidden). The name now shortens with “…” and the picture and links stay.
