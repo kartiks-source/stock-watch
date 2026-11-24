@@ -58,6 +58,7 @@ const targets = require('./src/targets');   // sprint 3 B-review: monthly target
 const lists = require('./src/lists');       // sprint 3 B-review: saved product lists (SW-044)
 const links = require('./src/links');       // 1.4.0: product image, Shopify admin and website links (LOGIC §19)
 const year = require('./src/year');         // 1.4.0: 12 months of daily sales + stock from ShopifyQL (LOGIC §20)
+const sell = require('./src/sell');         // 1.4.0: best sellers now, push / pause ads (LOGIC §23)
 const agency = require('./src/agency');     // 1.4.0: the brand report: best sellers out of stock, month by month (LOGIC §20–§22)
 
 const PORT = /^\d+$/.test(process.env.PORT || '') ? Number(process.env.PORT) : 4400;   // PORT=0 picks a free port (tests)
@@ -585,7 +586,13 @@ async function storeApi(req, res, url, role, id) {
   if (p === '/api/brand' && req.method === 'GET') {
     const b = brandData(), r = agency.build(b.y, b.cat, brandOpts());
     for (const x of r.products || []) { x.name = x.name || x.sku; if (b.cat[x.variantId] && b.cat[x.variantId].variant && x.variants === 1) x.name = `${x.name} · ${b.cat[x.variantId].variant}`; }
-    return send(res, 200, { ok: true, ...r, basis: b.basis, year: year.summary(year.load()), store: here, app: version.current() });
+    /* 1.4.0 (§23): best sellers now and the ads lists, from today's report (30 days, saved settings) */
+    const rep = links.annotateReport(helpers.enrich(engine.report(d.stock, d.orders, d.settings, reportOpts({ days: 30, from: undefined }))), d.catalog, shopLinks());
+    const month = r.ok ? r.months[r.months.length - 1].key : null;
+    const now = r.ok ? sell.bestNow(r, rep.products, month) : [];
+    const adl = sell.ads(r.ok ? r : null, rep.products, { ...engine.DEFAULT_SETTINGS, ...d.settings });
+    const slim = (x) => { const { months: _m, season: _s, variantPace: _v, ...rest } = x; return url.searchParams.get('full') === '1' ? x : { ...rest, months: x.best ? x.months : undefined }; };
+    return send(res, 200, { ok: true, ...r, products: (r.products || []).map(slim), now, ads: adl, basis: b.basis, year: year.summary(year.load()), store: here, generatedAt: Date.now(), app: version.current() });
   }
   if (p === '/api/shopify/year' && req.method === 'POST') {   // 1.4.0: admin only; queued like a pull
     if (role !== access.ADMIN) return fail(res, 403, access.READ_ONLY);

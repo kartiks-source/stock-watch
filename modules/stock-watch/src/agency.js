@@ -11,8 +11,8 @@
  * stock at the read, like §1c). Start of day = end of the day before. In stock all day: start > 0 and end > 0. Out all day:
  * start ≤ 0 and end ≤ 0, unless it sold more than its oversold units that day (it was refilled and sold out again inside
  * the day: in stock). Otherwise (ran out or came back that day): half a day. Oversold units = how far the day pushed stock
- * further below 0 (an oversell to −1 is not "in stock", §2); they never count in the pace. A walk that goes below
- * min(stock now, 0) means the log is incomplete for that variant: dropped (unsure), as in §1c.
+ * further below 0 (an oversell to −1 is not "in stock", §2); they never count in the pace. A walk that goes more than
+ * OVERSELL (2) below min(stock now, 0) means the log is incomplete for that variant: dropped (unsure), like §1c.
  *
  * Pace (§21): units ÷ in-stock days over the last `paceMonths` months (6 by default, 12 by setting), oversold units out;
  * fewer than 14 in-stock days → the 12 months; still fewer than 7 → divided by 7 at least (marked few). Season (§21):
@@ -32,6 +32,8 @@ const SEASON_K = 14;          // blend weight: a month with 14 in-stock days cou
 const SEASON_MIN = 7;         // under this many in-stock days in a month: the shop's index
 const SEASON_CAP = [0.5, 2];
 const MONTHS = 12;
+const OVERSELL = 2;            // stock may sit this far below min(now, 0) after checkout races before a walk counts as broken
+const SEASON_UNITS = 12;      // a variant that sold fewer than this in the year follows the shop's season (its own months are noise)
 
 const keyPlus = (key, n) => new Date(Date.parse(`${key}T00:00:00Z`) + n * DAY).toISOString().slice(0, 10);
 const monthOf = (k) => k.slice(0, 7);
@@ -62,7 +64,7 @@ function days(y, id, keys, createdDay = null) {
   const L0 = y.anchor && Object.hasOwn(y.anchor.levels, id) ? Number(y.anchor.levels[id]) : null;
   if (L0 == null || !Number.isFinite(L0)) return null;
   const mv = (y.moves.by && y.moves.by[id]) || {}, sl = (y.sales.by && y.sales.by[id]) || {};
-  const floor = Math.min(L0, 0);
+  const floor = Math.min(L0, 0) - OVERSELL;   // an oversell race can leave −1 or −2 for a while (§2); deeper = the log is missing changes
   /* walk back from the anchor day's end to the day before the span */
   const ends = new Map(); let L = L0, low = L0;
   const first = keyPlus(keys[0], -1);
@@ -117,7 +119,7 @@ function paceOf(list, paceFrom, shop) {
   const season = {};
   for (const m of Object.keys(shop)) {
     const p = per.get(m);
-    if (!p || p.d < SEASON_MIN || !(year > 0)) { season[m] = shop[m]; continue; }
+    if (!p || p.d < SEASON_MIN || !(year > 0) || all.u < SEASON_UNITS) { season[m] = shop[m]; continue; }
     const raw = p.u / p.d / year, w = p.d / (p.d + SEASON_K);
     season[m] = r2(clamp(w * raw + (1 - w) * shop[m], SEASON_CAP));
   }
@@ -210,6 +212,7 @@ function build(y, catalog = {}, { paceMonths = 6, bestShare = 0.8, links = () =>
     const tp = top.pace;
     out.push({
       productId: p.productId, name: p.name, sku: top.c.sku || '', variantId: top.id, variants: p.variants.length, best: p.best,
+      ids: p.variants.map((v) => v.id), variantPace: Object.fromEntries(p.variants.map((v) => [v.id, r2(v.pace.perDay * (v.pace.season[lastM] ?? 1) / (v.pace.level || 1))])),
       sold: Math.round(p.sold), units: p.units, share: r2(p.share * 100),
       price: Math.round(top.price), pace: { perDay: r2(selling.reduce((s, v) => s + v.pace.perDay, 0)), basis: tp.basis, few: selling.every((v) => v.pace.few), inDays: tp.inDays, months: paceMonths },
       season: tp.season, months: pm,
@@ -285,4 +288,4 @@ function fromRows(stock, orders, { dayOf, now = Date.now() } = {}) {
   return { v: 1, rows: true, at: now, sales: { ...sales, from: first, to: keyPlus(today, -1) }, moves: { ...moves, from: first, to: keyPlus(today, -1) }, anchor: { at: now, day: today, levels } };
 }
 
-module.exports = { fromRows, build, variantYear, days, spanOf, shopSeason, paceOf, ranges, dayKeys, keyPlus, monthLabel, MIN_DAYS, FLOOR_DAYS, SEASON_K, SEASON_MIN, SEASON_CAP };
+module.exports = { OVERSELL, SEASON_UNITS, fromRows, build, variantYear, days, spanOf, shopSeason, paceOf, ranges, dayKeys, keyPlus, monthLabel, MIN_DAYS, FLOOR_DAYS, SEASON_K, SEASON_MIN, SEASON_CAP };

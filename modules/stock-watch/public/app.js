@@ -6,7 +6,7 @@
   const esc = (x) => String(x ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
   const state = {
-    days: 30, view: 'overview', report: null, settings: null, source: null,
+    days: 30, view: 'brand', report: null, settings: null, source: null,
     filter: { reorder: 'all', stockouts: 'all', products: 'all' },   // show everything by default; a role (roles.js) or a tab narrows it
     q: { reorder: '', stockouts: '', products: '' },
     sort: { reorder: null, stockouts: null, products: null },
@@ -78,6 +78,7 @@
   }
 
   async function reloadReport() {
+    window.SW_BRAND?.reset();   // 1.4.0: best sellers now / ads carry today's report (Mark ordered changes them)
     state.report = await api(`/api/report?days=${state.days}${whatQs()}`);
     header(); render();
   }
@@ -90,6 +91,7 @@
     header();
     render._animate = true; render();
     freshness();
+    if (window.SW_BRAND && !state.brand) SW_BRAND.fetch().then(() => { if (['brand', 'best', 'ads'].includes(state.view)) render(); }).catch(() => {});   // 1.4.0: the rail badge
   }
 
   /* ---------- stale-data banner (SW-019): "Data is X h old" when this store's last Shopify pull is older than the server's
@@ -119,8 +121,7 @@
     else { $('#store-name').textContent = name; document.title = `${name} · Stock-out Watch`; }
     $('#n-reorder').textContent = r.totals.orderToday || '';
     const stillOut = outsByProduct().filter((a) => a.open && !a.dead).length;   // out but not selling don't count (SW-063)
-    $('#n-stockouts').textContent = stillOut || '';
-    $('#n-stockouts').title = `${stillOut} products still out of stock`;
+    if ($('#n-stockouts')) { $('#n-stockouts').textContent = stillOut || ''; $('#n-stockouts').title = `${stillOut} products still out of stock`; }
     const src = state.source, d = r.data, sh = state.shopify || {};
     const err = sh.lastError || src.err;
     const pill = $('#sync-pill');
@@ -962,6 +963,7 @@
           ${p?.returnPct != null ? `<div class="tile rtile" id="returns-tile" title="${esc(RETURNS_TIP)}"><span>Cancelled or refunded: <b class="${p.returnPct >= HIGH_RETURN ? 'amberv' : ''}">${n1(p.returnPct)}%</b> (${inr.format(p.unitsReturned)} of ${inr.format(p.unitsOrdered)} ordered${p.unitsCancelled ? `, ${inr.format(p.unitsCancelled)} cancelled` : ''}) · ${money(p.refundValue)} back</span></div>` : ''}
         </section>
         ${p && (viewOnly() ? p.onOrder : p.orderQty > 0 || p.onOrder) ? orderForm(p) : ''}
+        ${window.SW_BRAND ? SW_BRAND.drawerYear(d.year) : ''}
         <div class="panel"><div class="panel-head"><h2>Trend</h2>${p ? trendChip(p) : ''}</div>${p ? `<div class="wk">${spark(p, 320, 44)}<div class="wknums">${(p.weeks || []).map((w, i) => `<span title="${esc(weekTip(w, i))}" class="${w.outDays ? 'wo' : ''}"><b>${w.units == null ? '–' : inr.format(w.units)}</b><small>${dateShort(weekStart(i))}</small></span>`).join('')}</div></div>
           <p class="muted small">Units sold per week, week starting on the date shown; rose = out of stock part of that week.</p>` : ''}</div>
         <div class="panel chart"><h2>Stock level</h2>${stockChart(d.timeline, from, now, gap)}<span class="muted" style="font-size:13px">${gap ? `<span id="nohist-note">Hatched = no stock history before ${esc(dateShort(gap))}: Shopify’s change log didn’t add up for it. </span>` : ''}Shaded = out of stock.</span></div>
@@ -995,10 +997,15 @@
   };
 
   /* ---------- render + events ---------- */
-  const VIEWS = { overview, reorder, stockouts, products, data: dataView };
+  /* 1.4.0: the agency's pages first (public/brand.js): Brand report (home), Best sellers now, Ads; then Restock list
+     (reorder), All products, Data. Overview and Stock-outs stay reachable by their links (#overview, #stockouts). */
+  const VIEWS = { ...(window.SW_BRAND ? SW_BRAND.views : {}), overview, reorder, stockouts, products, data: dataView };
+  const HOME = window.SW_BRAND ? 'brand' : 'overview';
+  const NO_PERIOD = new Set(['brand', 'best', 'ads']);   // 12 months / now: the period buttons don't apply
   function render() {
     if (!state.report) return;
-    if (state.view === 'data' && viewOnly()) { state.view = 'overview'; history.replaceState(null, '', '#overview'); }
+    if (state.view === 'data' && viewOnly()) { state.view = HOME; history.replaceState(null, '', `#${HOME}`); }
+    document.body.classList.toggle('no-period', NO_PERIOD.has(state.view));
     $$('#tabs a').forEach((a) => a.classList.toggle('on', a.dataset.view === state.view));
     $('#view').classList.toggle('calm', !render._animate); render._animate = false;   // bars animate when a page opens, not on every filter or keystroke
     $('#view').innerHTML = (VIEWS[state.view] || overview)() + (viewOnly() ? '<form class="phone-only" method="post" action="/logout"><button class="btn ghost" type="submit">Sign out</button></form>' : '');
@@ -1029,6 +1036,7 @@
     fitTables();
     fitChart();
     window.SW_MONEY?.after(state.view);   // SW-041: dim rows over budget, draw the cut line
+    window.SW_BRAND?.after(state.view);   // 1.4.0: the month chart at its real width
   }
   /* final r2 M1: fade the chips row's edge only on a side that has more chips to scroll to */
   function chipEdges(c) {
@@ -1068,7 +1076,7 @@
       if (prev) prev.textContent = text; else b.insertAdjacentHTML('beforebegin', `<div class="sx-hint">${esc(text)}</div>`);
     });
   }
-  function route() { closeDrawer(); render._animate = true; state.view = (location.hash || '#overview').slice(1) in VIEWS ? (location.hash || '#overview').slice(1) : 'overview'; render(); window.scrollTo(0, 0); }
+  function route() { closeDrawer(); render._animate = true; const h = (location.hash || `#${HOME}`).slice(1); state.view = h in VIEWS ? h : HOME; render(); window.scrollTo(0, 0); }
 
   document.addEventListener('click', async (e) => {
     if (e.target.closest('.rz')) return;
@@ -1229,14 +1237,15 @@
   document.addEventListener('scroll', (e) => { if (e.target.classList && e.target.classList.contains('chips')) chipEdges(e.target); }, true);   // final r2 M1
   let wasNarrow = narrow();
   let wasTier = tier();
-  window.addEventListener('resize', () => { if (narrow() !== wasNarrow || tier() !== wasTier) { wasNarrow = narrow(); wasTier = tier(); render(); } else { fitTables(); fitChart(); } });
+  window.addEventListener('resize', () => { if (narrow() !== wasNarrow || tier() !== wasTier) { wasNarrow = narrow(); wasTier = tier(); render(); } else { fitTables(); fitChart(); window.SW_BRAND?.after(state.view); } });
 
   async function copy(text) {
     try { await navigator.clipboard.writeText(text); toast('Copied'); }
     catch { const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); toast('Copied'); }
   }
 
-  state.view = (location.hash || '#overview').slice(1);
+  state.view = (location.hash || `#${HOME}`).slice(1);
+  window.SW_BRAND?.init({ state, api, esc, inr, table, nameCell, saveCsv, copy, toast, render, status, dateShort, dt, viewOnly, rate });   // 1.4.0 (brand.js)
   window.SW_MONEY?.init({ state, api, toast, money, esc, inr, storeUrl, copy, viewOnly, dateShort, render, reload: reloadReport });   // Sprint 3 A-money (money.js)
   window.SW_ROLES?.start(state);   // land on the chosen role's home page (SW-020)
   load().catch((e) => { $('#view').innerHTML = `<p class="pad">Couldn’t load: ${esc(e.message)}</p>`; });
