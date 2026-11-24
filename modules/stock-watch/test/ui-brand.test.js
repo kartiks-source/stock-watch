@@ -83,7 +83,7 @@ test('1440: Best sellers now, Ads push / pause, drawer with 12 months on the she
   await pg.click('#view table[data-table="best"] tbody tr');
   await pg.waitForSelector('#drawer .phero');
   await pg.waitForSelector('#drawer .ycal .cal .cd');
-  assert.match(await pg.textContent('#drawer .ycal'), /Normal pace: [\d.]+ a day \(about \d+ a week, \d+ a month\)/);
+  assert.match(await pg.textContent('#drawer .kgrid'), /Sells, on days in stock.+ a day · [\d,.]+ a week · [\d,]+ a month/);   // 1.4.1: the pace sits in the key numbers
   await pg.keyboard.press('Escape');
   await pg.goto(base + '/?store=sammsara-demo#ads'); await pg.waitForSelector('.ads2 .arow');
   assert.match(await pg.textContent('#view .headline h1'), /^Push \d+ in stock\. Pause \d+: \d+ out, \d+ about to run out\.$/);
@@ -129,3 +129,27 @@ test('390: Brand report, Best sellers now and Ads usable on a phone, no sideways
   assert.deepEqual(size, [44, 44]);
   assert.deepEqual(pg.errors, []);
 });
+
+/* 1.4.1 (LOGIC §24): the drawer is the product's 12-month profile; the old 30-day Trend and Stock level cards are gone */
+for (const [w, h] of [[1440, 900], [390, 844]]) {
+  test(`${w}: product drawer = 12-month profile: header with rank, story, key numbers, charts drawn when scrolled to, calendar, season, details`, opts, async () => {
+    const pg = await open(w, h, '/?store=sammsara-demo#best', w < 760 ? '#view .mcard' : '#view table[data-table="best"] tbody tr');
+    await pg.click(w < 760 ? '#view .mcard' : '#view table[data-table="best"] tbody tr');
+    await pg.waitForSelector('#drawer .pstory');
+    assert.match(await pg.textContent('#drawer .prank'), /^#\d+ of \d+ by sales, 12 months$/);
+    assert.match(await pg.textContent('#drawer .pstory'), /^Sells about .+ when it is in stock\. (Ran out .+ in all\.|It never ran out .+\.) .*\(\d+ \w{3}.* – \d+ \w{3} \d{4}\)$/);
+    const labels = await pg.$$eval('#drawer .kgrid .kv > span', (e) => e.map((x) => x.textContent));
+    for (const l of ['Sold, 12 months', 'Sells, on days in stock', 'On the shelf', 'Ran out', 'Money missed', 'Stock now', 'Last restock']) assert.ok(labels.includes(l), `${l} in ${labels}`);
+    const heads = await pg.$$eval('#drawer h2', (e) => e.map((x) => x.textContent));
+    assert.ok(!heads.includes('Trend'), 'no 30-day Trend card');
+    for (const hd of ['12 months: sold and missed', 'Price and discount', 'Every day on the shelf', 'Stock level', 'Busy and quiet months', 'Details']) assert.ok(heads.includes(hd), `${hd} in ${heads}`);
+    assert.equal(await pg.$$eval('#drawer .lazy-chart.drawn', (e) => e.length) < 3, true, 'charts wait until they scroll into view');
+    await pg.evaluate(async () => { const c = document.querySelector('.drawer-card'); for (let y = 0; y < c.scrollHeight; y += 300) { c.scrollTop = y; await new Promise((r) => setTimeout(r, 50)); } });
+    await pg.waitForFunction(() => document.querySelectorAll('#drawer .lazy-chart.drawn svg').length === 3);
+    assert.ok(await pg.$('#drawer .pchart .ghost, #drawer .pchart .sold'), 'month bars');
+    assert.ok(await pg.$('#drawer .pchart .stl'), 'stock line');
+    assert.equal(await sideways(pg), 0, 'no sideways page scroll');
+    if (w < 760) assert.ok(await pg.$eval('#drawer .chartbox', (b) => b.scrollWidth >= b.clientWidth), 'a wide chart scrolls inside its card');
+    assert.deepEqual(pg.errors, []);
+  });
+}

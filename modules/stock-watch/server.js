@@ -635,7 +635,17 @@ async function storeApi(req, res, url, role, id) {
     const S = { ...engine.DEFAULT_SETTINGS, ...settingsFor(url, d.settings) }, now = Date.now();
     const det = helpers.enrichDetail(engine.productDetail(id, d.stock, d.orders, S, reportOpts({ now })), S, now);
     if (det && det.product) links.annotate([det.product], d.catalog, shopLinks());   // 1.4.0
-    try { const b = brandData(); det.year = agency.variantYear(b.y, b.cat, String(id), brandOpts()); det.year.basis = b.basis; } catch (e) { det.year = { ok: false, reason: e.message }; }   // 1.4.0: 12-month calendar, pace, season
+    /* 1.4.1 (LOGIC §24): the product profile from the 12 months (whole catalog, so rank, share and season are the store's) */
+    try {
+      const t0 = Date.now(), b = brandData(), vid = String(id);
+      const r = agency.build(b.y, b.cat, { ...brandOpts(), apart: det && det.product && det.product.allocation ? new Set([vid]) : null, detail: vid });
+      det.profile = agency.profile(r, b.y, b.cat, vid);
+      det.profile.basis = b.basis;
+      const c = b.cat[vid] || {}, gc = catalog.current(d.source, d.catalog);
+      det.profile.details = { type: c.type || '', vendor: String(c.vendor || '').trim(), tags: c.tags || [], createdAt: c.createdAt || null, publishedAt: c.publishedAt || null, published: !!c.published,
+        collections: Object.values(gc.collections || {}).filter((x) => (x.productIds || []).map(String).includes(String(c.productId))).map((x) => x.title).filter((t) => !/^all( products)?$/i.test(t)).slice(0, 12) };
+      det.profile.ms = Date.now() - t0;
+    } catch (e) { det.profile = { ok: false, reason: e.message }; }
     return send(res, 200, { ok: true, ...det });
   }
   /* Group by (SW-022): ?lens=product|type|collection|tag, same period, trial values, catalog and on-order as /api/report,

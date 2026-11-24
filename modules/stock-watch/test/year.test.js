@@ -25,7 +25,7 @@ function fakeShop({ perDay = 3, cap = 1000, from = '2025-01-01', to = '2026-11-2
     for (let k = a; k <= b; k = keyPlus(k, 1)) {   // both ends included, as Shopify does
       if (k < from || k > to) continue;
       for (let v = 1; v <= perDay; v++) {
-        if (/FROM sales/.test(ql)) rows.push({ day: k, product_variant_id: String(100 + v), net_items_sold: '1', net_sales: '100.5' });
+        if (/FROM sales/.test(ql)) rows.push({ day: k, product_variant_id: String(100 + v), net_items_sold: '1', net_sales: '100.5', taxes: '5.03', gross_sales: '110' });
         else rows.push({ day: k, product_variant_id: String(100 + v), inventory_adjustment_change: '-1' });
       }
       if (nullRow && /FROM sales/.test(ql)) rows.push({ day: k, product_variant_id: null, net_items_sold: '0', net_sales: '-10' });
@@ -46,7 +46,7 @@ function useStore(catalog = { 101: { stock: 50, tracked: true, seenAt: NOW - 60e
 }
 
 test('queries: explicit store-time dates, both ends included; sales and available stock changes by day and variant', () => {
-  assert.equal(Y.QL.sales('2026-10-01', '2026-10-31'), 'FROM sales SHOW net_items_sold, net_sales GROUP BY day, product_variant_id SINCE 2026-10-01 UNTIL 2026-10-31 ORDER BY day ASC LIMIT 1000');
+  assert.equal(Y.QL.sales('2026-10-01', '2026-10-31'), 'FROM sales SHOW net_items_sold, net_sales, taxes, gross_sales GROUP BY day, product_variant_id SINCE 2026-10-01 UNTIL 2026-10-31 ORDER BY day ASC LIMIT 1000');
   assert.match(Y.QL.moves('2026-10-01', '2026-10-01'), /FROM inventory_adjustment_history SHOW inventory_adjustment_change WHERE inventory_state = 'available' GROUP BY day, product_variant_id SINCE 2026-10-01 UNTIL 2026-10-01/);
   assert.doesNotThrow(() => require('../src/shopify').assertReadOnly(Y.Q));
   assert.equal(Y.span('2026-10-01', '2026-10-31'), 31);
@@ -55,7 +55,7 @@ test('queries: explicit store-time dates, both ends included; sales and availabl
 
 test('parse: string rows, null variant rows kept for the store total only, zero changes skipped', () => {
   const s = Y.parse({ columns: [{ name: 'day' }, { name: 'product_variant_id' }, { name: 'net_items_sold' }, { name: 'net_sales' }], rows: JSON.stringify([['2026-11-01', '7', '2', '300'], ['2026-11-01', null, '0', '0'], ['bad', '7', '1', '1']]) }, 'sales');
-  assert.deepEqual(s.rows, [{ day: '2026-11-01', variantId: '7', units: 2, net: 300 }, { day: '2026-11-01', variantId: null, units: 0, net: 0 }]);
+  assert.deepEqual(s.rows, [{ day: '2026-11-01', variantId: '7', units: 2, net: 300, tax: 0, gross: 0 }, { day: '2026-11-01', variantId: null, units: 0, net: 0, tax: 0, gross: 0 }]);
   assert.equal(s.count, 3);
   const m = Y.parse({ rows: [{ day: '2026-11-01', product_variant_id: 'gid://shopify/ProductVariant/7', inventory_adjustment_change: '-1' }, { day: '2026-11-01', product_variant_id: '8', inventory_adjustment_change: '0' }] }, 'moves');
   assert.deepEqual(m.rows, [{ day: '2026-11-01', variantId: '7', delta: -1 }]);
@@ -77,7 +77,7 @@ test('a first load reads 365 full days back in windows under the cap, every day 
   /* every day once: 30 variants × 1 unit, ₹100.5 each, + a −₹10 row without a variant */
   for (let k = start; k <= '2026-11-24'; k = keyPlus(k, 1)) {
     assert.deepEqual(y.sales.all[k], [30, 3005], k);
-    assert.deepEqual(y.sales.by['101'][k], [1, 100.5], k);
+    assert.deepEqual(y.sales.by['101'][k], [1, 100.5, 5.03, 110], k);
     assert.equal(y.moves.by['101'][k], -1, k);
   }
   assert.equal(y.sales.all[keyPlus(start, -1)], undefined, 'nothing before the span');

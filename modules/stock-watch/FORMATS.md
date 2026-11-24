@@ -196,7 +196,7 @@ Outside `DATA_DIR`, in the app folder: `BUILD_SHA` (optional, SW-056): one line,
   "catalog": { "<variantId>": { "productId": "", "product": "", "variant": "", "sku": "", "type": "", "vendor": "", "tags": [],
                 "price": 0, "cost": null, "status": "ACTIVE|ARCHIVED|DRAFT|UNTRACKED|DELETED", "tracked": true, "active": true,
                 "stock": 0, "seenAt": 0, "inactiveSince": "?", "createdAt": "?0",
-                "image": "?https://cdn.shopify.com/…", "handle": "?", "web": "?https://…", "published": "?true",
+                "image": "?https://cdn.shopify.com/…", "handle": "?", "web": "?https://…", "published": "?true", "publishedAt": "?0", "compareAt": "?0",
                 "spells": "?[ { from: 0, to: 0, status: 'DRAFT' } ]" } },
   "source": "empty|demo|live", "everLive": true,
   "lastSync": null, "lastSyncError": null,
@@ -215,7 +215,7 @@ Outside `DATA_DIR`, in the app folder: `BUILD_SHA` (optional, SW-056): one line,
 - Times are ms since 1970 (UTC). `"?"` marks an optional key. `before` may be `null` (unknown).
 - Rows older than 120 days are pruned, except per variant the newest stock row and the row that opened a stock-out still running (ADR-0010).
 - `catalog` is Shopify only, replaced whole on every stock pull; a variant that disappears stays as `DELETED` until it is 120 days gone. `spells` (optional) are the variant's past inactive spells, added when it turns active again (from = `inactiveSince`, to = the pull that saw it active); at most 20, each dropped 120 days after it ends (LOGIC §1). Older files without it load as before.
-- Catalog `image`, `handle`, `web`, `published` and `shopify.shopInfo` (1.4.0, LOGIC §19): the product's featured image (Shopify CDN URL, 320 px wide, `https://cdn.shopify.com` only), its handle, its `onlineStoreUrl` (only when on the online store), whether it has a publish date; the shop's `*.myshopify.com` domain and primary domain. Read by the stock pull; optional, older files load as before. Settings gain `paceMonths` (6) and `bestShare` (80) (LOGIC §21, §22). Catalog `publishedAt` (ms): when the product went on the online store (the brand report counts a product from max(createdAt, publishedAt)).
+- Catalog `image`, `handle`, `web`, `published` and `shopify.shopInfo` (1.4.0, LOGIC §19): the product's featured image (Shopify CDN URL, 320 px wide, `https://cdn.shopify.com` only), its handle, its `onlineStoreUrl` (only when on the online store), whether it has a publish date; the shop's `*.myshopify.com` domain and primary domain. Read by the stock pull; optional, older files load as before. Settings gain `paceMonths` (6) and `bestShare` (80) (LOGIC §21, §22). Catalog `compareAt` (1.4.1): the variant's compare-at price (MRP, with GST), only when set. Catalog `publishedAt` (ms): when the product went on the online store (the brand report counts a product from max(createdAt, publishedAt)).
 - `settingsLog` keeps 200 entries, newest first; the ingest key shows as `(old key)` → `(new key)`. `syncRuns` keeps 20. `digest.log` keeps 50.
 - `shopify.writeScopes` (optional, SW-051): the `write_*` scopes the last pull's token had; only ever non-empty for Performity's token (our own apps with one are refused), shown on Data as "Token also allows writes; this app only reads". Older files without it load as `[]`.
 - `src: 'rebuilt'` stock rows (SW-063, LOGIC §1c): stock before the store's first Shopify read, rebuilt from Shopify's change log; same fields as a pulled row, only times before the first live row; replaced whole on each rebuild (`store.setRebuilt`). `shopify.historyRebuiltAt` (optional) = when the rebuild last ran (set even when it was skipped, so it runs once per store; reset with the rest of `shopify` by Clear / demo); `shopify.history` = its outcome (`v` = rules version, `history.VERSION`, 2 since 1.1.1; a file without `v` or with an older one is rebuilt on the next pull; `kept` of `total` variants; `dropped` = `droppedLog` (rebuilt stock below min(stock at the first read, 0)) + `droppedCheck` (failed the order check); `check` = order lines in the rebuilt span, how many fell inside a rebuilt stock-out with no logged drop, their units, and the variants they hit; `from`/`until` = rebuilt span; `note` = why it was skipped, refused (check over 1%) or the last re-run failed). Older files without them load as before; no schema bump.
@@ -229,9 +229,9 @@ Outside `DATA_DIR`, in the app folder: `BUILD_SHA` (optional, SW-056): one line,
 
 ```
 {
-  "v": 1, "zone": "Asia/Kolkata", "days": 400, "at": 0, "triedAt": 0, "ok": true, "done": true, "note": null, "error": "?",
+  "v": 2, "zone": "Asia/Kolkata", "days": 400, "at": 0, "triedAt": 0, "ok": true, "done": true, "note": null, "error": "?",
   "sales":  { "from": "YYYY-MM-DD", "to": "YYYY-MM-DD", "perDay": 31.2,
-              "by":  { "<variantId>": { "YYYY-MM-DD": [units, net ₹] } },
+              "by":  { "<variantId>": { "YYYY-MM-DD": [units, net ₹, GST ₹, gross ₹] } },
               "all": { "YYYY-MM-DD": [units, net ₹] } },
   "moves":  { "from": "YYYY-MM-DD", "to": "YYYY-MM-DD", "perDay": 33.1,
               "by":  { "<variantId>": { "YYYY-MM-DD": change } } },
@@ -240,7 +240,7 @@ Outside `DATA_DIR`, in the app folder: `BUILD_SHA` (optional, SW-056): one line,
 }
 ```
 
-- `sales.by` = ShopifyQL `net_items_sold` and `net_sales` per variant per store day (ex GST, returns on the day they happened, so a day can be negative); `sales.all` = every row of the day, the rows without a variant too: the store total Shopify shows. `moves.by` = the day's net 'available' stock change. `from` / `to` = the oldest / newest store day read in full; today is held too and read again next time. A window read replaces its days whole.
+- `sales.by` = ShopifyQL `net_items_sold`, `net_sales`, `taxes` and `gross_sales` (v 2, 1.4.1; v 1 held two numbers and is read again once) per variant per store day (ex GST, returns on the day they happened, so a day can be negative); `sales.all` = every row of the day, the rows without a variant too: the store total Shopify shows. `moves.by` = the day's net 'available' stock change. `from` / `to` = the oldest / newest store day read in full; today is held too and read again next time. A window read replaces its days whole.
 - `anchor.levels` = the catalog's stock at the read (`at` = the pull's time), `anchor.day` = that store day; stock at the end of an earlier day = level − the changes after it.
 - `perDay` = rows per day of the last read (sizes the next read). `calls.runs` keeps 30.
 - A different `v`, time zone or span is read again from scratch. Clear all data empties it.
