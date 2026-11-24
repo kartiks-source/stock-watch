@@ -671,6 +671,11 @@ function report(stock, orders, settings = {}, opts = {}) {
     const before = allDemand ? run / allDemand : 1; run += demandOf(p);
     p.abc = !(demandOf(p) > 0) ? 'C' : before < 0.8 ? (p.lowData ? 'B' : 'A') : before < 0.95 ? 'B' : 'C';   // low data is never A (§7a)
   }
+  /* 1.4.4 (LOGIC §7a, §22): ONE best-seller definition. When the brand report's set is given (opts.bestIds: variant IDs of the
+     products making the top 80% of 12 months' net sales), A = in it; the period's own demand rank is kept as salesRank (A/B/C)
+     and only splits the rest into B and C. Without it (no 12 months, no rows), the period's rank as before. */
+  const bestIds = opts.bestIds ? (opts.bestIds instanceof Set ? opts.bestIds : new Set([].concat(opts.bestIds).map(String))) : null;
+  if (bestIds) for (const p of products) { p.salesRank = p.abc; p.abc = bestIds.has(String(p.id)) ? 'A' : p.abc === 'A' ? 'B' : p.abc; }
   /* a best seller is never "slow": it earns its place by ₹ even when it sells few units (e.g. furniture) */
   for (const p of products) {
     const { pl, perDay, unitValue } = p._plan;

@@ -26,7 +26,12 @@ test('GET /api/brand on demo: rows held, 12 months, headline = sum of months, be
   assert.equal(j.headline.lost, j.months.reduce((s, m) => s + m.lost, 0));
   assert.equal(j.headline.sold, j.months.reduce((s, m) => s + m.sold, 0));
   assert.ok(j.products.some((p) => p.best));
-  assert.ok(j.products.filter((p) => !p.best).every((p) => p.months === undefined), 'months only for best sellers unless full=1');
+  assert.ok(j.products.filter((p) => !p.best && !(p.lost > 0)).every((p) => p.months === undefined), 'months for best sellers and products with money missed unless full=1');
+  for (const k of ['best', 'all']) {   // 1.4.4: both scopes, headline = sum of the months
+    assert.equal(j.headline[k].lost, j.months.reduce((s, m) => s + m[k].lost, 0), k);
+    assert.ok(Math.abs(j.headline[k].total - (j.headline[k].lost + j.headline[k].est + j.headline[k].nr + j.headline[k].apart)) <= 24, `${k}: counted + apart parts = all (rounding)`);
+  }
+  assert.ok(j.headline.all.lost >= j.headline.best.lost);
   assert.ok(Array.isArray(j.now) && j.now.every((p) => p.best));
   assert.ok(Array.isArray(j.ads.push) && Array.isArray(j.ads.pause));
   for (const p of j.ads.push) assert.ok(p.stock > 0 && p.coverDays >= j.ads.coverDays, p.name);
