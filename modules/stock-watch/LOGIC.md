@@ -10,7 +10,7 @@ The code is in `src/engine.js`, which has no inputs or outputs of its own, so ev
 
 If you change a rule, change this file in the same commit and add a line to `docs/DEVLOG.md`.
 
-**Index** (find the section, read only that): §0a store time zone · §1 what goes in (rows, catalog, §1a CSV/Sheet/Flow, §1c stock history rebuilt from Shopify, what counts as a sale) · §2 stock-out episodes · §3 sales per day · §4 ₹ lost (§4a hour profile, §4b example, §4c how sure ₹ lost is) · §5 Overview totals (§5a periods: N calendar days, This month, Yesterday) · §6 reorder status and qty (§6a assumptions + typing, §6b Mark ordered) · §7 slow sellers (§7a A/B/C, §7b profit, §7c overstock, §7d trend) · §8 restocking · §9 Products columns (§9a/§9b Group by, §9e cancel/refund %, check against Shopify) · §10 demo · §11 known limits · §12 Google Sheet differences · §13 view-only + change log · §14 sync runs (§14a capacity + data folder lock) · §15 decision helpers (§15a–d) · §16 role views · §17 morning digest · §18 several stores · **1.4.0 agency pages:** §19 product picture and links · §20 12 months from Shopify (days in / out) · §21 pace and season · §22 money missed by month, best sellers · §23 best sellers now, push / pause ads.
+**Index** (find the section, read only that): §0a store time zone · §1 what goes in (rows, catalog, §1a CSV/Sheet/Flow, §1c stock history rebuilt from Shopify, what counts as a sale) · §2 stock-out episodes · §3 sales per day · §4 ₹ lost (§4a hour profile, §4b example, §4c how sure ₹ lost is) · §5 Overview totals (§5a periods: N calendar days, This month, Yesterday) · §6 reorder status and qty (§6a assumptions + typing, §6b Mark ordered) · §7 slow sellers (§7a A/B/C, §7b profit, §7c overstock, §7d trend) · §8 restocking · §9 Products columns (§9a/§9b Group by, §9e cancel/refund %, check against Shopify) · §10 demo · §11 known limits · §12 Google Sheet differences · §13 view-only + change log · §14 sync runs (§14a capacity + data folder lock) · §15 decision helpers (§15a–d) · §16 role views · §17 morning digest · §18 several stores · **1.4.0 agency pages:** §19 product picture and links · §20 12 months from Shopify (days in / out) · §21 pace and season · §22 money missed by month, best sellers · §23 best sellers now, push / pause ads · §24 the product drawer (12-month profile).
 
 ---
 
@@ -1086,3 +1086,29 @@ Who they are for (`.claude/skills/agency-perspective`): the agency that runs a b
 - **Best sellers now:** each best seller (§22): in stock (pieces) or out since when (any selling option out = out; the day comes from the 12 months, so a product out longer than the rows we hold says "since 9 Aug" or "since before 25 Nov 2025", not the first stock record), days out and money missed this month (§22), how fast it sells (§21), refill: ordered (lands …), order N now, not ordered, enough stock. Out first, then money missed this month. Opening a row gives *Mark ordered* (§6b).
 - **Push in ads:** in stock, selling (pace > 0), and at least max(21 days, lead time + buffer) of stock at its pace, so ads won't empty the shelf; most money a day first (pace × price). **Pause ads:** the Pause list of §15c (out now, or runs out before a refill can land), only items that sell; best sellers first, then money a day. Copy list (code + name) and CSV, with links.
 - Pace = the brand report's pace for this month (§21) when Shopify's 12 months are read, else the 28-day rate (§3).
+
+## 24. The product drawer: a 12-month profile (1.4.1, `src/agency.js` `profile`, `public/profile.js`)
+
+Everything comes from the 12 months of §20 (ShopifyQL day aggregates) and the catalog; one variant. Months = the 12 calendar months of the brand report; "12 months" = the first of the oldest month to yesterday.
+
+| Section | Rule |
+|---|---|
+| Rank | products on sale now by 12 months' net sales: "#23 of 234 by sales, 12 months"; *Best seller* as §22 |
+| Story | "Sells about <pace> when it is in stock. Ran out N times in the last 12 months, D days in all. That cost about ₹X in sales." (pace in words as §3; "in these days" when under 330 days are held) |
+| Sold, share | Σ net units and net sales (ex GST) over the 12 months; ÷ the store's net sales over the same months |
+| Pace on days in stock | units on days in stock (oversold units out) ÷ in-stock days over the 12 months, at least 7 days; a week = × 7, a month = × 30.4. (The ₹ uses the 6-month seasonal pace of §21; this line is the plain 12-month average) |
+| On the shelf | in-stock share of the days held (§20 day rules: ½ for a day it ran out or came back) |
+| Ran out | runs of days not fully in stock; times = runs, days = Σ (1 − in-stock share); longest = the run with most out-days, with dates; "still out" when the last run reaches yesterday |
+| Money missed | Σ over the months of §22 for this variant |
+| Last restock | the newest day the 'available' stock went up (net of the day), with +pieces |
+| Price | **MRP** = Shopify's compare-at price (when above the price); **list** = the price (with GST); **paid** = net sales ÷ units (ex GST), × (1 + GST %); **GST %** = ShopifyQL `taxes` ÷ `net_sales`; discount off MRP = 1 − paid with GST ÷ MRP, off list likewise; per month the same |
+| 12-month chart | bars = net units sold that month; dashed bar on top = units it would have sold on its days out (§22); red strip = days out ÷ days in the month; line = the month's season index (§21, ×½ to ×2) |
+| Stock level | stock at each day's end (§20 walk); ▲ = a day the stock went up (+pieces); shaded = days not fully in stock |
+| Busy / quiet | months with index ≥ 1.1 / ≤ 0.9 (its own when it has the days, else the store's, §21); this month so far vs the same month last year: units, in-stock days, a day |
+| Details | category (product type), vendor, launched (variant createdAt), on the website since (publishedAt), collections (Group by cache, §9b; "All products" left out), tags |
+
+The last 30 days to the hour (Why, sales lost with its confidence, every stock-out with times) stay under one fold, from the report of §4.
+
+**Checked on Sammsara (24 Nov 2026, read-only, against ShopifyQL `GROUP BY product_title, month` and the Admin API):** Oakwood Table Set of 2, Nivaya Table Set of 2, Scarlett Gold Table, Kimaya Chandelier Candle Holder: 12 of 12 months equal in units and ₹ (to ₹1 rounding) for each; MRP = compare-at (₹12,709 / ₹12,420 / ₹19,999 / ₹7,220), list price, paid with GST (₹5,397 / ₹5,008 / ₹6,159 / ₹2,962), GST % (5.52 / 5.54 / 5.32 / 5.28) and discount off MRP (57.5% / 59.7% / 69.2% / 59.0%) equal Shopify's. The profile takes about 150 ms to build on the live catalog.
+
+**Why:** the drawer answers the brand's questions about one product in one place, with a year of evidence; the 30-day widgets showed zeros for a product out most of the month. **Can be wrong:** a day's net stock change hides a restock and sale on the same day (the "last restock" is net); compare-at prices set only on some variants show no MRP for the others.

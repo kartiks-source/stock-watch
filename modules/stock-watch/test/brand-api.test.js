@@ -38,8 +38,12 @@ test('GET /api/product/:id carries the variant’s year; POST /api/shopify/year 
   const b = await get('/api/brand');
   const id = b.now[0].id;
   const d = await get(`/api/product/${id}`);
-  assert.equal(d.year.ok, true);
-  assert.ok(d.year.calendar.length > 30 && d.year.calendar.every(([k, f]) => /^\d{4}-\d\d-\d\d$/.test(k) && [0, 0.5, 1].includes(f)));
+  assert.equal(d.profile.ok, true, JSON.stringify(d.profile).slice(0, 200));
+  assert.ok(d.profile.calendar.length > 30 && d.profile.calendar.every(([k, f]) => /^\d{4}-\d\d-\d\d$/.test(k) && [0, 0.5, 1].includes(f)));
+  assert.equal(d.profile.months.length, 12);
+  assert.ok(d.profile.rank && d.profile.rank.n >= 1 && d.profile.rank.of >= d.profile.rank.n);
+  assert.ok(d.profile.details && Array.isArray(d.profile.details.tags));
+  assert.ok(d.profile.ms < 1500, `fast: ${d.profile.ms} ms`);
   const r = await fetch(`${base}/api/shopify/year?store=sammsara-demo`, { method: 'POST' });
   assert.equal(r.status, 400);
 });
@@ -48,7 +52,7 @@ test('a year.json from Shopify is preferred over the rows held', async () => {
   const scope = require('../src/scope'), store = require('../src/store');
   const d = scope.run('sammsara-demo', () => store.load());
   const id = String(d.stock[0].variantId), today = new Date(Date.now() + 330 * 60e3).toISOString().slice(0, 10);
-  const y = { v: 1, zone: 'Asia/Kolkata', days: 365, at: Date.now(), ok: true, done: true, anchor: { at: Date.now(), day: today, levels: { [id]: 0 } },
+  const y = { v: require('../src/year').VERSION, zone: 'Asia/Kolkata', days: 400, at: Date.now(), ok: true, done: true, anchor: { at: Date.now(), day: today, levels: { [id]: 0 } },
     sales: { from: '2026-01-01', to: '2026-12-31', by: { [id]: { '2026-02-02': [3, 300] } }, all: { '2026-02-02': [3, 300] } }, moves: { from: '2026-01-01', to: '2026-12-31', by: { [id]: { '2026-03-01': -5 } } } };
   scope.run('sammsara-demo', () => require('../src/year').save(y));   // through the side file, so its cache holds it
   const j = await get('/api/brand');

@@ -214,24 +214,6 @@
     A.saveCsv(`${kind === 'push' ? 'push-in-ads' : 'pause-ads'}-${new Date().toISOString().slice(0, 10)}.csv`, [[...head, ...SW_PROD.CSV_HEAD], ...body]);
   }
 
-  /* ---------- drawer: the product's 12 months ---------- */
-  function drawerYear(y) {
-    if (!y || !y.ok) return y && y.reason === 'unsure' ? '<div class="panel"><h2>12 months</h2><p class="muted small">Shopify’s stock log doesn’t add up for this product, so its past days aren’t shown.</p></div>' : '';
-    const cal = y.calendar || [];
-    if (!cal.length) return '';
-    const first = cal[0][0], dow = (new Date(`${first}T00:00:00Z`).getUTCDay() + 6) % 7;   // Monday first
-    const cells = [...Array(dow).fill('<i class="cd e"></i>'), ...cal.map(([k, f]) => `<i class="cd ${f >= 1 ? 'in' : f > 0 ? 'half' : 'out'}" title="${esc(`${dayY(k)}: ${f >= 1 ? 'in stock' : f > 0 ? 'ran out or came back' : 'out of stock'}`)}"></i>`)].join('');
-    const outDays = cal.reduce((s, [, f]) => s + (1 - f), 0);
-    const p = y.pace || {}, sea = Object.entries(y.season || {}).sort((a, b) => b[1] - a[1]);
-    const busy = sea.filter(([, v]) => v >= 1.15).slice(0, 3), quiet = sea.filter(([, v]) => v <= 0.85).slice(-3).reverse();
-    const lostMonths = Object.entries(y.months || {}).filter(([, x]) => x.lost > 0 || x.daysOut > 0).sort((a, b) => (a[0] < b[0] ? 1 : -1));
-    return `<div class="panel ycal"><div class="panel-head"><h2>${y.span.days >= 360 ? '12 months on the shelf' : `On the shelf since ${esc(day(y.span.from))}`}</h2><span class="muted small">${span(y.span.from, y.span.through)}</span></div>
-      <p class="small">${outDays ? `Out of stock on <b class="lostv">${nDays(outDays)}</b>.` : 'In stock every day.'} ${p.perDay > 0 ? `Normal pace: <b>${(Math.round(p.perDay * 100) / 100).toLocaleString('en-IN')} a day</b> (about ${Math.round(p.perDay * 7)} a week, ${Math.round(p.perDay * 30.4)} a month), from ${p.basis === 'year' ? '12 months' : `${p.months || 6} months`} of days in stock.` : 'No sales on days in stock.'}</p>
-      <div class="cal" aria-label="Each square is a day; red = out of stock">${cells}</div>
-      <p class="muted small"><i class="sw in"></i> in stock <i class="sw half"></i> ran out or came back <i class="sw out"></i> out${busy.length ? ` · busy: ${busy.map(([m, v]) => `${mShort(m)} ×${v}`).join(', ')}` : ''}${quiet.length ? ` · quiet: ${quiet.map(([m, v]) => `${mShort(m)} ×${v}`).join(', ')}` : ''}</p>
-      ${lostMonths.length ? `<div class="ylost">${lostMonths.map(([m, x]) => `<p><b>${esc(monthName(m))}:</b> ran out ${esc(x.range)} (${nDays(x.daysOut)}). It would have sold about ${units(x.units)}. <b class="lostv">${money(x.lost)}</b> missed.</p>`).join('')}</div>` : ''}</div>`;
-  }
-
   /* ---------- events ---------- */
   document.addEventListener('click', (e) => {
     if (!A) return;
@@ -261,6 +243,6 @@
   window.SW_BRAND = {
     init(ctx) { A = ctx; },
     views: { brand: brandView, best: bestView, ads: adsView },
-    fetch: fetchBrand, reset() { if (A) { A.state.brand = null; } }, after, drawerYear, rs, pace,
+    fetch: fetchBrand, reset() { if (A) { A.state.brand = null; } }, after, rs, pace,
   };
 })();

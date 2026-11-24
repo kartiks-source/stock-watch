@@ -3,7 +3,7 @@
  * 12 months of history from Shopify's own reports (1.4.0, LOGIC.md §20). No order download: two ShopifyQL aggregates
  * (read_reports scope, Admin API 2025-10), per variant per store-time day, for the last DAYS days (today included):
  *
- *   sales:  FROM sales SHOW net_items_sold, net_sales GROUP BY day, product_variant_id SINCE <d1> UNTIL <d2> …
+ *   sales:  FROM sales SHOW net_items_sold, net_sales, taxes, gross_sales GROUP BY day, product_variant_id SINCE <d1> UNTIL <d2> …
  *   moves:  FROM inventory_adjustment_history SHOW inventory_adjustment_change WHERE inventory_state = 'available'
  *           GROUP BY day, product_variant_id SINCE <d1> UNTIL <d2> …
  *
@@ -27,7 +27,7 @@
 const TZ = require('./tz');
 const { sideFile } = require('./sidefile');
 
-const VERSION = 1;
+const VERSION = 2;             // 2 (1.4.1): sales carry taxes and gross sales (price and GST in the product profile)
 const DAYS = 400;             // 12 whole months on any day, plus last year's same month in full for the season (LOGIC §21)
 const CAP = 1000;             // ShopifyQL's row cap
 const TARGET_ROWS = 800;      // aim per read, under the cap
@@ -48,7 +48,7 @@ class YearError extends Error { constructor(code, msg) { super(msg); this.code =
 const keyPlus = (key, n) => new Date(Date.parse(`${key}T00:00:00Z`) + n * DAY).toISOString().slice(0, 10);
 const span = (a, b) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / DAY) + 1;   // days a..b, both in
 const QL = {
-  sales: (a, b) => `FROM sales SHOW net_items_sold, net_sales GROUP BY day, product_variant_id SINCE ${a} UNTIL ${b} ORDER BY day ASC LIMIT ${CAP}`,
+  sales: (a, b) => `FROM sales SHOW net_items_sold, net_sales, taxes, gross_sales GROUP BY day, product_variant_id SINCE ${a} UNTIL ${b} ORDER BY day ASC LIMIT ${CAP}`,
   moves: (a, b) => `FROM inventory_adjustment_history SHOW inventory_adjustment_change WHERE inventory_state = 'available' GROUP BY day, product_variant_id SINCE ${a} UNTIL ${b} ORDER BY day ASC LIMIT ${CAP}`,
 };
 
@@ -66,9 +66,9 @@ function parse(td, kind) {
     const v = o.product_variant_id == null ? null : String(o.product_variant_id).replace(/^gid:\/\/shopify\/ProductVariant\//, '');
     const variantId = v && /^\d+$/.test(v) ? v : null;
     if (kind === 'sales') {
-      const units = Number(o.net_items_sold), net = Number(o.net_sales);
+      const units = Number(o.net_items_sold), net = Number(o.net_sales), tax = Number(o.taxes), gross = Number(o.gross_sales);
       if (!Number.isFinite(units) && !Number.isFinite(net)) continue;
-      out.push({ day, variantId, units: Number.isFinite(units) ? units : 0, net: Number.isFinite(net) ? net : 0 });
+      out.push({ day, variantId, units: Number.isFinite(units) ? units : 0, net: Number.isFinite(net) ? net : 0, tax: Number.isFinite(tax) ? tax : 0, gross: Number.isFinite(gross) ? gross : 0 });
     } else {
       const delta = Number(o.inventory_adjustment_change);
       if (!variantId || !Number.isFinite(delta) || !delta) continue;
@@ -93,11 +93,12 @@ function merge(stream, kind, a, b, rows) {
     if (r.day < a || r.day > b) continue;
     if (kind === 'sales') {
       const t = stream.all[r.day] || (stream.all[r.day] = [0, 0]);
-      t[0] += r.units; t[1] = Math.round((t[1] + r.net) * 100) / 100;
+      t[0] += r.units; t[1] = Math.round((t[1] + r.net) * 100) / 100;   // the store total keeps units and ₹ only
       if (!r.variantId || (!r.units && !r.net)) continue;
       const m = by[r.variantId] || (by[r.variantId] = {});
-      const x = m[r.day] || (m[r.day] = [0, 0]);
+      const x = m[r.day] || (m[r.day] = [0, 0, 0, 0]);
       x[0] += r.units; x[1] = Math.round((x[1] + r.net) * 100) / 100;
+      x[2] = Math.round(((x[2] || 0) + (r.tax || 0)) * 100) / 100; x[3] = Math.round(((x[3] || 0) + (r.gross || 0)) * 100) / 100;   // GST, gross (1.4.1)
     } else {
       const m = by[r.variantId] || (by[r.variantId] = {});
       m[r.day] = (m[r.day] || 0) + r.delta;

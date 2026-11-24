@@ -2,6 +2,19 @@
 
 User-facing changes, newest first. Semver: minor when a number's rule changes or a feature lands, patch for fixes. The version in `package.json` matches the top heading. Versions before 0.9.0 were reconstructed from `docs/DEVLOG.md` on 20 Nov 2026 (no tags existed); dates are the DEVLOG dates. Per DEVLOG, nothing from 0.6.0 on has been deployed yet. Since 1.0.0-rc.1, `/health`, `/status` and the page footer show the version and the build's commit (SW-056); `test/docs.test.js` checks the top heading matches `package.json`.
 
+## 1.4.1 · 2026-11-24 · the product drawer is a 12-month profile
+
+- The drawer no longer shows the 30-day *Trend* bars (0, 0, 0…) or the flat 30-day *Stock level* block. It is the product's 12 months, top to bottom:
+  - big picture, name, code, *Best seller* and its rank ("#23 of 234 by sales, 12 months"), stock now (in stock N / out since date / website top-up), Open in Shopify, View on website;
+  - one story line: "Sells about 3 a week when it is in stock. Ran out 4 times in the last 12 months, 23.5 days in all. That cost about ₹63k in sales.";
+  - key numbers: sold (units, ₹, share of the store), pace on days in stock (a day / week / month), on the shelf (% of the year), times out and the longest, money missed, stock now and days left, last restock (+pieces, date), cancel/refund (30 days);
+  - a 12-month chart: units sold, a dashed "would have sold while out" bar on top, a red strip for days out, the busy-month line;
+  - price and discount: MRP (Shopify's compare-at price), list price, average paid with and without GST, GST %, discount off MRP and off list, and price paid per month against units sold;
+  - every day on the shelf (calendar), stock level over 12 months with restocks (+pieces) and stock-outs shaded, busy and quiet months with "this month vs the same month last year", month-by-month sentences, details (category, vendor, launched, on the website since, collections, tags);
+  - the last 30 days to the hour stay under one fold.
+- Charts are drawn when they scroll into view; on a phone they scroll inside their card.
+- 12-month sales now also carry GST and gross sales (ShopifyQL `taxes`, `gross_sales`): the stored year is read again once (≈40 reads). The catalog reads the compare-at price (MRP). Checked on Sammsara: Oakwood, Nivaya, Scarlett Gold Table and Kimaya Chandelier Candle Holder match Shopify month by month (units and ₹), and their MRP, GST and discount match.
+
 ## 1.4.0 · 2026-11-24 · agency proof: best sellers out of stock, month by month
 
 - **New home: Brand report.** "Best sellers ran out on N days in the last 12 months. Money we missed: about ₹X. That is Y% of what the brand sold (₹Z), <dates>." A chart of sold and missed each month, a month table (click a month), a grid of best sellers × months (days out, darker = longer), and the month's list: picture, name, code, links, the dates it was out, days out, "would have sold about N", money missed. CSV of the month table and of the list. Sales up to yesterday and the stock read time are always shown. Sammsara, 12 months to 23 Nov 2026: best sellers ran out on 896 days, about ₹16.6 lakh missed, 2.3% of ₹7.1 Cr sold (+ ₹2.8 lakh on 4 website top-up items, kept apart). While the history is still loading the page says from when, and ranks best sellers on Shopify's last 26 weeks.

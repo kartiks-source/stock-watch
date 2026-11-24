@@ -11,6 +11,13 @@ Older entries: [2026-11](devlog/2026-11.md)
 
 
 
+## 2026-11-24 · 1.4.1 · product drawer = 12-month profile
+stock-watch 1.4.1 (branch `feature/agency-proof`, after merging main ec2fa1a; not pushed, not deployed). User (screenshot): the drawer still showed 30-day Trend 0,0,0 and a flat pink Stock level block.
+- Drawer rebuilt (`public/profile.js`): header with rank and status now; story line; key numbers; 12-month sold + "would have sold" ghost bars + days-out strip + season line; price and discount (MRP = compare-at, GST from ShopifyQL `taxes`); day calendar; 12-month stock level with restocks; busy/quiet months + same month last year; month sentences; details. 30-day hour detail under one fold. Charts lazy (IntersectionObserver), inline SVG, scroll inside their card on phones.
+- Data: `agency.profile` (pure) from a build with `detail`; year sales v2 = [units, net, GST, gross] (re-read once); catalog `compareAt`. ~150 ms per drawer on the live catalog.
+- Live check (read-only): Oakwood, Nivaya, Scarlett Gold Table, Kimaya: 12/12 months units and ₹ = ShopifyQL; MRP, list, paid with GST, GST %, discount off MRP = Shopify.
+- Open: restock markers crowd on products restocked often (labels only on the 8 biggest); collections list can include internal ones ("Test").
+
 ## 2026-11-24 · 1.4.0 fixes after the first live deploy (e526426) and the critic round
 - Live (coordinator): the first pull read 8 ShopifyQL windows (26 Sep → today), best sellers were ranked on those 2 months, so Oakwood and Nivaya were not best sellers and Nov showed ₹18,539 counted. Fixes: the first load reads everything (≤ 80 reads, 39 on Sammsara in 47 s); while loading, best sellers rank on Shopify's 26 weeks and the page says "History from …; the full 12 months after the next pull".
 - Season per calendar month, smoothed 1-2-1 with the months either side, 400 days held (last year's same month): Oakwood Nov ₹31k → ₹56k (1.3.0 engine ₹68.5k), Nivaya ₹40.9k (engine ₹51.6k), Seville ₹24.7k (engine ₹18.9k); pinned by a fixture test with the Shopify evidence (LOGIC §21).

@@ -988,3 +988,51 @@ body.no-period .top .range, body.no-period .top .rlabel, body.no-period .top .rd
   .chk { min-height: 44px; padding: 0 4px; }
   .ads2 .pl1 .best { display: none; }
 }
+
+/* 1.4.1 product profile (public/profile.js) */
+.prank { font-size: 12.5px; color: var(--soft); font-weight: 600; }
+.pstory { margin: 0; font-size: 15px; line-height: 1.5; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px; }
+.kgrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.kgrid.k4 { margin-bottom: 8px; }
+.kv { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.panel .kv { background: #F8FAFC; }
+.kv span { font-size: 12px; color: var(--soft); }
+.kv b { font-size: 17px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.kv small { font-size: 12px; color: var(--soft); line-height: 1.3; }
+.kv.bad b { color: var(--lost); }
+.chartbox { overflow-x: auto; overscroll-behavior-x: contain; }
+.lazy-chart { min-width: 100%; }
+.pchart { display: block; overflow: visible; }
+.pchart text { font-size: 11px; fill: var(--soft); }
+.pchart .gl { stroke: var(--line); }
+.pchart .hit { fill: transparent; }
+.pchart .sold { fill: #7DB6DF; }
+.pchart .ghost { fill: #FCE9ED; stroke: var(--lost); stroke-width: 1; stroke-dasharray: 3 2; }
+.pchart .otrack { fill: #EEF1F5; }
+.pchart .out { fill: var(--lost); }
+.pchart .bv { fill: var(--ink); font-weight: 600; }
+.pchart .sline { fill: none; stroke: #9A5B0F; stroke-width: 1.5; }
+.pchart .sdot { fill: #9A5B0F; }
+.pchart .ub { fill: #CFE5F3; }
+.pchart .pline { fill: none; stroke: var(--brand); stroke-width: 2; }
+.pchart .pdot { fill: var(--brand); }
+.pchart .mrp { stroke: var(--soft); stroke-dasharray: 4 3; }
+.pchart .lst { stroke: var(--faint); stroke-dasharray: 1 3; }
+.pchart .stl { fill: none; stroke: var(--brand); stroke-width: 1.5; }
+.pchart .oshade { fill: #FCE9ED; }
+.pchart .oshade.half { fill: #FDF3F5; }
+.pchart .rmark { fill: var(--ok); }
+.pchart .rlab { fill: var(--ok); font-weight: 600; font-size: 10.5px; }
+.sw.ghost { background: #FCE9ED; outline: 1px dashed var(--lost); }
+.sw.line { background: #9A5B0F; height: 3px; vertical-align: 2px; }
+.calwrap { overflow-x: auto; }
+.pdet { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 14px; font-size: 13.5px; }
+.pdet > div { display: contents; }
+.pdet span { color: var(--soft); }
+.pdet b { font-weight: 500; }
+.ptags { display: flex; flex-wrap: wrap; gap: 4px; }
+.ptags i { font-style: normal; font-size: 12px; background: #EEF1F5; border-radius: 4px; padding: 1px 6px; }
+@media (max-width: 759.98px) {
+  .kgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pstory { font-size: 14px; }
+}

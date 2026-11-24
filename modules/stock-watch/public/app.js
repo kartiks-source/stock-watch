@@ -962,25 +962,17 @@
     try {
       const d = await api(`/api/product/${encodeURIComponent(id)}?days=${state.days}${whatQs()}`);
       const p = d.product, now = state.report.generatedAt, from = state.report.from, gap = noHistory(p, from);
+      const prof = d.profile;
+      /* 1.4.1: the drawer is the product's 12-month profile (public/profile.js, LOGIC §24); 30-day hour detail under More */
+      const nowHtml = !p ? '' : p.stock != null && p.stock <= 0 ? `<span class="st g-today">Out${prof && prof.ok && prof.outs.open && prof.outs.since ? ` since ${esc(dateShort(Date.parse(prof.outs.since + 'T12:00:00Z') - off()))}` : p.outSince ? ` since ${esc(dateShort(p.outSince))}` : ''}</span>` : p.stock != null ? `<span class="st ok">In stock · ${inr.format(p.stock)}</span>` : '';
       body.innerHTML = `
-        ${manyStores() ? `<p class="dstore">${esc(SW_STORES.name())}</p>` : ''}${p ? SW_PROD.hero(p, `<div class="toolbar">${status(p) + bestTag(p)}</div>`) : `<h2 id="drawer-title">${esc(id)}</h2>`}
+        ${manyStores() ? `<p class="dstore">${esc(SW_STORES.name())}</p>` : ''}${p ? (window.SW_PROFILE ? SW_PROFILE.top(p, prof, nowHtml + status(p)) : SW_PROD.hero(p, `<div class="toolbar">${status(p) + bestTag(p)}</div>`)) : `<h2 id="drawer-title">${esc(id)}</h2>`}
+        ${window.SW_PROFILE ? SW_PROFILE.body(prof, p, p && (viewOnly() ? p.onOrder : p.orderQty > 0 || p.onOrder) ? orderForm(p) : '') : ''}
+        <details class="panel fold"><summary><b>Last ${state.report.days || 30} days, to the hour</b> <span class="muted">${esc(periodDates(state.report))}</span></summary>
         ${p?.why ? `<p class="dwhy">${whyCell(p)}</p>` : ''}
-        <section class="tiles dtiles">
-          <div class="tile amber"><b>${p?.orderQty ? `${inr.format(p.orderQty)} pcs` : '–'}</b><span>order now${p?.orderQty ? ` · ${money(p.orderValue)} ${atCost()}` : ''}${p?.paceQty != null ? `<br><small id="pace-qty" title="Sales are falling (${p.trendPct ?? '–'}% this product, ${state.report.totals.storeTrendPct ?? '–'}% the typical product): the same order at the last 14 days’ in-stock pace, ${n1(p.pacePerDay)} a day">${inr.format(p.paceQty)} pcs at last 2 weeks’ pace</small>` : ''}</span></div>
-          <div class="tile ${p?.daysLeft != null && p.daysLeft <= 3 ? 'lost' : ''}"><b>${p?.daysLeft == null ? (p?.stock <= 0 ? '0' : '–') : n1(p.daysLeft)}</b><span>days left · ${p?.stock ?? '–'} in stock</span></div>
-          <div class="tile"><b title="${n1(p?.perDay)} per in-stock day">${rate(p?.perDay)}</b><span>sells while in stock${p?.lowData ? ' · <abbr title="Under 5 units and 14 in-stock days to go on: capped at units ÷ days since its first sale, and never a best seller (LOGIC §3)">low data</abbr>' : ''}</span></div>
-          ${gap ? `<div class="tile" id="lost-unknown" title="No stock record before ${esc(dateShort(gap))}, so stock-outs before then can’t be seen (Shopify’s change log didn’t add up for it)"><b>${p.lost ? money(p.lost) : 'Unknown'}</b><span>sales lost${p.lost ? ` since ${esc(dateShort(gap))}` : ''} · before ${esc(dateShort(gap))}: unknown</span></div>`
-    : `<div class="tile lost"><b>${money(p?.lost)}</b><span>missed ${esc(inPeriod())} (${esc(periodDates(state.report))})${p?.lostProfit != null ? ` · ${money(p.lostProfit)} profit` : ''}${p && p.lost ? ` · confidence ${esc((CONF_LABEL[p.confidence] || '–').toLowerCase())}${weeksText(p) ? ` (${esc(weeksText(p))})` : ''}` : ''}</span>${p && p.lost ? lostSplitLine(p) : ''}</div>`}
-          ${p?.returnPct != null ? `<div class="tile rtile" id="returns-tile" title="${esc(RETURNS_TIP)}"><span>Cancelled or refunded: <b class="${p.returnPct >= HIGH_RETURN ? 'amberv' : ''}">${n1(p.returnPct)}%</b> (${inr.format(p.unitsReturned)} of ${inr.format(p.unitsOrdered)} ordered${p.unitsCancelled ? `, ${inr.format(p.unitsCancelled)} cancelled` : ''}) · ${money(p.refundValue)} back</span></div>` : ''}
-        </section>
-        ${p && (viewOnly() ? p.onOrder : p.orderQty > 0 || p.onOrder) ? orderForm(p) : ''}
-        ${window.SW_BRAND ? SW_BRAND.drawerYear(d.year) : ''}
-        <div class="panel"><div class="panel-head"><h2>Trend</h2>${p ? trendChip(p) : ''}</div>${p ? `<div class="wk">${spark(p, 320, 44)}<div class="wknums">${(p.weeks || []).map((w, i) => `<span title="${esc(weekTip(w, i))}" class="${w.outDays ? 'wo' : ''}"><b>${w.units == null ? '–' : inr.format(w.units)}</b><small>${dateShort(weekStart(i))}</small></span>`).join('')}</div></div>
-          <p class="muted small">Units sold per week, week starting on the date shown; rose = out of stock part of that week.</p>` : ''}</div>
-        <div class="panel chart"><h2>Stock level</h2>${stockChart(d.timeline, from, now, gap)}<span class="muted" style="font-size:13px">${gap ? `<span id="nohist-note">Hatched = no stock history before ${esc(dateShort(gap))}: Shopify’s change log didn’t add up for it. </span>` : ''}Shaded = out of stock.</span></div>
-        <details class="panel fold"><summary><b>More</b> <span class="muted">units per day, every stock-out</span></summary>
-        <div class="chart"><h2>Units sold per day</h2>${unitsChart(d.dailyUnits)}</div>
-        <div><h2>Stock-outs</h2>${d.stockouts.length ? `<div>${d.stockouts.map((s) => `<div class="ep"><span>${dt(s.start)} → ${s.open ? '<span class="st open">still out</span>' : dt(s.end)}</span><span class="muted">${dur(s.hours)}</span><b style="color:#E0506E">${money(s.lost)}</b>${s.topUp != null ? `<span>refilled ${s.topUp} pcs</span>` : ''}${s.small ? '<span class="st small">Small top-up</span>' : ''}${s.repeat ? '<span class="st again">Out again</span>' : ''}</div>`).join('')}</div>` : '<p class="muted">None in this period.</p>'}</div></details>`;
+        <p class="small">Sales lost in these days: <b class="lostv">${money(p?.lost)}</b>${p && p.lost ? ` · how sure: ${esc((CONF_LABEL[p.confidence] || '–').toLowerCase())}${weeksText(p) ? ` (${esc(weeksText(p))})` : ''}` : ''}. Sells ${esc(rate(p?.perDay))} on days in stock (last 28 days).</p>${p && p.lost ? lostSplitLine(p) : ''}
+        <div><h3 class="small">Every stock-out</h3>${d.stockouts.length ? `<div>${d.stockouts.map((s) => `<div class="ep"><span>${dt(s.start)} → ${s.open ? '<span class="st open">still out</span>' : dt(s.end)}</span><span class="muted">${dur(s.hours)}</span><b style="color:#E0506E">${money(s.lost)}</b>${s.topUp != null ? `<span>refilled ${s.topUp} pcs</span>` : ''}${s.small ? '<span class="st small">Small top-up</span>' : ''}${s.repeat ? '<span class="st again">Out again</span>' : ''}</div>`).join('')}</div>` : '<p class="muted">None in these days.</p>'}</div></details>`;
+      if (window.SW_PROFILE) SW_PROFILE.charts(body, prof);
       $('#drawer-close').focus();
     } catch (e) { body.innerHTML = `<p>Couldn’t load this product: ${esc(e.message)}</p>`; }
   }

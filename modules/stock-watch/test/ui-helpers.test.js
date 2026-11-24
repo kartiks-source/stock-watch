@@ -295,8 +295,10 @@ test('final critic round 1, phones 390 and 360 (M2–M8, M10): Pause names reada
       await fetch(base + '/api/onorder', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ items: [{ id: one.id, qty: 0 }] }) });
     }
     await pg.goto(base + '/?role=all#reorder'); await pg.waitForSelector('.phone .mcard');
-    await pg.click('.phone .mcard h3'); await pg.waitForSelector('svg[aria-label^="Stock over time"] text');
-    const over = await pg.$eval('svg[aria-label^="Stock over time"]', (svg) => { const W = svg.viewBox.baseVal.width; return [...svg.querySelectorAll('text')].map((t) => t.getBBox()).filter((b) => b.x + b.width > W + 0.5 || b.x < -0.5).length; });
+    await pg.click('.phone .mcard h3'); await pg.waitForSelector('#drawer .pstory');   // 1.4.1: the 12-month stock chart, drawn when scrolled to
+    await pg.evaluate(async () => { const c = document.querySelector('.drawer-card'); for (let y = 0; y < c.scrollHeight; y += 300) { c.scrollTop = y; await new Promise((r) => setTimeout(r, 40)); } });
+    await pg.waitForSelector('svg[aria-label^="Stock at each day"] text');
+    const over = await pg.$eval('svg[aria-label^="Stock at each day"]', (svg) => { const W = svg.viewBox.baseVal.width; return [...svg.querySelectorAll('text')].map((t) => t.getBBox()).filter((b) => b.x + b.width > W + 0.5 || b.x < -0.5).length; });
     assert.equal(over, 0, `${w}: M8 stock chart labels inside the chart`);
     await pg.goto(base + '/?role=all#overview'); await pg.waitForSelector('.tiles');
     assert.equal(await pg.$eval('.tile span', (e) => getComputedStyle(e).fontSize), '12px', `${w}: M7 tile context 12 px`);
@@ -360,7 +362,7 @@ test('final critic round 2, phones 390 and 360 (M1–M6, M8, M9): whole chips, t
     assert.ok(m2, `${w}: M2 toast clear of the Mark button`);
     await pg.click('#pick-clear');
     /* M3: the × stays in view when the drawer is scrolled */
-    await pg.click('.phone .mcard h3'); await pg.waitForSelector('#drawer:not([hidden]) svg');
+    await pg.click('.phone .mcard h3'); await pg.waitForSelector('#drawer:not([hidden]) .pstory');
     const x = await pg.evaluate(() => { const c = document.querySelector('.drawer-card'); c.scrollTop = c.scrollHeight; const r = document.getElementById('drawer-close').getBoundingClientRect(); return { top: r.top, w: r.width, h: r.height, scrolled: c.scrollTop > 100 }; });
     assert.ok(x.scrolled && x.top >= 0 && x.top < 30 && x.w >= 44 && x.h >= 44, `${w}: M3 × pinned ${JSON.stringify(x)}`);
     await pg.click('#drawer-close');
@@ -447,7 +449,8 @@ test('1.3.0: grey parts apart, Top-up from warehouse, "since <date>" for open st
       await pg.goto(base + '/#products'); await pg.waitForSelector('#q-products');
       const sel = w > 760 ? `.tbl.desk tr[data-id="${split.id}"]` : `.mcard[data-id="${split.id}"]`;
       await pg.fill('#q-products', split.sku || split.name); await pg.waitForSelector(sel);
-      await pg.click(sel); await pg.waitForSelector('#lost-split');
+      await pg.click(sel); await pg.waitForSelector('#drawer details.fold summary');
+      await pg.click('#drawer details.fold summary'); await pg.waitForSelector('#lost-split');   // 1.4.1: the 30-day detail sits under one fold
       assert.match(await pg.textContent('#lost-split'), /^in headline ₹[\d,.]+( L)? · /);
       await pg.keyboard.press('Escape');
     }
