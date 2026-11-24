@@ -250,6 +250,8 @@ function storeName(id = scope.id()) {
 
 /** engine options from lossPaceOf: { lossPace, lossPrice } (none without the 12 months) */
 const lossOpts = (m) => (m ? { lossPace: m.pace, lossPrice: m.price } : {});
+/** 1.4.4: the parts of §4c per variant from a report, for the brand report (same rule on every page) */
+const rowInfoOf = (rows) => Object.fromEntries((rows || []).map((x) => [String(x.id), { confidence: x.confidence, nrDays: x.nrDays, ordered: !!x.onOrder, allocation: !!x.allocation }]));
 /** 1.4.0 (LOGIC §21): { variantId → units a day this month } from Shopify's 12 months (brand report pace × season), for
  *  ₹ lost of long stock-outs; cached per store until the year is read again or the pace setting changes. */
 /** 1.4.3: what the brand report is built from: Shopify's 12 months (year.json) when read, else the rows held; the catalog
@@ -261,7 +263,7 @@ function brandInputs(d) {
     const src = shopY || agency.fromRows(d.stock, d.orders, { dayOf: (t) => TZ.dayKey(t, zone) });
     let cat = d.catalog || {};
     if (!Object.keys(cat).length) {   // demo, Flow, Sheet, CSV: names and product IDs from the rows and the group catalog
-      const gc = catalog.current(d.source, d.catalog).variants || {}; cat = {};
+      const gc = catalog.current(d.source, d.catalog).variants || {}; cat = Object.create(null);   // variant IDs are data: never Object.prototype keys
       for (const r of d.stock) { const id = String(r.variantId); cat[id] = { productId: (gc[id] && gc[id].productId) || id, product: r.product, variant: r.variant, sku: r.sku, price: r.price, active: true, tracked: true }; }
     }
     return { y: src, cat, basis: shopY ? 'shopify' : 'rows' };
@@ -281,6 +283,10 @@ function yearBuild(d) {
     return { b, r: agency.build(b.y, b.cat, brandOptsOf(d, { detail: true })) };
   });
 }
+/** 1.4.4 (LOGIC §7a, §22): the one best-seller set: variant IDs of the brand report's best sellers (12 months, top 80%). */
+function bestIdsOf(d) {
+  return cache.memo('bestIds', '', 10 * 60e3, () => { const r = yearBuild(d).r; const set = new Set(); if (r && r.ok) for (const p of r.products) if (p.best) for (const id of p.ids || [p.variantId]) set.add(String(id)); return set; });
+}
 function lossPaceOf(dir, d) {   // dir: kept for the callers; the cache is per store (src/cache.js)
   const y = year.load();
   if (!y || !y.anchor || !y.sales || !y.sales.from) return null;
@@ -297,7 +303,7 @@ function lossMap(r) {
   return { pace, price };
 }
 
-weekly.useLossPace((d) => lossOpts(lossPaceOf(scope.dir(), d)), () => { const y = year.load(); return y && y.anchor ? 'y1' : ''; });   // snapshots use the same ₹ lost; retaken once the 12 months arrive
+weekly.useLossPace((d) => ({ ...lossOpts(lossPaceOf(scope.dir(), d)), bestIds: bestIdsOf(d) }), () => { const y = year.load(); return y && y.anchor ? 'y1' : ''; });   // snapshots use the same ₹ lost; retaken once the 12 months arrive
 
 /** SW-040: each variant's supplier and terms for the current store (src/supplier-rules.js resolve). */
 const supplierOf = (d) => supplierRules.resolve(d.stock, d.catalog, suppliers.all());
@@ -519,7 +525,7 @@ const digestCtx = {
     /* today's digest: the same options as /api/report (catalog snapshot, Mark ordered); a past "7 days before" comparison
        uses the rows as they stood then, plus only the catalog's inactive flags from before then (today's stock and price
        would be wrong for a past date; without the flags an archived-while-out variant never ends its stock-out, §17) */
-    const base = { suppliers: supplierOf(d), reversals: d.reversals, weekSales: weeks.forReport(d.shopify), syncMinutes: SYNC_MIN, ...lossOpts(lossPaceOf(scope.dir(), d)) };
+    const base = { suppliers: supplierOf(d), reversals: d.reversals, weekSales: weeks.forReport(d.shopify), syncMinutes: SYNC_MIN, ...lossOpts(lossPaceOf(scope.dir(), d)), bestIds: bestIdsOf(d) };
     const live = Math.abs(Date.now() - now) < 36e5 ? { ...base, catalog: d.catalog, onOrder: onorder.all() }
       : { ...base, catalog: period.catalogAsOf(d.catalog, now), onOrder: onorder.asOf(now) };   // L7 (1.3.0): Mark ordered as it stood then, as weekly.compute does
     const { period: _kind, ...span } = period.range(days, now, TZ.zoneOf(d.settings));   // calendar days, as on the page (1.1.5)
@@ -609,7 +615,7 @@ async function storeApi(req, res, url, role, id) {
   const sups = supplierOf(d);   // SW-040: each variant's supplier and terms (lead time, MOQ, case pack)
   const shopLinks = () => ({ ...(d.shopify.shopInfo || {}), handle: keys.status(id).store || null });   // 1.4.0 (LOGIC §19)
   const lossPace = () => lossPaceOf(scope.dir(), d);   // 1.4.0 (LOGIC §21): seasonal pace for long stock-outs' ₹ lost
-  const reportOpts = (extra = {}) => ({ ...span, catalog: d.catalog, onOrder: onorder.all(), suppliers: sups, reversals: d.reversals, weekSales: weeks.forReport(d.shopify), syncMinutes: SYNC_MIN, ...lossOpts(lossPace()), ...extra });   // span: { days } or { from } (SW-027)
+  const reportOpts = (extra = {}) => ({ ...span, catalog: d.catalog, onOrder: onorder.all(), suppliers: sups, reversals: d.reversals, weekSales: weeks.forReport(d.shopify), syncMinutes: SYNC_MIN, ...lossOpts(lossPace()), bestIds: bestIdsOf(d), ...extra });   // span: { days } or { from } (SW-027)
   const savedRates = () => new Map(engine.report(d.stock, d.orders, d.settings, { days: 30, catalog: d.catalog, onOrder: onorder.all() }).products.map((x) => [String(x.id), x.perDay]));
   const dc = await decide.handle(req, p, readBody, (id) => savedRates().get(id));
   if (dc) return send(res, dc.code, dc.body);
@@ -628,7 +634,7 @@ async function storeApi(req, res, url, role, id) {
   if (sp) return send(res, sp.code, sp.body, sp.type, sp.headers);
   /* sprint 3 B-review: weekly review (SW-043), targets on groups (SW-042), saved lists (SW-044); month-to-date groups on the saved settings */
   const now = Date.now(), from = period.monthStart(now, TZ.zoneOf(d.settings));
-  const monthGroups = (lens) => groups.build(engine.report(d.stock, d.orders, d.settings, { from, now, catalog: d.catalog, onOrder: onorder.all(), weekSales: weeks.forReport(d.shopify), syncMinutes: SYNC_MIN, ...lossOpts(lossPace()) }).products, catalog.current(d.source, d.catalog), lens);
+  const monthGroups = (lens) => groups.build(engine.report(d.stock, d.orders, d.settings, { from, now, catalog: d.catalog, onOrder: onorder.all(), weekSales: weeks.forReport(d.shopify), syncMinutes: SYNC_MIN, ...lossOpts(lossPace()), bestIds: bestIdsOf(d) }).products, catalog.current(d.source, d.catalog), lens);
   for (const h of [weekly, targets, lists]) { const x = await h.handle(req, url, readBody, { role, by: whoOf(req, role), monthGroups, from, now, offMin: TZ.zoneOf(d.settings) }); if (x) return send(res, x.code, x.body); }
   /* 1.4.0: the brand report (LOGIC §20–§22). Shopify's 12 months when read (year.json), else the rows we hold. */
   const dayOf = (t) => TZ.dayKey(t, TZ.zoneOf(d.settings));
@@ -650,12 +656,12 @@ async function storeApi(req, res, url, role, id) {
   function brandBody() {
     /* 1.4.0 (§23): today's report (30 days, saved settings): best sellers now, ads, and website allocations (§6, kept apart) */
     const rep = links.annotateReport(helpers.enrich(engine.report(d.stock, d.orders, d.settings, reportOpts({ days: 30, from: undefined }))), d.catalog, shopLinks());
-    const b = brandData(), r = agency.build(b.y, b.cat, { ...brandOpts(), apart: new Set(rep.products.filter((x) => x.allocation).map((x) => String(x.id))) });
+    const b = brandData(), r = agency.build(b.y, b.cat, { ...brandOpts(), rowInfo: rowInfoOf(rep.products) });   // 1.4.4: the same parts as the pages (§4c)
     for (const x of r.products || []) { x.name = x.name || x.sku; if (b.cat[x.variantId] && b.cat[x.variantId].variant && x.variants === 1) x.name = `${x.name} · ${b.cat[x.variantId].variant}`; }
     const month = r.ok ? r.months[r.months.length - 1].key : null;
     const now = r.ok ? sell.bestNow(r, rep.products, month) : [];
     const adl = sell.ads(r.ok ? r : null, rep.products, { ...engine.DEFAULT_SETTINGS, ...d.settings });
-    const slim = (x) => { const { months: _m, season: _s, variantPace: _v, outFrom: _o, monthPace: _mp, variantPrice: _vp, ...rest } = x; return url.searchParams.get('full') === '1' ? x : { ...rest, months: x.best ? x.months : undefined }; };
+    const slim = (x) => { const { months: _m, season: _s, variantPace: _v, outFrom: _o, monthPace: _mp, variantPrice: _vp, ...rest } = x; return url.searchParams.get('full') === '1' ? x : { ...rest, months: x.best || x.lost > 0 ? x.months : undefined }; };   // 1.4.4: months for every product with money missed (All products view)
     return { ok: true, ...r, products: (r.products || []).map(slim), now, ads: adl, basis: b.basis, year: year.summary(year.load()), store: here, generatedAt: Date.now(), app: version.current() };
   }
   if (p === '/api/shopify/year' && req.method === 'POST') {   // 1.4.0: admin only; queued like a pull

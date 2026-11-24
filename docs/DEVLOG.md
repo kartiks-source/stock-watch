@@ -11,6 +11,14 @@ Older entries: [2026-11](devlog/2026-11.md)
 
 
 
+## 2026-11-24 · 1.4.4 · Best sellers | All products; one best-seller list; same parts on the brand report
+stock-watch 1.4.4 (branch `feature/agency-proof`, main 8ca4cbe merged; not pushed, not deployed).
+- Switch on the brand report (All products by default per the user; remembered; `?view=best|all`): headline, chart, table, grid (all: top 50 by ₹ + Show all), month list, CSVs; one scope line under Restock list / All products / Best sellers now headlines.
+- One best-seller definition: engine `opts.bestIds` from the 12-month build (server `bestIdsOf`) → `abc` A; the 28-day rank kept as `salesRank`. Luxe Hammered Planter: salesRank A, not a best seller; Noori, Chess Set: salesRank C, best sellers.
+- Brand report parts = §4c via `rowInfo` from today's report (confidence, nrDays, ordered, allocation): counted / restock or drop? / a guess / top-up per day; months and headline in both scopes.
+- Fix found on the way: `fromRows` is bounded to 400 days with null-prototype maps (a stray epoch row and an ID like `constructor` made a test hang once every report needed the build).
+- Live (read-only), Nov 1–23 brand vs report 1–24 Nov: all products counted ₹4,00,590 vs ₹4,07,887; best sellers ₹1,28,987 vs ₹1,25,539; Oakwood ₹56,167 vs ₹58,084; Nivaya ₹37,330 + ₹3,555 vs ₹37,474 + ₹4,947; Luxe Hammered ₹33,661 vs ₹36,291; Noori ₹0 + ₹41,783 vs ₹0 + ₹43,348; Chess Set ₹0 + ₹39,353 vs ₹0 + ₹40,829 (the report includes 24 Nov so far).
+
 ## 2026-11-24 · 1.4.3 · one pace for money missed; drawer instant, tooltips; cached answers
 stock-watch 1.4.3 (branch `feature/agency-proof`, main 1.4.2 merged; not pushed, not deployed).
 - Live inconsistency: brand report Oakwood Nov ≈ ₹56k vs report 30 d ₹76,788 (28-day rate from 8 pre-Diwali shelf days, basis window; lossPace only on history/before-out). Engine now values every hour out at §21's pace of its month × the 12-month price (`opts.lossPace` per month, `opts.lossPrice`) on every page/period, digest, snapshots (retaken), v1, CSVs. Reorder/Sells/days left stay 28-day. Test: brand month = report lost for the same dates (±₹2).

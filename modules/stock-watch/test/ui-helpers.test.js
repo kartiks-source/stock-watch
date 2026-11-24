@@ -400,7 +400,7 @@ test('§4c: "+ ₹ estimate · ₹ not restocked" under the headline opens those
     assert.ok((await pg.$$(`#view .lmark`)).length > 0, 'rows carry a marker');
     /* UI-3: the filtered view leads with that part's own ₹, never "₹0 lost" */
     assert.match(await pg.textContent('#bucket-line'), /^₹[\d,.]+( L)? (estimated from few sales|after day \d+)/);
-    assert.equal(await pg.$('#view .headline .lostv'), null, 'no "₹0 lost" in the filtered view');
+    assert.equal(await pg.$$eval('#view .headline .lostv', (els) => els.filter((e) => !e.closest('#scope-line')).length), 0, 'no "₹0 lost" in the filtered view (1.4.4: the scope line is store-wide)');
     await pg.goto(base + '/#stockouts'); await pg.waitForSelector('#lost-sub');
     await pg.click(`#lost-sub a[data-filter="${kind}"]`);
     await pg.waitForSelector(`[data-filter-stockouts="${kind}"].on`);

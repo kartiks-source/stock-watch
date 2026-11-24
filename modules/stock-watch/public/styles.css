@@ -1055,3 +1055,10 @@ body.no-period .top .range, body.no-period .top .rlabel, body.no-period .top .rd
 @keyframes skm { from { background-position: 100% 0; } to { background-position: -100% 0; } }
 @media (prefers-reduced-motion: reduce) { .sk { animation: none; } }
 .pchart .sline, .pchart .sdot, .pchart .pline, .pchart .pdot, .pchart .mrp, .pchart .lst, .pchart .gl, .pchart .rmark, .pchart .rlab, .pchart .oshade, .pchart .stl, .pchart text { pointer-events: none; }
+/* 1.4.4: Best sellers | All products */
+.scope { display: inline-flex; border: 1px solid var(--line-2); border-radius: 8px; overflow: hidden; background: var(--card); vertical-align: middle; }
+.scope button { border: 0; background: none; font: inherit; font-size: 13px; font-weight: 600; padding: 5px 12px; color: var(--soft); cursor: pointer; min-height: 32px; }
+.scope button.on { background: var(--brand); color: #fff; }
+.brand-h .scope { margin-bottom: 8px; }
+.scopeline { margin: 6px 0 0; font-size: 13.5px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+@media (max-width: 759.98px) { .scope button { min-height: 44px; padding: 0 14px; } }

@@ -216,3 +216,46 @@ test('brand report month = report ₹ lost for the same dates (same §21 pace an
   const plain = E.report(stock, orders, {}, { from: at('2026-11-01', 0), now: at('2026-11-24', 0) - 1 }).products.find((x) => x.id === '9');
   assert.equal(plain.lossPace, undefined);
 });
+
+/* 1.4.4: the brand report keeps apart the same parts as the pages (§4c): counted = the report's lostCounted for the same
+   dates; "restock or drop?" (after day 30, nothing ordered) apart on both, to within one day's value */
+test('brand report parts = report parts for the same product and dates (counted, restock or drop?)', () => {
+  const E = require('../src/engine');
+  const IST = 330 * 60e3, at = (k, hh = 12) => Date.parse(`${k}T${String(hh).padStart(2, '0')}:00:00Z`) - IST;
+  const dayOf = (t) => new Date(t + IST).toISOString().slice(0, 10);
+  const sales = {}, moves = {}, orders = [];
+  const days = A.dayKeys('2026-09-01', '2026-10-31');
+  for (const k of days) { sales[k] = 2; moves[k] = -2; orders.push({ t: at(k), order: `#${k}`, line: k, variantId: '9', sku: 'S9', qty: 2, price: 1500 }); }
+  moves['2026-08-31'] = 2 * days.length;
+  const stock = [{ t: at('2026-09-01', 0), variantId: '9', sku: 'S9', product: 'Oak', variant: '', before: null, now: 2 * days.length, price: 1800 },
+    { t: at('2026-10-31', 23), variantId: '9', sku: 'S9', product: 'Oak', variant: '', before: 2, now: 0, price: 1800 }];
+  const catalog = { 9: { productId: 'p9', product: 'Oak', sku: 'S9', price: 1800, active: true, tracked: true, stock: 0 } };
+  for (const [today, label] of [['2026-11-24', 'out 23 days'], ['2026-12-11', 'out 40 days: after day 30 apart']]) {
+    const y = yearOf({ from: '2026-09-01', today, levels: { 9: 0 }, sales: { 9: sales }, moves: { 9: moves }, price: 1500 });
+    const r0 = A.build(y, catalog, { dayOf }), p0 = r0.products[0];
+    const opts = { from: at('2026-11-01', 0), now: at(today, 0) - 1, lossPace: { 9: p0.monthPace['9'] }, lossPrice: { 9: p0.variantPrice['9'] } };
+    const row = E.report(stock, orders, {}, opts).products.find((x) => x.id === '9');
+    const info = { 9: { confidence: row.confidence, nrDays: row.nrDays, ordered: !!row.onOrder, allocation: !!row.allocation } };
+    const p = A.build(y, catalog, { dayOf, rowInfo: info }).products[0];
+    const sum = (k) => Object.entries(p.months).filter(([m]) => m >= '2026-11').reduce((s, [, x]) => s + (x[k] || 0), 0);
+    const day = p0.monthPace['9']['2026-11'] * 1500;
+    assert.ok(Math.abs(sum('counted') - row.lostCounted) <= day + 2, `${label}: counted ₹${sum('counted')} vs report ₹${row.lostCounted}`);
+    assert.ok(Math.abs(sum('nr') - row.lostNotRestocked) <= day + 2, `${label}: restock or drop? ₹${sum('nr')} vs report ₹${row.lostNotRestocked}`);
+    if (today === '2026-12-11') assert.ok(sum('nr') > 0 && row.lostNotRestocked > 0, 'both keep the part after day 30 apart');
+  }
+});
+
+test('one best-seller definition: with the brand report’s set the report’s A = that set; the period rank stays as salesRank', () => {
+  const E = require('../src/engine');
+  const now = Date.parse('2026-11-24T06:00:00Z'), DAY = 864e5, stock = [], orders = [];
+  for (const [id, q] of [['1', 9], ['2', 5], ['3', 1]]) {
+    stock.push({ t: now - 50 * DAY, variantId: id, sku: `S${id}`, product: `P${id}`, variant: '', before: null, now: 500, price: 100 });
+    for (let i = 1; i < 28; i++) orders.push({ t: now - i * DAY, order: `#${id}-${i}`, line: `${id}-${i}`, variantId: id, sku: `S${id}`, qty: q, price: 100 });
+  }
+  const own = E.report(stock, orders, {}, { now, days: 30 });
+  assert.equal(own.products.find((p) => p.id === '1').abc, 'A', 'without the set: the period’s rank');
+  const one = E.report(stock, orders, {}, { now, days: 30, bestIds: new Set(['3']) });
+  assert.deepEqual(one.products.filter((p) => p.abc === 'A').map((p) => p.id), ['3']);
+  assert.equal(one.products.find((p) => p.id === '1').salesRank, 'A');
+  assert.equal(one.totals.bestsellers, 1);
+});
