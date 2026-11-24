@@ -11,6 +11,12 @@ Older entries: [2026-11](devlog/2026-11.md)
 
 
 
+## 2026-11-24 · 1.4.0 fixes after the first live deploy (e526426) and the critic round
+- Live (coordinator): the first pull read 8 ShopifyQL windows (26 Sep → today), best sellers were ranked on those 2 months, so Oakwood and Nivaya were not best sellers and Nov showed ₹18,539 counted. Fixes: the first load reads everything (≤ 80 reads, 39 on Sammsara in 47 s); while loading, best sellers rank on Shopify's 26 weeks and the page says "History from …; the full 12 months after the next pull".
+- Season per calendar month, smoothed 1-2-1 with the months either side, 400 days held (last year's same month): Oakwood Nov ₹31k → ₹56k (1.3.0 engine ₹68.5k), Nivaya ₹40.9k (engine ₹51.6k), Seville ₹24.7k (engine ₹18.9k); pinned by a fixture test with the Shopify evidence (LOGIC §21).
+- Critic round (logic + UI, read-only agents; reports summarised here): fixed launch days (publishedAt), shop season from in-stock product-days, unsure variants kept in the rank, top-ups apart per variant, fresh anchor (pull first, 15 min), new days always read in full, retry after 30 min, capped day not retried, drawer tile period, headline/list counts consistent, heat grid months held, Ads wording + ₹ a day, phone 44 px, Enter on product buttons. Not done (noted): links nested inside clickable rows (a11y), one money format on the older pages, a day's checkout race corrected the same day counts as in stock (day granularity), net units on return days.
+- Sammsara 12 months: ₹16.6 L missed on best sellers (2.33% of ₹7.11 Cr), 896 days, 36 of 43; + ₹2.8 L top-ups apart.
+
 ## 2026-11-24 · 1.4.0 · agency proof (branch `feature/agency-proof`)
 stock-watch 1.4.0 (not pushed, not deployed). Owner: prove to brands which best sellers were out, when, how long, what it cost, month by month; protect the agency from fee deductions; push restocks; sell what's in stock; pace from 6–12 months.
 - **Restructure (owner: "we can rehaul the thing"):** rail = Brand report (home) · Best sellers now · Ads: push / pause · Restock list (= Reorder) · All products · Data. Overview and Stock-outs kept, reachable by `#overview` / `#stockouts`, not in the rail. Engine and APIs unchanged underneath.

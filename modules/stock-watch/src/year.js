@@ -28,13 +28,15 @@ const TZ = require('./tz');
 const { sideFile } = require('./sidefile');
 
 const VERSION = 1;
-const DAYS = 366;             // the last 365 full store days and today (so the oldest of the 12 months is whole on the 1st)
+const DAYS = 400;             // 12 whole months on any day, plus last year's same month in full for the season (LOGIC §21)
 const CAP = 1000;             // ShopifyQL's row cap
 const TARGET_ROWS = 800;      // aim per read, under the cap
 const MAX_WINDOW = 62;        // days per read at most
 const QL_VERSION = '2025-10';
 const MAX_CALLS = Math.max(1, Number(process.env.YEAR_CALLS_PER_RUN) || 8);   // per run (after a pull); a first load spreads over pulls
 const MAX_MS = 4 * 60e3;      // and no new read after 4 minutes
+const FIRST_CALLS = Math.max(MAX_CALLS, Number(process.env.YEAR_FIRST_CALLS) || 80);   // the first load: everything at once
+const FIRST_MS = 10 * 60e3;
 const FRESH_READS = 20;       // the new days are always read in full (up to this many reads), so the anchor matches them
 const ANCHOR_AGE = 15 * 60e3; // the catalog's stock must be this fresh to anchor the walk (else the last anchor stays)
 const RETRY_MS = 30 * 60e3;   // a failed read is tried again at the next pull after this long
@@ -164,7 +166,7 @@ const save = (d) => file.write(d);
 
 /** True when this store should read: never read, older rules, backfill not finished, or not yet read today (store time). */
 function due(y, now = Date.now(), zone = TZ.DEFAULT_ZONE) {
-  if (!y || y.v !== VERSION) return true;
+  if (!y || y.v !== VERSION || y.days !== DAYS) return true;
   if (!y.done) return true;
   if (y.error && y.error !== 'scope' && y.error !== 'cap' && now - (+y.triedAt || 0) > RETRY_MS) return true;   // a failed refresh: again at the next pull
   const last = Math.max(+y.at || 0, +y.triedAt || 0);
@@ -183,7 +185,7 @@ function noteFor(e) {
  * streams), then the backfill, newest to oldest, within the budget. The anchor (stock now) is the catalog's at this run.
  * Never throws; returns the summary saved in year.json.
  */
-async function run({ q, now = Date.now(), days = DAYS, maxCalls = MAX_CALLS, maxMs = MAX_MS } = {}) {
+async function run({ q, now = Date.now(), days = DAYS, maxCalls = null, maxMs = null } = {}) {
   const store = require('./store');
   const shopify = require('./shopify');
   const ask = q || ((doc, vars) => shopify.gql(doc, vars, { version: QL_VERSION }));
@@ -192,6 +194,10 @@ async function run({ q, now = Date.now(), days = DAYS, maxCalls = MAX_CALLS, max
   const today = TZ.dayKey(now, zone), start = keyPlus(today, -(days - 1));
   const prev = load();
   const y = prev && prev.zone === zone && prev.days === days ? prev : { v: VERSION, zone, days, sales: {}, moves: {}, calls: { total: 0, runs: [] } };
+  /* the first load reads everything in one go (≈ 40 small reads, seconds on Sammsara); after that a few reads a run */
+  const first = !(prev && prev.zone === zone && prev.days === days && prev.done);
+  if (maxCalls == null) maxCalls = first ? FIRST_CALLS : MAX_CALLS;
+  if (maxMs == null) maxMs = first ? FIRST_MS : MAX_MS;
   const budget = { calls: maxCalls, until: Date.now() + maxMs, used: 0, log: [] };
   const t0 = Date.now();
   try {

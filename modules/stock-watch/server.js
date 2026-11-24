@@ -603,7 +603,8 @@ async function storeApi(req, res, url, role, id) {
     return { y: src, cat, basis: shopY ? 'shopify' : 'rows' };
   };
   const S0 = { ...engine.DEFAULT_SETTINGS, ...d.settings };
-  const brandOpts = () => ({ paceMonths: Math.round(+S0.paceMonths || 6), bestShare: (+S0.bestShare || 80) / 100, dayOf, links: (c) => links.of(c, shopLinks()) });
+  const rankBy = () => { const w = weeks.forReport(d.shopify); return w ? Object.fromEntries(Object.entries(w.by).map(([k, v]) => [k, v.n])) : null; };   // 26 weeks, while the 12 months load
+  const brandOpts = () => ({ paceMonths: Math.round(+S0.paceMonths || 6), bestShare: (+S0.bestShare || 80) / 100, dayOf, links: (c) => links.of(c, shopLinks()), rankBy: rankBy() });
   if (p === '/api/brand' && req.method === 'GET') {
     /* 1.4.0 (§23): today's report (30 days, saved settings): best sellers now, ads, and website allocations (§6, kept apart) */
     const rep = links.annotateReport(helpers.enrich(engine.report(d.stock, d.orders, d.settings, reportOpts({ days: 30, from: undefined }))), d.catalog, shopLinks());

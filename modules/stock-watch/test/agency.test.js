@@ -61,46 +61,47 @@ test('pace: units ÷ in-stock days over the last 6 months, oversells out; under 
   assert.equal(few.few, true); assert.equal(few.perDay, 3 / 7);
 });
 
-test('season: per month = in-stock pace that month ÷ 12-month pace, blended with the shop by in-stock days, capped 0.5–2.0', () => {
+test('season: per calendar month, smoothed over the month either side (1-2-1), blended with the shop by in-stock days, capped 0.5–2.0', () => {
   const list = [];
   for (let i = 0; i < 61; i++) { const k = kp('2026-09-01', i); list.push({ k, u: k < '2026-10-01' ? 1 : 9, over: 0, inF: 1 }); }   // Sep 1 a day, Oct 9 a day
   const shop = { '2026-09': 1, '2026-10': 1 };
   const s = A.paceOf(list, '2026-09-01', shop);
-  // 12-month pace = (30 + 279) / 61 = 5.07; Oct raw = 9 / 5.07 = 1.78, weight 31/45 → 0.69 × 1.78 + 0.31 × 1 = 1.54
-  assert.equal(s.season['2026-10'], 1.54);
-  assert.equal(s.season['2026-09'], 0.5, 'capped at 0.5 (raw 0.2, blended 0.45)');
+  // 12-month pace = 309 / 61 = 5.07. Oct: (Sep 30 + 2 × Oct 279 + Nov 0) / (30 + 62) = 6.39 a day → raw 1.26, weight 92/120 → 1.20
+  assert.equal(s.season['2026-10'], 1.2);
+  // Sep: (Aug 0 + 2 × 30 + Oct 279) / (60 + 31) = 3.73 → raw 0.73, weight 91/119 → 0.80
+  assert.equal(s.season['2026-09'], 0.8);
   const big = A.paceOf(list.map((x) => ({ ...x, u: x.k < '2026-10-01' ? 0.01 : 50 })), '2026-09-01', shop);
-  assert.ok(big.season['2026-10'] <= 2, 'capped at 2.0');
-  const thin = A.paceOf(list.map((x) => ({ ...x, inF: x.k < '2026-10-01' ? 1 : (x.k < '2026-10-05' ? 1 : 0) })), '2026-09-01', { '2026-09': 0.8, '2026-10': 1.4 });
-  assert.equal(thin.season['2026-10'], 1.4, 'under 7 in-stock days that month: the shop’s index');
+  assert.ok(big.season['2026-10'] <= 2 && big.season['2026-09'] >= 0.5, 'capped 0.5–2.0');
+  const thin = A.paceOf(list.slice(0, 5), '2026-09-01', { '2026-09': 0.8, '2026-10': 1.4 });
+  assert.deepEqual(thin.season, { '2026-09': 0.8, '2026-10': 1.4 }, 'under 12 units in the year: the shop’s index');
+  // the same calendar month in two years is one month (Nov 2025 + Nov 2026)
+  const two = A.paceOf([...A.dayKeys('2025-11-01', '2025-11-30').map((k) => ({ k, u: 2, over: 0, inF: 1 })), ...A.dayKeys('2026-11-01', '2026-11-30').map((k) => ({ k, u: 2, over: 0, inF: 1 }))], '2026-06-01', { '2025-11': 1, '2026-11': 1 });
+  assert.equal(two.season['2025-11'], two.season['2026-11']);
   // shop index: units a day that month ÷ units a day over the span, capped
   const y = yearOf({ from: '2026-09-01', today: '2026-11-01', levels: {}, all: Object.fromEntries(A.dayKeys('2026-09-01', '2026-10-31').map((k) => [k, [k < '2026-10-01' ? 1 : 100, 0]])) });
   const sh = A.shopSeason(y, A.dayKeys('2026-09-01', '2026-10-31'));
   assert.equal(sh['2026-09'], 0.5); assert.equal(sh['2026-10'], 1.95);   // 100 ÷ (3,130 ÷ 61)
 });
 
-test('money missed: out-of-stock days × seasonal pace × average price paid, split by calendar month; a pace over Diwali is not applied to a quiet month', () => {
-  // in stock 1 Sep – 31 Oct at 2 a day in Sep, 6 a day in Oct (busy); out from 1 Nov
+test('money missed: out-of-stock days × seasonal pace × average price paid, split by calendar month; a month it was out takes its season from the months around it, not the busiest month alone', () => {
+  // in stock Dec 2025 – Oct 2026: 2 a day in Dec, 3 a day Jan–Sep, 6 a day in Oct (busy); out from 1 Nov
   const sales = {}, moves = {};
-  for (const k of A.dayKeys('2026-09-01', '2026-10-31')) { const u = k < '2026-10-01' ? 2 : 6; sales[k] = u; moves[k] = -u; }
-  const lvlBefore = 2 * 30 + 6 * 31;   // stock on 31 Aug
-  moves['2026-08-31'] = lvlBefore;
+  for (const k of A.dayKeys('2025-12-01', '2026-10-31')) { const u = k < '2026-01-01' ? 2 : k < '2026-10-01' ? 3 : 6; sales[k] = u; moves[k] = -u; }
+  moves['2025-11-30'] = Object.values(sales).reduce((a, b) => a + b, 0);   // stock on 30 Nov 2025 = everything sold after it
   const all = {};
-  for (const k of A.dayKeys('2026-08-31', '2026-11-30')) all[k] = [k < '2026-10-01' ? 2 : k < '2026-11-01' ? 6 : 2, 0];
-  const y = yearOf({ from: '2026-09-01', today: '2026-12-01', levels: { 1: 0 }, sales: { 1: sales }, moves: { 1: moves }, price: 900, all });
+  for (const k of A.dayKeys('2025-11-30', '2026-11-30')) all[k] = [k < '2026-10-01' ? 3 : k < '2026-11-01' ? 6 : 3, 0];
+  const y = yearOf({ from: '2025-12-01', today: '2026-12-01', levels: { 1: 0 }, sales: { 1: sales }, moves: { 1: moves }, price: 900, all });
   const r = A.build(y, cat(['1']), { paceMonths: 6 });
   const p = r.products[0];
   assert.equal(p.best, true);
   assert.equal(p.price, 900, 'average price paid = net sales ÷ units');
-  assert.deepEqual(Object.keys(p.months), ['2026-10', '2026-11']);
   assert.equal(p.months['2026-10'].daysOut, 0.5, 'ran out on 31 Oct: half a day');
   assert.equal(p.months['2026-11'].daysOut, 30);
   assert.equal(p.months['2026-11'].range, '1–30 Nov');
-  // flat pace 4.03 a day would give 30 × 4.03 × 900 ≈ ₹1.09 L; the season puts November near September's pace
-  assert.ok(p.months['2026-11'].lost < 30 * 4.03 * 900 * 0.75, `seasonal: ${p.months['2026-11'].lost}`);
+  const perDay = p.months['2026-11'].units / 30;
+  assert.ok(perDay > 3 && perDay < 6 * 0.8, `November between the quiet months and October’s rush: ${perDay.toFixed(2)} a day`);
   const nov = r.months.find((m) => m.key === '2026-11');
   assert.equal(nov.lost, p.months['2026-11'].lost); assert.equal(nov.bestOut, 1); assert.equal(nov.daysOut, 30);
-  assert.ok(r.months.find((m) => m.key === '2026-10').lost > 0);
   assert.equal(r.months.length, 12); assert.equal(r.months[11].key, '2026-11');
   assert.equal(r.headline.lost, r.months.reduce((s, m) => s + m.lost, 0), 'the headline is the sum of the months');
   assert.equal(r.asOf.through, '2026-11-30');
@@ -161,4 +162,30 @@ test('a website allocation (§6) keeps its gaps on the product but out of the mo
   const nov = r.months.find((m) => m.key === '2026-11');
   assert.equal(nov.lost, p1.months['2026-11'].lost); assert.equal(nov.lostApart, p2.months['2026-11'].lost); assert.equal(nov.bestOut, 1);
   assert.equal(r.headline.apart, 1); assert.equal(r.headline.lostApart, p2.lost);
+});
+
+test('a short span (first load still reading) ranks best sellers on Shopify’s 26 weeks when given', () => {
+  const day = '2026-11-02';
+  const y = yearOf({ from: '2026-11-01', today: '2026-11-05', levels: { 1: 5, 2: 5 }, sales: { 1: { [day]: 50 }, 2: { [day]: 1 } }, moves: {} });
+  assert.deepEqual(A.build(y, cat(['1', '2']), { bestShare: 0.5 }).products.filter((p) => p.best).map((p) => p.productId), ['p1']);
+  assert.deepEqual(A.build(y, cat(['1', '2']), { bestShare: 0.5, rankBy: { 1: 10, 2: 900 } }).products.filter((p) => p.best).map((p) => p.productId), ['p2']);
+});
+
+/* Live check, 24 Nov 2026 (coordinator: Oakwood ≈ ₹74k, Nivaya ≈ ₹40k counted, Seville ≈ ₹10k + ₹14k in 1–24 Nov). The 1.3.0
+   engine on the same store, 1–23 Nov: Oakwood ₹68,514 (0.69 a day: its last 28 in-stock days, Oct), Nivaya ₹51,591 (0.45 a day,
+   October's festive pace), Seville ₹18,898 (0.13 a day). Shopify's own months (in-stock days from the walk): Oakwood Oct 2026
+   0.45 a day, Dec 2025 0.77, Jan 0.58, Sep 0.20; Nivaya Oct 0.45, Dec 0.23, Sep 0.10, Nov 2025 16 units; Seville Sep 0.14,
+   Oct 0.19. The brand report uses the 6-month pace × the calendar month's season (Nov pooled over 2025 and 2026, smoothed with
+   Oct and Dec), so it sits between the quiet months and the October rush: within 25% of the engine for Oakwood and Nivaya;
+   Seville above it because last November (9 units) and October lift its season. Fixture: test/fixtures/sammsara-3-year.json. */
+test('Sammsara fixture: Oakwood, Nivaya, Seville November figures (1–23 Nov) against the 1.3.0 engine', () => {
+  const fx = require('./fixtures/sammsara-3-year.json');
+  const r = A.build(fx.y, fx.catalog, { dayOf: (t) => new Date(t + 330 * 60e3).toISOString().slice(0, 10) });
+  const nov = (n) => r.products.find((p) => p.name === n).months['2026-11'];
+  const near = (x, ref, tol, what) => assert.ok(Math.abs(x - ref) <= tol * ref, `${what}: ₹${x} vs ₹${ref} (±${tol * 100}%)`);
+  const oak = nov('Oakwood Table Set of 2'), niv = nov('Nivaya Table Set of 2'), sev = nov('Seville Nesting Table Set of 3');
+  assert.equal(oak.range, '4–23 Nov'); assert.equal(oak.daysOut, 19.5);   // out from 4 Nov 18:00 IST: 4 Nov is half a day
+  assert.equal(niv.range, '1–23 Nov'); assert.equal(sev.range, '1–23 Nov');
+  near(oak.lost, 68514, 0.25, 'Oakwood vs 1.3.0'); near(niv.lost, 51591, 0.25, 'Nivaya vs 1.3.0'); near(sev.lost, 18898, 0.4, 'Seville vs 1.3.0');
+  near(oak.lost, 57430, 0.02, 'Oakwood pinned'); near(niv.lost, 41828, 0.02, 'Nivaya pinned'); near(sev.lost, 25386, 0.02, 'Seville pinned');
 });

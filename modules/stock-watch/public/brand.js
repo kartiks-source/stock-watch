@@ -97,7 +97,8 @@
     const held = b.span.days;
     const when = held >= 360 ? 'in the last 12 months' : `since ${dayY(h.from)}`;
     const y = b.year || {};
-    const stale = b.basis === 'rows' ? '<p class="note">From the days we hold. Shopify’s 12 months aren’t read yet.</p>' : y.done === false ? `<p class="note">${esc(y.note || 'Still reading 12 months from Shopify.')}</p>` : '';
+    const stale = b.basis === 'rows' ? `<p class="note">History from ${esc(dayY(b.span.from))}: the days we hold. Shopify’s 12 months are read after the next pull.</p>`
+      : (y.done === false || held < 360) ? `<p class="note">History from ${esc(dayY(b.span.from))}; the full 12 months after the next pull. Months before then are not read yet (not ₹0).${h.bestsellers ? ' Best sellers are ranked on Shopify’s last 26 weeks until then.' : ''}</p>` : '';
     const best = b.products.filter((p) => p.best && p.daysOut > 0);   // website top-ups stay listed (tagged); their days aren't in the totals
     const all = S().brandAll ? b.products.filter((p) => p.best).length : Math.min(12, best.length);
     const ms = months.map((m) => m.key);   // only months held
@@ -134,8 +135,8 @@
     if (!m) return '';
     const mm = b.months.find((x) => x.key === m) || {};
     const rows = monthRows(b, m);
-    const lost = rows.reduce((s, p) => s + (p.allocation && !S().brandMonthAll ? 0 : p.x.lost), 0);
-    const n = S().brandMonthAll ? rows.length : rows.filter((p) => !p.allocation).length;
+    const lost = rows.reduce((s, p) => s + (S().brandMonthAll ? p.x.lost : p.x.lost - (p.x.apart || 0)), 0);
+    const n = S().brandMonthAll ? rows.length : rows.filter((p) => !p.allApart).length;
     const lead = rows.length ? `${monthName(m)}: ${n} ${S().brandMonthAll ? 'product' : 'best seller'}${n === 1 ? '' : 's'} ran out. We missed about ${rs(lost)}.` : `${monthName(m)}: no ${S().brandMonthAll ? 'product' : 'best seller'} ran out.`;
     const cols = [
       { k: 'name', label: 'Product', f: (p) => SW_PROD.cell(p, { extra: topUp(p) }) },
@@ -169,7 +170,7 @@
     const b = B();
     if (!b.ok) return notReady(b);
     const rows = b.now || [], out = rows.filter((p) => p.out), m = b.months[b.months.length - 1];
-    const lost = rows.reduce((s, p) => s + (p.allocation ? 0 : p.lostMonth || 0), 0);   // the same ₹ as the month table (top-ups apart)
+    const lost = rows.reduce((s, p) => s + (p.lostMonth || 0) - (p.apartMonth || 0), 0);   // the same ₹ as the month table (top-ups apart)
     const nowCell = (p) => (p.out ? `<span class="st g-today">Out${sinceText(p)}</span>${p.variantsLive > 1 ? ` <small class="muted">${p.outVariants} of ${p.variantsLive} options</small>` : ''}` : `<span class="st ok">In stock · ${inr.format(p.stock)}</span>`);
     const refill = (p) => (p.onOrder ? `<span class="st g-ordered">Ordered · lands ${esc(A.dateShort(p.onOrder.eta))}</span>` : p.orderQty > 0 ? `<span class="st g-week">Order ${inr.format(p.orderQty)} now</span>` : p.out ? '<span class="st g-today">Not ordered</span>' : '<span class="muted">Enough stock</span>');
     const cols = [

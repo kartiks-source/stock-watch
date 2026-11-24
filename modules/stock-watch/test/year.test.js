@@ -71,7 +71,7 @@ test('a first load reads 365 full days back in windows under the cap, every day 
   for (let i = 0; i < 20 && !r.done; i++) r = await Y.run({ q: f.q, now: NOW, maxCalls: 6 });
   assert.equal(r.done, true);
   const y = Y.load();
-  const start = keyPlus('2026-11-24', -365);   // 365 full days and today
+  const start = keyPlus('2026-11-24', -(Y.DAYS - 1));   // 12 whole months + last year's same month, today included
   assert.equal(y.sales.from, start); assert.equal(y.moves.from, start);
   assert.equal(y.sales.to, '2026-11-23'); assert.equal(y.moves.to, '2026-11-23');
   /* every day once: 30 variants × 1 unit, ₹100.5 each, + a −₹10 row without a variant */
@@ -131,10 +131,21 @@ test('the anchor is only taken from a fresh stock read; a stale catalog keeps th
 test('a failed refresh is tried again at the next pull (30 min on), a missing permission once a day', async () => {
   useStore();
   const ok = fakeShop({ perDay: 1 });
-  await Y.run({ q: ok.q, now: NOW, maxCalls: 40, days: 20 });
+  await Y.run({ q: ok.q, now: NOW });
   assert.equal(Y.load().done, true);
   const bad = async () => { throw new Error('Shopify: HTTP 502'); };
-  await Y.run({ q: bad, now: NOW + 864e5, days: 20 });
+  await Y.run({ q: bad, now: NOW + 864e5 });
   assert.equal(Y.due(Y.load(), NOW + 864e5 + 10 * 60e3, 'Asia/Kolkata'), false);
   assert.equal(Y.due(Y.load(), NOW + 864e5 + 31 * 60e3, 'Asia/Kolkata'), true);
+});
+
+test('the first load reads everything in one run (no budget of 8); later runs top up new days only', async () => {
+  useStore();
+  const f = fakeShop({ perDay: 30 });
+  const r = await Y.run({ q: f.q, now: NOW });
+  assert.equal(r.done, true, `one run: ${r.calls.last} reads`);
+  assert.ok(r.calls.last <= 80);
+  const n = f.calls.length;
+  await Y.run({ q: f.q, now: NOW + 864e5 });
+  assert.equal(f.calls.length - n, 2, 'next day: one read per stream');
 });

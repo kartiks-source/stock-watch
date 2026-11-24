@@ -139,11 +139,18 @@ function paceOf(list, paceFrom, shop) {
   const few = use.d < FLOOR_DAYS;
   const perDay = use.u / Math.max(use.d, FLOOR_DAYS);
   const year = all.d > 0 ? all.u / Math.max(all.d, FLOOR_DAYS) : 0;
+  /* 1.4.0 fix (live check, 24 Nov): the index is per calendar month (Nov 2025 and Nov 2026 pooled) and smoothed over the
+     month either side (weights 1-2-1), so a month the product was mostly out still gets its own season from its neighbours
+     (Oakwood: out most of Nov, Oct 0.45 and Dec 0.77 a day in stock → its winter rise, not the shop's post-Diwali dip) */
+  const cal = new Map();   // 'MM' → { u, d }
+  for (const [m, p] of per) { const c = cal.get(m.slice(5)) || { u: 0, d: 0 }; c.u += p.u; c.d += p.d; cal.set(m.slice(5), c); }
+  const mm = (k, n) => String(((+k - 1 + n + 12) % 12) + 1).padStart(2, '0');
   const season = {};
   for (const m of Object.keys(shop)) {
-    const p = per.get(m);
-    if (!p || p.d < SEASON_MIN || !(year > 0) || all.u < SEASON_UNITS) { season[m] = shop[m]; continue; }
-    const raw = p.u / p.d / year, w = p.d / (p.d + SEASON_K);
+    const k = m.slice(5), a = cal.get(mm(k, -1)) || { u: 0, d: 0 }, c = cal.get(k) || { u: 0, d: 0 }, b = cal.get(mm(k, 1)) || { u: 0, d: 0 };
+    const U = a.u + 2 * c.u + b.u, Dd = a.d + 2 * c.d + b.d;
+    if (Dd < 2 * SEASON_MIN || !(year > 0) || all.u < SEASON_UNITS) { season[m] = shop[m]; continue; }
+    const raw = U / Dd / year, w = Dd / (Dd + 2 * SEASON_K);
     season[m] = r2(clamp(w * raw + (1 - w) * shop[m], SEASON_CAP));
   }
   /* the average index of the days the pace was measured on */
@@ -174,7 +181,7 @@ function ranges(keys) {
  * The report. catalog = store.catalog ({ variantId → productId, product, variant, sku, price, active, createdAt, … }).
  * opts: { paceMonths = 6, bestShare = 0.8, zone, links: (catalogEntry) → { image, adminUrl, webUrl }, month: 'YYYY-MM' }.
  */
-function build(y, catalog = {}, { paceMonths = 6, bestShare = 0.8, links = () => ({}), dayOf = null, apart = null } = {}) {
+function build(y, catalog = {}, { paceMonths = 6, bestShare = 0.8, links = () => ({}), dayOf = null, apart = null, rankBy = null } = {}) {
   const sp = spanOf(y);
   if (!sp) return { ok: false, reason: !y || !y.anchor ? 'none' : 'short' };
   const keys = dayKeys(sp.from, sp.through);
@@ -228,10 +235,14 @@ function build(y, catalog = {}, { paceMonths = 6, bestShare = 0.8, links = () =>
     const p = byP.get(pid) || { productId: pid, name: v.c.product || v.c.sku || v.id, variants: [], sold: 0, units: 0 };
     p.variants.push(v); p.sold += v.sold; p.units += v.units; byP.set(pid, p);
   }
-  const products = [...byP.values()].sort((a, b) => b.sold - a.sold);
-  const total = products.reduce((s, p) => s + Math.max(0, p.sold), 0);
+  /* best sellers rank on the 12 months; while under 300 days are held (a first load still reading), on opts.rankBy
+     (Shopify's 26 weeks of net sales per variant, src/weeks.js) when given, so a short span after Diwali can't reshuffle them */
+  const short = keys.length < 300 && rankBy && Object.keys(rankBy).length;
+  for (const p of byP.values()) p.rank = short ? p.variants.reduce((s, v) => s + (Number(rankBy[v.id]) || 0), 0) : p.sold;
+  const products = [...byP.values()].sort((a, b) => b.rank - a.rank);
+  const total = products.reduce((s, p) => s + Math.max(0, p.rank), 0);
   let before = 0;
-  for (const p of products) { p.share = total > 0 ? p.sold / total : 0; p.best = total > 0 && p.sold > 0 && before / total < bestShare; before += Math.max(0, p.sold); }
+  for (const p of products) { p.share = total > 0 ? p.rank / total : 0; p.best = total > 0 && p.rank > 0 && before / total < bestShare; before += Math.max(0, p.rank); }
   /* per product per month: ₹ missed (sum of variants), days out (per day: the most-out selling variant), dates */
   const out = [];
   for (const p of products) {
@@ -241,7 +252,7 @@ function build(y, catalog = {}, { paceMonths = 6, bestShare = 0.8, links = () =>
     for (const m of monthKeys) {
       let lost = 0, units = 0, ap = 0; const dayOut = new Map();
       for (const v of p.variants) { const x = v.perMonth[m]; if (!x) continue; lost += x.lost; units += x.units; ap += x.apart; }
-      for (const v of selling) for (const x of v.dayMap) { if (v.isApart || monthOf(x.k) !== m || x.inF >= 1) continue; dayOut.set(x.k, Math.max(dayOut.get(x.k) || 0, 1 - x.inF)); }
+      for (const v of selling) for (const x of v.dayMap) { if (monthOf(x.k) !== m || x.inF >= 1) continue; dayOut.set(x.k, Math.max(dayOut.get(x.k) || 0, 1 - x.inF)); }
       const ks = [...dayOut.keys()].sort();
       const daysOut = [...dayOut.values()].reduce((s, f) => s + f, 0);
       if (lost > 0 || daysOut > 0) pm[m] = { daysOut: r2(daysOut), dates: ks, range: ranges(ks), units: r2(units), lost: Math.round(lost), ...(ap > 0 ? { apart: Math.round(ap) } : {}) };
@@ -256,7 +267,7 @@ function build(y, catalog = {}, { paceMonths = 6, bestShare = 0.8, links = () =>
       lost: Object.values(pm).reduce((s, x) => s + x.lost, 0), daysOut: r2(Object.values(pm).reduce((s, x) => s + x.daysOut, 0)),
       stockNow: p.variants.reduce((s, v) => s + Math.max(0, Number(y.anchor.levels[v.id]) || 0), 0),
       ...links(top.c),
-      ...(p.variants.some((v) => v.isApart) ? { allocation: true } : {}),
+      ...(p.variants.some((v) => v.isApart) ? { allocation: true, ...(p.variants.every((v) => v.isApart) ? { allApart: true } : {}) } : {}),
       ...(p.variants.some((v) => v.ds.unsure) ? { unsure: p.variants.filter((v) => v.ds.unsure).length } : {}),
     });
   }
@@ -267,14 +278,14 @@ function build(y, catalog = {}, { paceMonths = 6, bestShare = 0.8, links = () =>
       if (!p.best) continue;
       const ap = x.apart || 0;   // §6: a website allocation's refill gaps, apart
       row.lostApart += ap; row.lost += x.lost - ap; row.lostUnits += x.units * (x.lost > 0 ? (x.lost - ap) / x.lost : 1);
-      if (x.daysOut > 0) { row.bestOut++; row.daysOut += x.daysOut; }
+      if (x.daysOut > 0 && !(ap > 0 && ap >= x.lost - 1)) { row.bestOut++; row.daysOut += x.daysOut; }   // a product that is all top-up: its days apart too
     }
   }
   const mlist = [...months.values()].map((m) => ({ ...m, sold: Math.round(m.sold), lost: Math.round(m.lost), lostAll: Math.round(m.lostAll), lostUnits: Math.round(m.lostUnits), lostApart: Math.round(m.lostApart), daysOut: r2(m.daysOut), pct: m.sold > 0 ? r2((m.lost / m.sold) * 100) : 0 }));
   const best = out.filter((p) => p.best);
   const sum = (k) => mlist.reduce((s, m) => s + m[k], 0);
   const headline = { from: mlist.find((m) => m.days)?.from || sp.from, through: sp.through, sold: sum('sold'), lost: sum('lost'), lostAll: sum('lostAll'), daysOut: r2(sum('daysOut')),
-    bestsellers: best.length, bestRanOut: best.filter((p) => p.daysOut > 0).length, pct: 0, unsure: dropped.length,
+    bestsellers: best.length, bestRanOut: best.filter((p) => p.daysOut > 0 && !p.allApart).length, pct: 0, unsure: dropped.length,
     lostApart: sum('lostApart'), apart: best.filter((p) => p.allocation).length };
   headline.pct = headline.sold > 0 ? r2((headline.lost / headline.sold) * 100) : 0;
   return {
