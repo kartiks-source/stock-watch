@@ -158,6 +158,7 @@ function writeNow(st) {
 
 /** Write the store (now, or batched after 500 ms). Never throws: a failed write is kept in health().lastSaveError and retried. */
 function save(now = false) {
+  require('./cache').bump();   // 1.4.3: cached answers of this store are stale
   return saveState(S(), now);
 }
 /* the state is captured here, so a retry 2 minutes later still writes the same store's file */

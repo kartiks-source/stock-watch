@@ -544,12 +544,17 @@ function report(stock, orders, settings = {}, opts = {}) {
        only (the order quantity keeps the product's own rate); all of it is "not restocked" (estimate when a PO is marked) */
     const units26 = wsRow ? Math.max(0, num(wsRow.u)) : 0, lastEp = eps[eps.length - 1];
     const seeded = !p.inactive && units === 0 && units26 > 0 && !!lastEp && lastEp.open && demandPerDay(0, histFrom, now, cantSell).rawDays < 1;
-    const lossPrice = seeded && num(wsRow.n) > 0 ? num(wsRow.n) / units26 : price;
-    /* 1.4.0 (LOGIC §21): a long stock-out's rate comes from an older in-stock stretch (history / before-out), which on
-       Sammsara was the pre-Diwali rush. With Shopify's 12 months read, ₹ lost uses the brand report's pace for this month
-       instead (6 months of in-stock days × this month's season), opts.lossPace[variantId] a day; reorder keeps perDay */
-    const lp = rate.basis !== 'window' && !lowData ? num(own(opts.lossPace, p.id)) : 0;
-    const lossPerHour = seeded ? units26 / FLOOR_DAYS / 24 : lp > 0 ? lp / 24 : perSellingHour;
+    /* 1.4.3 (LOGIC §21): with Shopify's 12 months read, ₹ lost on EVERY row uses the brand report's expected pace for the
+       month of each hour out (6 months of in-stock days × that month's season, opts.lossPace[variantId] = { 'YYYY-MM': units
+       a day }) at its 12-month average price paid (opts.lossPrice[variantId]), so the same product and days give the same ₹
+       on every page as in the brand report. Reorder, days left and "Sells" keep the 28-day rate (perDay, §3). Without the
+       12 months (no read_reports, Flow / Sheet / CSV, demo, a variant the year doesn't hold): the rules of §3–§4 as before. */
+    const lpm = own(opts.lossPace, p.id), byMonth = lpm && typeof lpm === 'object' ? lpm : null;
+    const lossPrice = byMonth && num(own(opts.lossPrice, p.id)) > 0 ? num(own(opts.lossPrice, p.id)) : seeded && num(wsRow.n) > 0 ? num(wsRow.n) / units26 : price;
+    const lossPerHour = byMonth ? 0 : seeded ? units26 / FLOOR_DAYS / 24 : typeof lpm === 'number' && lpm > 0 && rate.basis !== 'window' && !lowData ? lpm / 24 : perSellingHour;
+    const monthRate = (k) => { const v = byMonth[k.slice(0, 7)]; return (v != null ? num(v) : num(byMonth._)) / 24; };   // _ = this month's, for a day past the months held
+    const unitsIn = (h) => (byMonth ? Object.entries(h.byDay).reduce((u, [k, w]) => u + w * monthRate(k), 0) : h.total * lossPerHour);
+    const unitsOn = (k, w) => (byMonth ? w * monthRate(k) : w * lossPerHour);
     /* §6 (1.3.0): Shopify's stock is a website allocation the warehouse tops up → no reorder from here; ₹ lost apart */
     const alloc = +S.allocationCheck !== 0 && !p.inactive && p.stock != null ? allocationOf(p.changes, now) : null;
 
@@ -562,16 +567,16 @@ function report(stock, orders, settings = {}, opts = {}) {
       const cut = Math.max(a, Math.min(e.end, e.start + nrDays * DAY));
       const h1 = sellingHours(a, cut, profile, off), h2 = sellingHours(cut, e.end, profile, off);
       const nr = e.open && !oo, nrAll = seeded && nr;
-      const uLost = (h1.total + h2.total) * lossPerHour;
-      const vLost = uLost * lossPrice, vOver = nrAll ? vLost : h2.total * lossPerHour * lossPrice;
+      const u1 = unitsIn(h1), u2 = unitsIn(h2), uLost = u1 + u2;
+      const vLost = uLost * lossPrice, vOver = nrAll ? vLost : u2 * lossPrice;
       lost += vLost; unitsLost += uLost; outs++;
       if (nr) lostNR += vOver;
       for (const [h, late] of [[h1, false], [h2, true]]) {
         for (const [k, w] of Object.entries(h.byDay)) {
           const d = daily[k]; if (!d) continue;
-          const v = w * lossPerHour * lossPrice;
+          const uu = unitsOn(k, w), v = uu * lossPrice;
           if ((late || nrAll) && nr) d.lostNotRestocked += v; else if (alloc) d.lostAllocation += v; else if (confidence === 'low' || seeded) d.lostEstimate += v; else d.lost += v;
-          d.unitsLost += w * lossPerHour; d.outSkus.add(p.id);
+          d.unitsLost += uu; d.outSkus.add(p.id);
         }
       }
       const small = !e.open && !e.inactive && perDay > 0 && e.topUp < perDay * S.smallTopUpDays;
@@ -598,7 +603,8 @@ function report(stock, orders, settings = {}, opts = {}) {
       status: pl ? (selling ? pl.status : 'Slow seller') : 'No stock data',
       orderQty: pl && selling ? pl.qty : 0, orderValue: pl && selling ? Math.round(pl.qty * (p.cost || price)) : 0,   // cash to commit: unit cost when known
       rateBasis: rate.basis, rateFrom: rate.from,   // which sales the rate was measured on (LOGIC.md §3)
-      ...(lp > 0 && !seeded ? { lossPace: round(lp, 2) } : {}),   // 1.4.0: ₹ lost at the brand report's seasonal pace (§21)
+      ...(byMonth ? { lossPace: round(num(byMonth[TZ.dayKey(now, off).slice(0, 7)] ?? byMonth._), 2), lossPrice: Math.round(lossPrice) }   // 1.4.3: ₹ lost at §21's pace this month
+        : lossPerHour !== perSellingHour && !seeded ? { lossPace: round(lossPerHour * 24, 2) } : {}),
       rateUnits: units, confidence, heldUnits, weeksSold, weeksLive: live != null && live >= WEEKS_MIN_LIVE ? live : null, confBasis: live != null && live >= WEEKS_MIN_LIVE ? 'weeks' : 'units', nrDays,   // §4c: how sure ₹ lost is, on what
       lost: Math.round(lost), unitsLost: round(unitsLost, 1), outs, smallTopUps, repeats,
       sold: Math.round(p.lines.filter((o) => o.t >= from).reduce((s, o) => s + num(o.qty) * num(o.price), 0)),
@@ -787,7 +793,7 @@ function productDetail(id, stock, orders, settings = {}, opts = {}) {
   for (const k of TZ.dayKeys(first, now, zone)) units[k] = 0;
   for (const o of lines) if (o.t >= from) { const k = dayKey(o.t, zone); if (k in units) units[k] += num(o.qty); }
   /* same numbers as the main report (the store-wide hourly pattern), this product only */
-  const r = report(stock, orders, S, { ...opts, now, from, days: opts.from != null ? opts.days : undefined });   // every report option (catalog, Mark ordered, suppliers, reversals, pull interval, weekly sales)
+  const r = opts.report || report(stock, orders, S, { ...opts, now, from, days: opts.from != null ? opts.days : undefined });   // 1.4.3: the cached report of the same options when given; every report option (catalog, Mark ordered, suppliers, reversals, pull interval, weekly sales)
   const c = own(opts.catalog, String(id));
   if (!timeline.length && c && c.stock != null) timeline.push({ t: from, stock: num(c.stock) }, { t: now, stock: num(c.stock) });   // never moved: flat at its stock now
   return { id, product: r.products.find((p) => String(p.id) === String(id)) || null, timeline,

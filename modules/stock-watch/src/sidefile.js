@@ -66,6 +66,7 @@ function sideFile(name) {
   }
   function write(next) {
     const st = S();
+    require('./cache').bump();   // 1.4.3: Mark ordered, decisions, suppliers… change the cached answers
     if (next !== undefined) st.data = next;
     if (!st.data) st.data = {};
     writeAtomic(file(), JSON.stringify(st.data), !st.mainBad);   // never make the bad file the .bak

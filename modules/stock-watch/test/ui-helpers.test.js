@@ -450,7 +450,8 @@ test('1.3.0: grey parts apart, Top-up from warehouse, "since <date>" for open st
       const sel = w > 760 ? `.tbl.desk tr[data-id="${split.id}"]` : `.mcard[data-id="${split.id}"]`;
       await pg.fill('#q-products', split.sku || split.name); await pg.waitForSelector(sel);
       await pg.click(sel); await pg.waitForSelector('#drawer details.fold summary');
-      await pg.click('#drawer details.fold summary'); await pg.waitForSelector('#lost-split');   // 1.4.1: the 30-day detail sits under one fold
+      if (!(await pg.$eval('#hour-fold', (x) => x.open))) await pg.click('#hour-fold summary');   // 1.4.3: open by default unless closed before
+      await pg.waitForSelector('#lost-split');
       assert.match(await pg.textContent('#lost-split'), /^in headline ₹[\d,.]+( L)? · /);
       await pg.keyboard.press('Escape');
     }

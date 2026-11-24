@@ -189,3 +189,30 @@ test('Sammsara fixture: Oakwood, Nivaya, Seville November figures (1–23 Nov) a
   near(oak.lost, 68514, 0.25, 'Oakwood vs 1.3.0'); near(niv.lost, 51591, 0.25, 'Nivaya vs 1.3.0'); near(sev.lost, 18898, 0.4, 'Seville vs 1.3.0');
   near(oak.lost, 57430, 0.02, 'Oakwood pinned'); near(niv.lost, 41828, 0.02, 'Nivaya pinned'); near(sev.lost, 25386, 0.02, 'Seville pinned');
 });
+
+/* 1.4.3: one pace for money missed everywhere. The brand report's November for a product = the report's ₹ lost (engine) for
+   the same dates, within rounding, when the report is given the brand report's monthly pace and price (server.js lossOpts). */
+test('brand report month = report ₹ lost for the same dates (same §21 pace and price on every page)', () => {
+  const E = require('../src/engine');
+  const IST = 330 * 60e3, at = (k, hh = 12) => Date.parse(`${k}T${String(hh).padStart(2, '0')}:00:00Z`) - IST;
+  const dayOf = (t) => new Date(t + IST).toISOString().slice(0, 10);
+  const sales = {}, moves = {}, orders = [];
+  const days = A.dayKeys('2026-09-01', '2026-10-31');
+  for (const k of days) { sales[k] = 2; moves[k] = -2; orders.push({ t: at(k), order: `#${k}`, line: k, variantId: '9', sku: 'S9', qty: 2, price: 1500 }); }
+  moves['2026-08-31'] = 2 * days.length;
+  const y = yearOf({ from: '2026-09-01', today: '2026-11-24', levels: { 9: 0 }, sales: { 9: sales }, moves: { 9: moves }, price: 1500 });
+  const catalog = { 9: { productId: 'p9', product: 'Oak', sku: 'S9', price: 1800, active: true, tracked: true, stock: 0 } };
+  const r = A.build(y, catalog, { dayOf });
+  const p = r.products[0];
+  const stock = [{ t: at('2026-09-01', 0), variantId: '9', sku: 'S9', product: 'Oak', variant: '', before: null, now: 2 * days.length, price: 1800 },
+    { t: at('2026-10-31', 23), variantId: '9', sku: 'S9', product: 'Oak', variant: '', before: 2, now: 0, price: 1800 }];
+  const rep = E.report(stock, orders, {}, { from: at('2026-11-01', 0), now: at('2026-11-24', 0) - 1, lossPace: { 9: p.monthPace['9'] }, lossPrice: { 9: p.variantPrice['9'] } });
+  const row = rep.products.find((x) => x.id === '9');
+  assert.equal(p.months['2026-11'].daysOut, 23);
+  assert.ok(Math.abs(row.lost - p.months['2026-11'].lost) <= 2, `report ₹${row.lost} vs brand report ₹${p.months['2026-11'].lost}`);
+  assert.equal(row.lossPrice, 1500, 'the 12-month average price paid');
+  assert.equal(row.perDay > 0, true, 'Sells / reorder keep the 28-day rate');
+  /* without the 12 months the engine keeps its own rate */
+  const plain = E.report(stock, orders, {}, { from: at('2026-11-01', 0), now: at('2026-11-24', 0) - 1 }).products.find((x) => x.id === '9');
+  assert.equal(plain.lossPace, undefined);
+});

@@ -41,6 +41,7 @@ const keyPlus = (key, n) => new Date(Date.parse(`${key}T00:00:00Z`) + n * DAY).t
 const monthOf = (k) => k.slice(0, 7);
 const clamp = (x, [a, b]) => Math.min(b, Math.max(a, x));
 const r2 = (x) => Math.round(x * 100) / 100;
+const r4 = (x) => Math.round(x * 1e4) / 1e4;
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const monthLabel = (m) => `${MON[+m.slice(5, 7) - 1]} ${m.slice(0, 4)}`;
 const dayLabel = (k) => `${+k.slice(8, 10)} ${MON[+k.slice(5, 7) - 1]}`;
@@ -260,6 +261,8 @@ function build(y, catalog = {}, { paceMonths = 6, bestShare = 0.8, links = () =>
     const tp = top.pace;
     out.push({
       productId: p.productId, name: p.name, sku: top.c.sku || '', variantId: top.id, variants: p.variants.length, best: p.best,
+      monthPace: Object.fromEntries(p.variants.map((v) => [v.id, { ...Object.fromEntries(Object.keys(shop).map((m) => [m, r4(v.pace.perDay * seasonFor(v.pace.season, m) / (v.pace.level || 1))])), _: r4(v.pace.perDay * seasonFor(v.pace.season, nowM) / (v.pace.level || 1)) }])),   // 1.4.3: §21 expected pace per month, for the engine's ₹ lost
+      variantPrice: Object.fromEntries(p.variants.map((v) => [v.id, r4(v.price)])),
       ids: p.variants.map((v) => v.id), outFrom: Object.fromEntries(p.variants.map((v) => [v.id, outRun(v.dayMap)])), variantPace: Object.fromEntries(p.variants.map((v) => [v.id, r2(v.pace.perDay * seasonFor(v.pace.season, nowM) / (v.pace.level || 1))])),
       sold: Math.round(p.sold), units: p.units, share: r2(p.share * 100),
       price: Math.round(top.price), pace: { perDay: r2(selling.reduce((s, v) => s + v.pace.perDay, 0)), basis: tp.basis, few: selling.every((v) => v.pace.few), inDays: tp.inDays, months: paceMonths },
@@ -288,13 +291,17 @@ function build(y, catalog = {}, { paceMonths = 6, bestShare = 0.8, links = () =>
     bestsellers: best.length, bestRanOut: best.filter((p) => p.daysOut > 0 && !p.allApart).length, pct: 0, unsure: dropped.length,
     lostApart: sum('lostApart'), apart: best.filter((p) => p.allocation).length };
   headline.pct = headline.sold > 0 ? r2((headline.lost / headline.sold) * 100) : 0;
-  const dv = detail ? variants.find((v) => v.id === String(detail)) : null;
-  return {
-    ...(dv ? { detail: { id: dv.id, list: dv.dayMap, pace: dv.pace, perMonth: dv.perMonth, price: dv.price, sold: dv.sold, units: dv.units, isApart: dv.isApart, unsure: !!dv.ds.unsure, monthKeys, nowM } } : {}),
+  const dv = detail && detail !== true ? variants.find((v) => v.id === String(detail)) : null;
+  const det = (v) => ({ id: v.id, list: v.dayMap, pace: v.pace, perMonth: v.perMonth, price: v.price, sold: v.sold, units: v.units, isApart: v.isApart, unsure: !!v.ds.unsure, monthKeys, nowM });
+  const res = {
+    ...(dv ? { detail: det(dv) } : {}),
     ok: true, span: { from: sp.from, through: sp.through, days: keys.length }, asOf: { readAt: y.at || null, stockAt: y.anchor.at || null, through: sp.through },
     settings: { paceMonths, bestShare }, months: mlist, headline, shopSeason: shop,
     products: out.sort((a, b) => b.lost - a.lost || b.sold - a.sold), dropped,
   };
+  /* 1.4.3: detail: true keeps every variant's days for the drawer (not sent: non-enumerable) */
+  if (detail === true) Object.defineProperty(res, 'details', { value: Object.fromEntries(variants.map((v) => [v.id, det(v)])), enumerable: false });
+  return res;
 }
 
 /**
@@ -305,7 +312,7 @@ function build(y, catalog = {}, { paceMonths = 6, bestShare = 0.8, links = () =>
  */
 function profile(r, y, catalog, id) {
   if (!r || !r.ok) return { ok: false, reason: (r && r.reason) || 'none' };
-  const d = r.detail;
+  const d = r.detail && r.detail.id === String(id) ? r.detail : r.details && r.details[String(id)];
   if (!d) return { ok: false, reason: 'none' };
   if (d.unsure) return { ok: false, reason: 'unsure' };
   const c = catalog[id] || {};
@@ -375,7 +382,7 @@ function profile(r, y, catalog, id) {
     missed: { value: Math.round(missed), units: r2(missedUnits) },
     lastRestock, price, months,
     calendar: list.map((x) => [x.k, x.inF]),
-    stock: list.map((x) => [x.k, x.end]), restocks: Object.entries(mv).filter(([k, q]) => k >= first && k <= through && +q > 0).map(([k, q]) => [k, +q]).sort(),
+    stock: list.map((x) => [x.k, x.end, x.u, +(mv[x.k] || 0)]), restocks: Object.entries(mv).filter(([k, q]) => k >= first && k <= through && +q > 0).map(([k, q]) => [k, +q]).sort(),
     season,
   };
   return out;

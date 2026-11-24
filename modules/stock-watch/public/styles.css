@@ -1042,3 +1042,16 @@ body.no-period .top .range, body.no-period .top .rlabel, body.no-period .top .rd
 .tbl td:first-child:has(.prod) { text-overflow: clip; }
 .tbl td:first-child .prod { max-width: 100%; }
 .tbl td:first-child:has(.pick, .pick-sp) .prod { max-width: calc(100% - 30px); }
+/* 1.4.3: drawer details on hover / tap / focus; placeholders while the profile loads */
+.ptip { position: absolute; z-index: 5; max-width: min(300px, calc(100% - 16px)); background: var(--ink); color: #fff; border-radius: 8px; padding: 8px 10px; font-size: 12.5px; line-height: 1.45; box-shadow: 0 8px 24px -8px rgba(14, 22, 38, .45); pointer-events: none; }
+.ptip[hidden] { display: none; }
+.ptip b { display: block; font-weight: 600; margin-bottom: 2px; }
+.pchart .tipg { cursor: pointer; outline: none; }
+.pchart g.tipg:focus-visible .hit, .pchart rect.tipg:focus-visible { stroke: var(--brand); stroke-width: 2; }
+.pchart g.tipg:hover .sold { fill: var(--brand); }
+.pchart rect.hit.tipg:hover { fill: rgba(9, 120, 190, .12); }
+.cd[data-tip] { cursor: pointer; }
+.sk { border-radius: 10px; background: linear-gradient(90deg, #EEF2F7 0%, #F6F8FB 50%, #EEF2F7 100%); background-size: 200% 100%; animation: skm 1.2s ease-in-out infinite; }
+@keyframes skm { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+@media (prefers-reduced-motion: reduce) { .sk { animation: none; } }
+.pchart .sline, .pchart .sdot, .pchart .pline, .pchart .pdot, .pchart .mrp, .pchart .lst, .pchart .gl, .pchart .rmark, .pchart .rlab, .pchart .oshade, .pchart .stl, .pchart text { pointer-events: none; }

@@ -153,3 +153,42 @@ for (const [w, h] of [[1440, 900], [390, 844]]) {
     assert.deepEqual(pg.errors, []);
   });
 }
+
+/* 1.4.3: the drawer opens at once from the row; "to the hour" open by default (closing it is remembered); chart details on
+   hover, focus and tap */
+test('1440 + 390: drawer opens at once, fold open by default and remembered, details on hover / focus / tap', opts, async () => {
+  for (const [w, h] of [[1440, 900], [390, 844]]) {
+    const pg = await open(w, h, '/?store=sammsara-demo#best', w < 760 ? '#view .mcard' : '#view table[data-table="best"] tbody tr');
+    await pg.click(w < 760 ? '#view .mcard' : '#view table[data-table="best"] tbody tr');
+    await pg.waitForSelector('#drawer .phero', { timeout: 300 });   // the header is there before the profile arrives
+    await pg.waitForSelector('#drawer .pstory');
+    assert.equal(await pg.$eval('#hour-fold', (d) => d.open), true, 'open by default');
+    await pg.click('#hour-fold summary');
+    await pg.waitForFunction(() => localStorage.getItem('sw-hourfold') === 'closed');   // the toggle event comes a moment after the click
+    await pg.evaluate(async () => { const c = document.querySelector('.drawer-card'); for (let y = 0; y < c.scrollHeight; y += 300) { c.scrollTop = y; await new Promise((r) => setTimeout(r, 40)); } c.scrollTop = 0; });
+    await pg.waitForFunction(() => document.querySelectorAll('#drawer .lazy-chart.drawn svg').length === 3);
+    /* 12-month chart: hover (mouse) or tap (phone) a month */
+    const g = await pg.$('#drawer svg[aria-label="Units sold and missed each month"] g.tipg:last-of-type');
+    await g.scrollIntoViewIfNeeded();
+    if (w < 760) await g.click({ force: true }); else await g.hover({ force: true });
+    await pg.waitForSelector('#ptip:not([hidden])');
+    assert.match(await pg.textContent('#ptip'), /\w{3,} \d{4}.*Sold [\d,]+ · ₹.*(Out .* missed|In stock all month)Busy-month index ×[\d.]+/s);
+    const inside = await pg.evaluate(() => { const t = document.getElementById('ptip').getBoundingClientRect(), c = document.querySelector('.drawer-card').getBoundingClientRect(); return t.left >= c.left - 1 && t.right <= c.right + 1; });
+    assert.ok(inside, 'the box stays inside the drawer');
+    /* keyboard focus on a price month, and a calendar day / stock day */
+    await pg.focus('#drawer svg[aria-label="Price paid each month"] g.tipg');
+    assert.match(await pg.textContent('#ptip'), /(Paid ₹[\d,]+ with GST|No sales).*sold/s);
+    const day = await pg.$('#drawer .cal .cd[data-tip]'); await day.scrollIntoViewIfNeeded(); await day.click({ force: true });
+    assert.match(await pg.textContent('#ptip'), /\d+ \w{3} \d{4}(In stock all day|Ran out or came back|Out of stock all day).*sold/s);
+    const sd = await pg.$('#drawer svg[aria-label="Stock at each day\'s end"] rect.tipg'); await sd.scrollIntoViewIfNeeded(); await sd.click({ force: true });
+    assert.match(await pg.textContent('#ptip'), /in stock at the day’s end.*sold that day/s);
+    await pg.keyboard.press('Escape');
+    /* reopen: the fold stays closed on this browser */
+    await pg.click(w < 760 ? '#view .mcard' : '#view table[data-table="best"] tbody tr');
+    await pg.waitForSelector('#hour-fold');
+    assert.equal(await pg.$eval('#hour-fold', (d) => d.open), false, 'closing it is remembered');
+    assert.equal(await sideways(pg), 0);
+    assert.deepEqual(pg.errors, []);
+    await pg.context().close();
+  }
+});
