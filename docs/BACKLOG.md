@@ -304,6 +304,12 @@ Goal: each role sees its one decision first, with less on screen than today. See
 - Source: owner, 20 Nov 2026.
 - Status: Done 1.1.5 (LOGIC §5a, §9e). Live: identical except 2 units ordered on one 60-day product added by an order edit. Open (Later): read sales agreements for edited orders to date edit-added units like Shopify (cost: one extra query per edited order).
 
+**SW-066 · ₹ lost says how sure it is** (P0 · M · builder)
+- Why: Sammsara 30 d: ₹5.89 L lost, of which ₹3.61 L (61%) on 43 products that sold ≤ 3 units; the category team saw losses on products they know don't sell (Seville Nesting Table: 0 sold, ₹29,215 from 3 older sales). A rate from a few sales was shown as fact, and stock-outs nobody restocks kept adding up.
+- Accept: per product `rateUnits` and `confidence` (high 10+, medium 5–9, low ≤ 4); open stock-out > 30 d with no PO → ₹ after day 30 apart (`lostNotRestocked`), a PO keeps it counting; headline = high + medium without that part, the same on every screen, digest, snapshots, `/api/v1/summary`, CSV; `lostAll` = old total; line under the headline with the parts, clickable; markers, Confidence column, filters; alternatives A–E quantified on live data in LOGIC §4.
+- Source: owner, 24 Nov 2026 (business walkthrough).
+- Status: Done 1.2.0 (LOGIC §3, §4, §4c, §5, §11, §15a). Tests `confidence.test.js`, `ui-helpers` §4c. Sammsara 30 d headline ₹3.72 L (5.9%), 7 d ₹77k (7.4%).
+
 ## Later
 
 Ordered by money impact. Each becomes a full item when pulled into a sprint.

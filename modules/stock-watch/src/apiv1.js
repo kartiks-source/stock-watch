@@ -56,7 +56,7 @@ function summary(r) {
   const t = r.totals || {};
   return {
     generatedAt: r.generatedAt, days: r.days, from: r.from, period: r.period, currency: 'INR',
-    money: { sold: t.sold, lost: t.lost, lostProfit: t.lostProfit, stillOutPerDay: t.stillOutPerDay, orderValueNow: t.orderValueNow, orderValueAll: t.orderValueAll, excessValue: t.excessValue },
+    money: { sold: t.sold, lost: t.lost, lostEstimate: t.lostEstimate ?? 0, lostNotRestocked: t.lostNotRestocked ?? 0, lostAll: t.lostAll ?? t.lost, lostProfit: t.lostProfit, stillOutPerDay: t.stillOutPerDay, orderValueNow: t.orderValueNow, orderValueAll: t.orderValueAll, excessValue: t.excessValue },
     counts: { products: t.products, outNow: t.outNow, stillOut: t.stillOut, outNotSelling: t.outNotSelling, orderToday: t.orderToday, orderNow: t.orderNow, orderWeek: t.orderWeek, bestAtRisk: t.bestAtRisk, overstocked: t.overstocked, stockouts: t.stockouts },
     lostPct: t.lostPct, storeTrendPct: t.storeTrendPct, yesterday: r.yesterday || null,
   };

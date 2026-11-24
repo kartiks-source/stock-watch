@@ -10,7 +10,7 @@ The code is in `src/engine.js`, which has no inputs or outputs of its own, so ev
 
 If you change a rule, change this file in the same commit and add a line to `docs/DEVLOG.md`.
 
-**Index** (find the section, read only that): §0a store time zone · §1 what goes in (rows, catalog, §1a CSV/Sheet/Flow, §1c stock history rebuilt from Shopify, what counts as a sale) · §2 stock-out episodes · §3 sales per day · §4 ₹ lost (§4a hour profile, §4b example) · §5 Overview totals (§5a periods: N calendar days, This month, Yesterday) · §6 reorder status and qty (§6a assumptions + typing, §6b Mark ordered) · §7 slow sellers (§7a A/B/C, §7b profit, §7c overstock, §7d trend) · §8 restocking · §9 Products columns (§9a/§9b Group by, §9e cancel/refund %, check against Shopify) · §10 demo · §11 known limits · §12 Google Sheet differences · §13 view-only + change log · §14 sync runs (§14a capacity + data folder lock) · §15 decision helpers (§15a–d) · §16 role views · §17 morning digest · §18 several stores.
+**Index** (find the section, read only that): §0a store time zone · §1 what goes in (rows, catalog, §1a CSV/Sheet/Flow, §1c stock history rebuilt from Shopify, what counts as a sale) · §2 stock-out episodes · §3 sales per day · §4 ₹ lost (§4a hour profile, §4b example, §4c how sure ₹ lost is) · §5 Overview totals (§5a periods: N calendar days, This month, Yesterday) · §6 reorder status and qty (§6a assumptions + typing, §6b Mark ordered) · §7 slow sellers (§7a A/B/C, §7b profit, §7c overstock, §7d trend) · §8 restocking · §9 Products columns (§9a/§9b Group by, §9e cancel/refund %, check against Shopify) · §10 demo · §11 known limits · §12 Google Sheet differences · §13 view-only + change log · §14 sync runs (§14a capacity + data folder lock) · §15 decision helpers (§15a–d) · §16 role views · §17 morning digest · §18 several stores.
 
 ---
 
@@ -218,6 +218,8 @@ The average price paid (section 4) comes from the same sales. A product launched
 
 **Low data (1.1.1):** a rate resting on **fewer than 5 units and fewer than 14 in-stock days** is capped at *units ÷ calendar days since the product's first sale*, the row is marked **low data** (drawer), and it can't be a best seller (A, §7a, so not in *Best sellers at risk*). *Why:* after the stock history rebuild many products were seen in stock only briefly; Tara 5 Arm sold 2 units in the 17 hours before a 40-day stock-out, which read as 0.29 a day, ₹23,280 lost and Out now; at its calendar pace it is 0.03 a day. 28 products with ≤ 3 units carried 44% of Sammsara's 30-day ₹ lost. *Considered:* leaving them out of ₹ lost altogether (hides real stock-outs of slow, pricey items); a higher floor for everyone (holds back real launches: a launch selling 4 in 3 days keeps its rate, since its calendar pace is no lower). *When it can be wrong:* a product that really sells fast but was out almost all the time reads slow until it has 5 sales or 14 in-stock days.
 
+**Evidence behind the rate (1.2.0, §4c):** every product row carries `rateUnits` = the units sold in the stretch the rate was measured on (the same order lines: window, history or before-out) and `confidence` = **high** (10 or more), **medium** (5–9) or **low** (4 or fewer). The rate itself doesn't change; what changes is whether its ₹ lost counts in the headline (§4c). The low-data cap above still applies to the rate.
+
 **Days it couldn't be sold** (archived, draft, untracked, deleted: §1) count like out-of-stock days: they're left out of the in-stock days, so a product drafted for three weeks and then reactivated keeps its rate.
 
 **Why in-stock days, not calendar days:** a product that sold 28 units but was out of stock for 7 of the 28 days really sells 28 ÷ 21 = 1.33 a day, not 1.0. Dividing by 28 would make every stock-out shrink the next order, and the product would run out sooner the next time, a loop that keeps getting worse. Removing the out-of-stock time breaks that loop.
@@ -254,6 +256,22 @@ The average price paid (section 4) comes from the same sales. A product launched
 - **Understated** if the brand paused ads while the product was out, or if the stock-out started before our data did.
 - **Approximate either way:** it's an estimate of demand that didn't happen, and it can't be checked against an order. Treat it as a size of the problem, not an accounting figure.
 
+**What the headline counts (1.2.0, §4c):** each product's ₹ lost above is kept whole on its row (`lost`), but the headline *₹ sales lost* counts only **high- and medium-confidence** products, and leaves out the part of a stock-out **after its 30th day** when it is still open and nothing is marked ordered. Those two parts are shown apart, on one small line under the headline.
+
+**Ways we compared (live Sammsara, read 24 Nov 2026, engine 1.2.0 on the store's backup, the same options as `/api/report`; 30 d = 25 Oct – 24 Nov, 7 d = 18 – 24 Nov; sold ₹59.72 L / ₹9.75 L).** Products = products with any ₹ in that number.
+
+| | Rule | 30 d ₹ | 30 d products | 30 d % of demand | 7 d ₹ | 7 d products | 7 d % |
+|---|---|---|---|---|---|---|---|
+| A | current (≤ 1.1.5): everything | ₹5,88,692 | 63 | 9.0% | ₹1,39,788 | 51 | 12.5% |
+| **B** | **chosen: high + medium, not restocked apart** | **₹3,71,843** (+ ₹1,64,833 estimate on 40 · + ₹52,016 not restocked on 18) | **22** | **5.9%** | **₹77,334** (+ ₹38,042 on 22 · + ₹24,412 on 18) | **15** | **7.4%** |
+| C | leave out products with ≤ 3 units sold in the period | ₹2,28,092 | 20 | 3.7% | ₹2,667 | 2 | 0.3% |
+| D | low confidence at the Poisson 80% lower bound of its rate, one number | ₹4,68,555 | 63 | 7.3% | ₹1,06,275 | 51 | 9.8% |
+| E | count at most 30 days of any stock-out, PO or not | ₹5,36,676 | 62 | 8.2% | ₹1,15,376 | 37 | 10.6% |
+
+B's three parts add up to A exactly (₹3,71,843 + ₹1,64,833 + ₹52,016 = ₹5,88,692). D's factors (lower bound ÷ units): 1 unit 0.22, 2 units 0.41, 3 units 0.51, 4 units 0.57. Data and the script: `approaches.json` (top 20 products and worked rows) in the session's scratch folder, built by running the engine on `/api/export/backup.json`.
+
+*Why B:* it says what it knows. C throws away real stock-outs of products that were out the whole period (they sold 0 *because* they were out: Avani Two Tier Platter, 8 units behind its rate, out 29 days) and in a 7-day view keeps almost nothing. D hides the doubt inside one number that is still mostly guesswork on 1–4 sales and can't be explained to a buyer. E caps best sellers too: an out-for-6-weeks best seller with a PO on the way is still losing sales. B keeps every rupee visible and clickable, with the uncertain ones named.
+
 ### 4a. How busy each hour is (hour-of-day profile)
 
 **Rule:** from the store's own order lines of the last 60 days, units sold are counted per local hour of the day (0–23). One unit is added to every hour, so a quiet hour never counts as zero. The 24 numbers are then scaled so their average is exactly 1.
@@ -276,6 +294,27 @@ Say a product sold 28 units in 28 days but was out of stock for 7 of them, at an
 
 ---
 
+### 4c. How sure is ₹ lost (confidence) (1.2.0, `src/engine.js` `confidenceOf`, `NOT_RESTOCKED_DAYS`)
+
+**Rules:**
+
+| Part | Rule | Where it shows |
+|---|---|---|
+| Confidence | units sold in the stretch the rate was measured on (`rateUnits`, §3): **High** 10+, **Medium** 5–9, **Low** 4 or fewer | `confidence` on every product row; *Confidence* column (optional) on Products and Stock-outs |
+| Counted (`lostCounted`) | ₹ lost of High and Medium products, less any *not restocked* part | the headline everywhere: Overview, Stock-outs, Products totals line, daily chart, Yesterday strip, Copy summary, digest, weekly snapshots, `/api/v1/summary` `money.lost`, groups and targets |
+| Estimate (`lostEstimate`) | ₹ lost of Low products, less any *not restocked* part | "+ ₹Y estimate from few sales" under the headline; row marker **estimate**; filter *Estimates (few sales)* (Stock-outs chip, Products More…) |
+| Not restocked (`lostNotRestocked`) | the part of a stock-out **still open after 30 days with nothing marked ordered** (no *Mark ordered*, §6b) that falls after its 30th day, whatever the confidence | "₹Z on items out 30+ days, not restocked" under the headline; row marker **not restocked**; filter *Not restocked 30+ d* (Stock-outs chip, Products More…); Why cell "Out 30+ days, not restocked: restock or drop?" |
+
+- `lost` on a row stays the product's whole number (= counted + estimate + not restocked), and rows still sort by it; the markers say which part isn't in the headline.
+- `totals.lost` = Σ `lostCounted`; `totals.lostEstimate`, `totals.lostNotRestocked` (and `…Products`, how many rows have each); `totals.lostAll` = all three = the old total. **% of demand** = `lost` ÷ (sold + `lost`), the headline only.
+- A **PO marked** on the product (*Mark ordered*, still due or late, not yet received) keeps the whole stock-out counting: someone is restocking, so the shelf is really missing sales. A stock-out that **ended** (refilled) counts in full whatever its length.
+- Daily chart bars and the Yesterday strip = counted; `daily[]` also carries `lostEstimate` and `lostNotRestocked` per day.
+- Stock-out rows carry `confidence`, `lostOver30` (₹ after day 30, any stock-out) and `lostNotRestocked`.
+
+**Why:** Sammsara, 30 days to 24 Nov: of ₹5.89 L lost, 43 products that sold 3 units or fewer carried ₹3.61 L (61%), and the category team said products they know don't sell showed losses. Two causes: a rate from 1–4 sales is mostly chance (Seville Nesting Table Set of 3 sold 0 in the period; its 0.15 a day came from 3 older sales and read as ₹29,215 lost); and a product left at 0 for weeks with no reorder is probably being dropped, so "sales lost" every day after the first month is not money anyone will act on. *Why 10 / 5:* with Poisson counts the spread is about √n: at 10 units the rate is within ±30% or so; at 4 or fewer it can be off by half or more. *Why 30 days:* the longest normal supplier wait plus a buffer is under a month (lead 7 + buffer 3 on Sammsara); a stock-out older than that without an order is a decision, not a delay. *Considered:* see the table in §4.
+
+**When it can be wrong:** a pricey item that really sells 3 a month is always *Low* and its real losses sit in the estimate; read the estimate line for furniture-type ranges. A product being restocked without anyone pressing *Mark ordered* shows as *not restocked* after day 30; mark the PO to put it back.
+
 ## 5. Totals on the Overview
 
 **`/api/v1/summary` (SW-050, §5c below)** gives other tools these same totals, unchanged.
@@ -283,8 +322,8 @@ Say a product sold 28 units in 28 days but was out of stock for 7 of them, at an
 | Number | Rule |
 |---|---|
 | Sold | sum of quantity × price paid for every order line in the period: **net sales, ex GST** with Shopify (§What counts as a sale; chart legend "Sold ex GST", tooltips say so). Totals are the sum of the product rows, so the Overview and the Products page always agree |
-| Lost to stock-outs | sum of ₹ lost (section 4) for stock-out hours inside the period; a stock-out spanning midnight is split across the days it covers |
-| % of demand | lost ÷ (sold + lost). "Demand" = what was sold plus what would have been sold |
+| Lost to stock-outs | sum of ₹ lost (section 4) for stock-out hours inside the period, **counted part only** (§4c, 1.2.0): high and medium confidence, without the 30+ d not restocked part; those two show on one small line under the headline, each opening Products (Overview) or Stock-outs filtered to its rows. A stock-out spanning midnight is split across the days it covers |
+| % of demand | lost ÷ (sold + lost), the headline lost only (§4c). "Demand" = what was sold plus what would have been sold |
 | Daily chart | the same two numbers per store day (setting *Time zone* [Asia/Kolkata], §0a); one bar per calendar day of the period (§5a), today so far included |
 | Selling items out now | products at 0 stock that sell at least the minimum rate (section 7) |
 | Out of stock right now (list) | every open stock-out, slow sellers included, so it can be higher than the count above |
@@ -330,7 +369,8 @@ No new maths: the summary copies `totals` from the same report the page shows (s
 
 | Field | Is |
 |---|---|
-| `money.sold`, `money.lost`, `lostPct` | Sold, Lost to stock-outs, % of demand (above) |
+| `money.sold`, `money.lost`, `lostPct` | Sold, Lost to stock-outs (the headline, §4c), % of demand (above) |
+| `money.lostEstimate`, `money.lostNotRestocked`, `money.lostAll` | the parts shown apart (§4c) and all three together (the pre-1.2.0 total) |
 | `money.lostProfit` | profit lost (§7b) |
 | `money.stillOutPerDay` | ₹ a day the products out right now cost (§15a) |
 | `money.orderValueNow` / `orderValueAll` | order cost of the *Order today* rows / of every row to order (§6) |
@@ -570,6 +610,7 @@ These two flags are the habits that turn one stock-out into many. They're counte
 | Units / Sold / Lost | inside the selected period (7 / 14 / 30 / 60 days) |
 | Sells / day, Avg price | over the last 28 days (further back for a long stock-out, section 3), whatever period is selected, so the reorder maths doesn't change when you switch the view |
 | % lost | the product's lost ÷ (its sold + its lost) |
+| Sales lost markers, Confidence | **estimate** under the ₹ = Low confidence (4 or fewer units behind the rate), **not restocked** = out 30+ days with nothing marked ordered; neither part is in the headline (§4c). *Confidence* (optional): High / Medium / Low; also in the Products CSV and the PO CSV (with *Not restocked 30+ d (₹)*) |
 | Outs | stock-outs touching the selected period |
 | Returns % | units returned or cancelled (Shopify's refunds; cancelled orders included, as in Shopify's Returns) ÷ units ordered, orders placed in the period; – under 5 units ordered; amber at 15%+ (§9e) |
 | Category | the product type from Shopify (or the CSV/Flow `type` column) |
@@ -717,7 +758,7 @@ The demo exists to show the screens with realistic shape. Its numbers say nothin
 ## 11. Known limits, in one place
 
 **Whatever the source:**
-- ₹ lost is an estimate of demand, and an upper bound where substitutes exist (section 4).
+- ₹ lost is an estimate of demand, and an upper bound where substitutes exist (section 4). Products whose rate rests on 4 or fewer units, and stock-outs open 30+ days with nothing ordered, are kept out of the headline and shown apart (§4c); a slow, pricey product's real losses can sit in that estimate.
 - One lead time for all products; no supplier minimums or case packs (section 6).
 - "Mark ordered" spots arrivals from stock increases, so returns after the mark count as received; one open order per variant (section 6b).
 - Profit lost and excess at cost need a unit cost per product; without one they fall back to selling price or are left out (sections 7b, 7c).
@@ -737,7 +778,7 @@ The demo exists to show the screens with realistic shape. Its numbers say nothin
 
 ## 12. Differences in the Google Sheet version
 
-`modules/stock-watch-sheets/StockWatch.gs` uses the same rules, settings and thresholds. Every difference is listed in one place, [`../stock-watch-sheets/LOGIC.md`](../stock-watch-sheets/LOGIC.md), so this section doesn't repeat them. `test/parity.test.js` runs the same fixtures through both and fails `npm test` on any difference that isn't on that list (same status and order quantity, ₹ lost within 2%).
+`modules/stock-watch-sheets/StockWatch.gs` uses the same rules, settings and thresholds. Every difference is listed in one place, [`../stock-watch-sheets/LOGIC.md`](../stock-watch-sheets/LOGIC.md), so this section doesn't repeat them. One more (1.2.0): the Sheet has no confidence split (§4c), so its ₹ lost total matches the web app's `lostAll`, not the headline. `test/parity.test.js` runs the same fixtures through both and fails `npm test` on any difference that isn't on that list (same status and order quantity, ₹ lost within 2%).
 
 ## 13. Who can change what (view-only sign-in, settings change log)
 
@@ -801,6 +842,7 @@ One plain sentence per row, the same text in the Reorder table, the phone card a
 |---|---|---|
 | Out of stock | "Out 3 d · lost ₹18.7k this stock-out" | time since the open stock-out began (hours under a day, else days, rounded); out at the product's first stock record → "Out since before 21 Sep" (§2); ₹ lost = this stock-out's ₹ lost inside the selected period (section 4), not the row's whole-period Sales lost (hence "this stock-out"). No open stock-out found → just "Out" (the Sales lost column already has the period's ₹) |
 | Has stock and sells | "Runs out Fri 22 Nov · order by today · supplier takes 7 d" | **runs out** = now + days left; **order by** = runs out − (lead time + buffer) days, then set by the status: *Order today* rows → today; any other row → tomorrow (store time) at the earliest; "supplier takes" = lead time. The Reorder **table** leaves the "· supplier takes N d" tail to the cell's tooltip (it's the same on most rows and in Plan settings), and caps the cell at 260 px up to 1440 px wide, so *In stock* stays on screen on a laptop (final critic UI-3) |
+| Out 30+ days, nothing ordered (1.2.0) | "Out 30+ days, not restocked: restock or drop?" | the open stock-out has run past day 30 and no PO is marked (§4c); its ₹ after day 30 is not in the headline. Mark ordered puts it back |
 | Marked ordered (SW-012) | "Ordered · lands 25 Nov" | the order's ETA |
 | No sales in the window | "No sales lately" | no rate, so no date |
 | More than a year of stock | "Over a year of stock" | a date that far out means nothing |

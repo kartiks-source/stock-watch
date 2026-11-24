@@ -110,9 +110,9 @@ A Flow body needs no header row (a first line is treated as a header only if it 
 
 UTF-8 with BOM, every cell quoted, text starting with `= + - @ tab CR` gets a leading `'` (formula guard). File `reorder-YYYY-MM-DD.csv` (store date). Rows: the tab (`filter`) and search (`q`) shown on the page, grouped by vendor A–Z (unknown last), page order within a vendor.
 
-`Vendor, Product, SKU, Variant ID, Order qty, Unit cost, Order value, Status, Why, Order by, Stock now, Sells per day, Days left, Sales lost (₹)`
+`Vendor, Product, SKU, Variant ID, Order qty, Unit cost, Order value, Status, Why, Order by, Stock now, Sells per day, Days left, Sales lost (₹), Confidence, Not restocked 30+ d (₹)`
 
-*Order by* is a store date `YYYY-MM-DD`; *Unit cost* is blank when unknown; *Status* uses the page's labels. *Vendor* = the product's supplier (SKU map, else Shopify vendor, SW-040). `?supplier=<name>` → file `po-<supplier>-<store>-YYYY-MM-DD.csv` with that supplier's lines to order only; `?budget=<₹>` keeps only the rows above the budget cut line (SW-041, LOGIC §6d).
+*Sales lost (₹)* = the product's whole number; *Confidence* = `High` / `Medium` / `Low` (units behind the rate, LOGIC §4c; Low = an estimate, not in the headline); *Not restocked 30+ d (₹)* = the part of it after day 30 of an open stock-out with no PO (not in the headline either) (1.2.0). *Order by* is a store date `YYYY-MM-DD`; *Unit cost* is blank when unknown; *Status* uses the page's labels. *Vendor* = the product's supplier (SKU map, else Shopify vendor, SW-040). `?supplier=<name>` → file `po-<supplier>-<store>-YYYY-MM-DD.csv` with that supplier's lines to order only; `?budget=<₹>` keeps only the rows above the budget cut line (SW-041, LOGIC §6d).
 
 ### Supplier CSVs (`GET /api/export/suppliers.csv`, `POST /api/suppliers/import`, SW-040)
 
@@ -123,7 +123,7 @@ Same BOM and formula guard. Header names match whatever their case and spacing; 
 
 ### Browser-built CSVs (`public/app.js`, same BOM and formula guard)
 
-- Products (`products-YYYY-MM-DD.csv`): the columns and rows shown.
+- Products (`products-YYYY-MM-DD.csv`): the columns and rows shown (with *Confidence*, 1.2.0, when that column is on).
 - Pause promotion (`pause-promotion-YYYY-MM-DD.csv`): `Product, SKU, Variant ID, Why, Back in stock, In stock, Days left`.
 - Push these (`push-these-YYYY-MM-DD.csv`): `Product, SKU, Variant ID, Overstock ₹, In stock, Days left`.
 

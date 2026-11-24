@@ -118,7 +118,8 @@ test('Products filters: no duplicate lists; overstock tile opens Push these (cri
   await pg.goto(base + '/#products'); await pg.waitForSelector('#f-more');
   const chips = await pg.$$eval('[data-filter-products]', (b) => b.map((x) => x.dataset.filterProducts));
   const more = await pg.$$eval('#f-more option', (o) => o.map((x) => x.value).filter(Boolean));
-  assert.equal(chips.length, 7);   // + High returns (SW-064) assert.equal(more.length, 6, `More… options ${more}`);
+  assert.equal(chips.length, 7);   // + High returns (SW-064); 1.2.0 Estimates / Not restocked are in More… (LOGIC §4c)
+  assert.ok(more.includes('estimate') && more.includes('notrestocked'), `More… has the §4c filters: ${more}`); assert.equal(more.length, 8, `More… options ${more}`);
   assert.ok(!more.includes('over') && !more.includes('decide'), 'Overstock = Push these; Slow sellers = Slow sellers to decide');
   await pg.selectOption('#f-more', 'slow'); await pg.waitForSelector('.tbl.desk');
   assert.ok((await heads(pg)).includes('Decide'), 'Slow sellers carries the Decide column');
@@ -374,6 +375,30 @@ test('final critic round 2, phones 390 and 360 (M1–M6, M8, M9): whole chips, t
     assert.ok(Math.abs(m6.scale - 1) < 0.01 && m6.font === '12.5px' && m6.out === 0, `${w}: M6 ${JSON.stringify(m6)}`);
     /* M9: Biggest losses "All" is 44 px wide */
     assert.ok(Math.min(...await pg.$$eval('.panel-head a', (a) => a.map((x) => x.getBoundingClientRect().width))) >= 44, `${w}: M9 panel link`);
+    assert.equal(await pg.evaluate(() => document.documentElement.scrollWidth - innerWidth), 0);
+    assert.deepEqual(pg.errors, []);
+    await pg.context().close();
+  }
+});
+
+/* 1.2.0 (LOGIC.md §4c): the line under the headline opens the rows apart; markers and the Confidence column */
+test('§4c: "+ ₹ estimate · ₹ not restocked" under the headline opens those rows; markers; Confidence column; 1440 and 390', opts, async () => {
+  for (const [w, h] of [[1440, 900], [390, 844]]) {
+    const pg = await page(w, h);
+    await pg.goto(base + '/#overview'); await pg.waitForSelector('#view .headline h1');
+    const r = await pg.evaluate(() => fetch('/api/report?days=30').then((x) => x.json()));
+    const t = r.totals;
+    assert.ok(t.lost + t.lostEstimate + t.lostNotRestocked === t.lostAll, 'parts add up');
+    if (!t.lostEstimate && !t.lostNotRestocked) { assert.equal(await pg.$('#lost-sub'), null, 'nothing apart: no line'); await pg.context().close(); continue; }
+    const kind = t.lostEstimate ? 'estimate' : 'notrestocked';
+    await pg.click(`#lost-sub a[data-filter="${kind}"]`);
+    await pg.waitForSelector('#f-more.on');
+    assert.equal(await pg.inputValue('#f-more'), kind);
+    assert.ok((await pg.$$(`#view .lmark`)).length > 0, 'rows carry a marker');
+    await pg.goto(base + '/#stockouts'); await pg.waitForSelector('#lost-sub');
+    await pg.click(`#lost-sub a[data-filter="${kind}"]`);
+    await pg.waitForSelector(`[data-filter-stockouts="${kind}"].on`);
+    if (w > 760) assert.ok((await heads(pg)).includes('Confidence'), 'Stock-outs has the Confidence column');
     assert.equal(await pg.evaluate(() => document.documentElement.scrollWidth - innerWidth), 0);
     assert.deepEqual(pg.errors, []);
     await pg.context().close();

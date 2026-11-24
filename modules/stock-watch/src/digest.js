@@ -62,11 +62,13 @@ const L = {
   lostPeriod(r, prev) {
     const t = r.totals;
     let s = `Sales lost to stock-outs, last ${r.days} days: ${money(t.lost)} (${n1(t.lostPct)}% of demand)`;
+    /* LOGIC.md §4c: estimates from few sales and 30+ d not restocked are apart from the headline, named when there are any */
+    const apart = [t.lostEstimate > 0 ? `+${money(t.lostEstimate)} estimate` : '', t.lostNotRestocked > 0 ? `+${money(t.lostNotRestocked)} not restocked` : ''].filter(Boolean);
     if (prev) {
       const p = prev.totals.lost;
       s += t.lost > p ? `, up from ${money(p)} the ${r.days} days before` : t.lost < p ? `, down from ${money(p)} the ${r.days} days before` : `, same as the ${r.days} days before`;
     }
-    return s + '.';
+    return s + (apart.length ? ` (${apart.join(', ')})` : '') + '.';
   },
   topOrders(r, n, fmt) { return orderToday(r).slice(0, n).map(fmt); },
 };

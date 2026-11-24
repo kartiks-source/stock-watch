@@ -2,6 +2,14 @@
 
 User-facing changes, newest first. Semver: minor when a number's rule changes or a feature lands, patch for fixes. The version in `package.json` matches the top heading. Versions before 0.9.0 were reconstructed from `docs/DEVLOG.md` on 20 Nov 2026 (no tags existed); dates are the DEVLOG dates. Per DEVLOG, nothing from 0.6.0 on has been deployed yet. Since 1.0.0-rc.1, `/health`, `/status` and the page footer show the version and the build's commit (SW-056); `test/docs.test.js` checks the top heading matches `package.json`.
 
+## 1.2.0 · 2026-11-24 · ₹ lost says how sure it is
+
+- The headline *sales lost* now counts only products whose sales rate rests on **5 or more units** (High 10+, Medium 5–9). Products with 4 or fewer sales behind the rate are an **estimate**, shown apart, and so is the part of a stock-out **still open after 30 days with nothing marked ordered** ("not restocked"). Under the headline, one small line: "+ ₹Y estimate from few sales · ₹Z on items out 30+ days, not restocked", each opening those rows. Sammsara, 30 days to 24 Nov: **₹3.72 L lost (5.9% of demand)**, + ₹1.65 L estimate on 40 products, + ₹52k not restocked on 18; before, all of it (₹5.89 L, 9%) was one number and 61% of it sat on products that sold 3 units or fewer. 7 days: ₹77k (7.4%), was ₹1.40 L (12.5%).
+- The same headline everywhere: Overview, Stock-outs, the Products totals line, the daily chart, Yesterday, Copy summary, the morning digest, the weekly review (snapshots are worked out again), groups and targets, `/api/v1/summary` (`money.lost`; new `lostEstimate`, `lostNotRestocked`, `lostAll` = the old total).
+- Each product keeps its own whole ₹ lost and the sort by ₹; a small **estimate** or **not restocked** marker says which part isn't in the headline. New optional *Confidence* column (High / Medium / Low) on Products and Stock-outs; filters *Estimates (few sales)* and *Not restocked 30+ d* (Stock-outs chips, Products More…). Why cell: "Out 30+ days, not restocked: restock or drop?". Marking a PO puts a long stock-out back in the headline.
+- PO CSV: new columns *Confidence* and *Not restocked 30+ d (₹)*.
+- LOGIC §4 compares five ways of counting on Sammsara's live data (§4c has the rule).
+
 ## 1.1.5 · 2026-11-20 · numbers that match Shopify for the same dates
 
 - Periods are calendar days in the store's time zone, today included: on 20 Nov "30 days" = 22 Oct – 20 Nov (was the last 30 × 24 hours). Every number on the page follows, and the dates show next to the Period buttons, so the same dates in Shopify give the same numbers.

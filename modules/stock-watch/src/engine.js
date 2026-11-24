@@ -154,6 +154,15 @@ const MIN_IN_STOCK_DAYS = 7;
  *  capped at units ÷ calendar days since the product's first sale, and can't make the product a best seller (A).
  *  Before: 2 units sold in the 17 h before a long stock-out read as 0.29 a day → ₹23,280 lost, ranked A. */
 const LOW_UNITS = 5, LOW_DAYS = 14;
+/** How sure ₹ lost is (LOGIC.md §4c, 1.2.0): units sold in the stretch the rate was measured on (rateUnits).
+ *  high ≥ 10, medium 5–9, low ≤ 4. Low-confidence ₹ lost is an estimate, shown apart from the headline. */
+const CONF_HIGH = 10, CONF_MEDIUM = 5;
+const confidenceOf = (units) => (units >= CONF_HIGH ? 'high' : units >= CONF_MEDIUM ? 'medium' : 'low');
+/** A stock-out still open after this many days with nothing marked ordered: its ₹ lost after day 30 is "not restocked"
+ *  (likely dropped), shown apart from the headline (LOGIC.md §4c). With a PO marked it keeps counting. */
+const NOT_RESTOCKED_DAYS = 30;
+/** A product row's ₹ lost in the three buckets (rows from report()): counted (headline), estimate, notRestocked. */
+const lostSplit = (p) => ({ counted: p.lostCounted || 0, estimate: p.lostEstimate || 0, notRestocked: p.lostNotRestocked || 0 });
 /** Returns (SW-064, LOGIC.md §9e): a % only from 5 units ordered; 15%+ is "high". */
 const RETURN_MIN_UNITS = 5, HIGH_RETURN_PCT = 15;
 /** Cancelled or refunded units in the period, per variant (SW-064, LOGIC.md §9e).
@@ -288,7 +297,7 @@ function trendCall(pct, base) {
 
 /** Bumped whenever a rule that changes a number changes (LOGIC.md): saved daily snapshots made under another value
  *  are worked out again (src/weekly.js), so the weekly panel never mixes old and new maths. */
-const CALC_VERSION = '1.1.3';   // 1.1.3: demand counts units returned after the sale (demandQty); 1.1.1: sale inside a stock-out moves its start (afterLastSale)
+const CALC_VERSION = '1.2.0';   // 1.2.0: headline ₹ lost leaves out low-confidence estimates and 30+ d not restocked (§4c); 1.1.3: demand counts units returned after the sale (demandQty); 1.1.1: sale inside a stock-out moves its start (afterLastSale)
 
 /** Order today rows (Out now, Critical, Order now) are one group, biggest ₹ of sales a day first (SIMP-2) */
 const TODAY_STATUS = ['Out now', 'Critical', 'Order now'];
@@ -413,7 +422,7 @@ function report(stock, orders, settings = {}, opts = {}) {
      chart adds up to the same totals as the product rows */
   const daily = {};
   const lastKey = dayKey(now, off);
-  for (const k of TZ.dayKeys(from, now, off)) { daily[k] = daily[k] || { sold: 0, lost: 0, units: 0, unitsLost: 0, outSkus: new Set() }; if (k === lastKey) break; }   // a 23- or 25-hour day is one day (SW-049)
+  for (const k of TZ.dayKeys(from, now, off)) { daily[k] = daily[k] || { sold: 0, lost: 0, lostEstimate: 0, lostNotRestocked: 0, units: 0, unitsLost: 0, outSkus: new Set() }; if (k === lastKey) break; }   // a 23- or 25-hour day is one day (SW-049)
   for (const o of orders) {
     if (o.t < from) continue;
     const d = daily[dayKey(o.t, off)]; if (!d) continue;
@@ -446,18 +455,32 @@ function report(stock, orders, settings = {}, opts = {}) {
       perDay = Math.min(perDay, all / Math.max(1, (now - firstSale) / DAY));
     }
     const perSellingHour = perDay / 24;
+    /* how sure ₹ lost is (LOGIC.md §4c): the units the rate rests on */
+    const confidence = confidenceOf(units);
+    /* SW-040 (LOGIC.md §6c): the product's supplier; its lead time, when set, replaces the store's */
+    const sup = own(opts.suppliers, p.id) || null, lead = sup && sup.leadDays != null ? sup.leadDays : S.leadDays;
+    const oo = p.stock == null ? null : onOrderNow(own(opts.onOrder, p.id), p.changes, now, p.stock, perDay, lead);
 
-    let lost = 0, unitsLost = 0, outs = 0, smallTopUps = 0, repeats = 0;
+    let lost = 0, unitsLost = 0, outs = 0, smallTopUps = 0, repeats = 0, lostNR = 0, lostLow = 0;
     eps.forEach((e, i) => {
       if (e.end <= from) return;
       const a = Math.max(e.start, from);
-      const h = sellingHours(a, e.end, profile, off);
-      const uLost = h.total * perSellingHour;
-      const vLost = uLost * price;
+      /* §4c: the part of a stock-out after its 30th day; still open and nothing marked ordered → "not restocked" */
+      const cut = Math.max(a, Math.min(e.end, e.start + NOT_RESTOCKED_DAYS * DAY));
+      const h1 = sellingHours(a, cut, profile, off), h2 = sellingHours(cut, e.end, profile, off);
+      const nr = e.open && !oo;
+      const uLost = (h1.total + h2.total) * perSellingHour;
+      const vLost = uLost * price, vOver = h2.total * perSellingHour * price;
       lost += vLost; unitsLost += uLost; outs++;
-      for (const [k, w] of Object.entries(h.byDay)) {
-        const d = daily[k]; if (!d) continue;
-        d.lost += w * perSellingHour * price; d.unitsLost += w * perSellingHour; d.outSkus.add(p.id);
+      if (nr) lostNR += vOver;
+      if (confidence === 'low') lostLow += vLost - (nr ? vOver : 0);
+      for (const [h, late] of [[h1, false], [h2, true]]) {
+        for (const [k, w] of Object.entries(h.byDay)) {
+          const d = daily[k]; if (!d) continue;
+          const v = w * perSellingHour * price;
+          if (late && nr) d.lostNotRestocked += v; else if (confidence === 'low') d.lostEstimate += v; else d.lost += v;
+          d.unitsLost += w * perSellingHour; d.outSkus.add(p.id);
+        }
       }
       const small = !e.open && !e.inactive && perDay > 0 && e.topUp < perDay * S.smallTopUpDays;
       const next = eps[i + 1];
@@ -469,12 +492,10 @@ function report(stock, orders, settings = {}, opts = {}) {
         hours: round((e.end - e.start) / HOUR, 1), hoursInPeriod: round((e.end - a) / HOUR, 1), unitsLost: round(uLost, 1), lost: Math.round(vLost),
         topUp: e.open || e.inactive ? null : e.topUp, topUpDays: !e.open && !e.inactive && perDay > 0 ? round(e.topUp / perDay, 1) : null,
         small, repeat, perDay: round(perDay, 2),
+        confidence, lostOver30: Math.round(vOver), lostNotRestocked: nr ? Math.round(vOver) : 0,   // §4c
       });
     });
 
-    /* SW-040 (LOGIC.md §6c): the product's supplier; its lead time, when set, replaces the store's */
-    const sup = own(opts.suppliers, p.id) || null, lead = sup && sup.leadDays != null ? sup.leadDays : S.leadDays;
-    const oo = p.stock == null ? null : onOrderNow(own(opts.onOrder, p.id), p.changes, now, p.stock, perDay, lead);
     let pl = p.stock == null ? null : planWithOrder({ stock: p.stock, perDay, lead, cover: S.coverDays, safety: S.safetyDays }, oo);
     if (pl && sup) pl = { ...pl, qty: roundOrder(pl.qty, sup).qty, rawQty: pl.qty };   // up to the MOQ, then whole case packs
     const selling = perDay > 0 && perDay >= S.minPerDay;
@@ -484,6 +505,7 @@ function report(stock, orders, settings = {}, opts = {}) {
       status: pl ? (selling ? pl.status : 'Slow seller') : 'No stock data',
       orderQty: pl && selling ? pl.qty : 0, orderValue: pl && selling ? Math.round(pl.qty * (p.cost || price)) : 0,   // cash to commit: unit cost when known
       rateBasis: rate.basis, rateFrom: rate.from,   // which sales the rate was measured on (LOGIC.md §3)
+      rateUnits: units, confidence,   // §4c: units the rate rests on, and how sure ₹ lost is
       lost: Math.round(lost), unitsLost: round(unitsLost, 1), outs, smallTopUps, repeats,
       sold: Math.round(p.lines.filter((o) => o.t >= from).reduce((s, o) => s + num(o.qty) * num(o.price), 0)),
       unitsSold: p.lines.filter((o) => o.t >= from).reduce((s, o) => s + num(o.qty), 0),
@@ -493,6 +515,12 @@ function report(stock, orders, settings = {}, opts = {}) {
     const rt = returns.get(String(p.id)) || { ordered: 0, returned: 0, value: 0, cancelled: 0 };
     Object.assign(row, { unitsOrdered: rt.ordered, unitsReturned: rt.returned, unitsCancelled: rt.cancelled, returnPct: returnPct(rt.ordered, rt.returned), refundValue: Math.round(rt.value) });
     if (lowData) row.lowData = true;
+    /* §4c: the row's ₹ lost in three buckets that add up to lost (headline = lostCounted) */
+    row.lostNotRestocked = Math.min(row.lost, Math.round(lostNR));
+    row.lostEstimate = confidence === 'low' ? Math.max(0, row.lost - row.lostNotRestocked) : 0;
+    row.lostCounted = row.lost - row.lostNotRestocked - row.lostEstimate;
+    row.lostConfidence = row.lost > 0 ? confidence : null;
+    if (row.lostNotRestocked > 0) row.notRestocked = true;
     /* the product's first stock record (UI-1): before it there's no stock history, so ₹ lost there is unknown, not 0 */
     row.historyFrom = p.changes.length ? p.changes[0].t : null;
     /* mostly given away (M4): average paid under 10% of the list price and no unit cost → a free gift? kept out of the budget rank */
@@ -578,11 +606,13 @@ function report(stock, orders, settings = {}, opts = {}) {
   products.sort((a, b) => b.lost - a.lost || b.sold - a.sold);
 
   const dailyRows = Object.entries(daily).map(([day, d]) => ({
-    day, sold: Math.round(d.sold), lost: Math.round(d.lost), units: d.units, unitsLost: round(d.unitsLost, 1), outSkus: d.outSkus.size,
+    day, sold: Math.round(d.sold), lost: Math.round(d.lost), lostEstimate: Math.round(d.lostEstimate), lostNotRestocked: Math.round(d.lostNotRestocked), units: d.units, unitsLost: round(d.unitsLost, 1), outSkus: d.outSkus.size,
   }));
   /* totals come from the product rows, so they always equal what the Products page adds up to */
   const sold = products.reduce((s, p) => s + p.sold, 0);
-  const lost = products.reduce((s, p) => s + p.lost, 0);
+  /* §4c: the headline counts high and medium confidence; estimates and 30+ d not restocked are apart; lostAll = all three */
+  const lost = products.reduce((s, p) => s + p.lostCounted, 0);
+  const lostEstimate = products.reduce((s, p) => s + p.lostEstimate, 0), lostNotRestocked = products.reduce((s, p) => s + p.lostNotRestocked, 0);
   /* out but not selling (LOGIC.md §1c): no units, no sales and no sales lost in the period; counted apart from "still out" */
   const rowOf = new Map(products.map((p) => [String(p.id), p]));
   const notSelling = (id) => { const p = rowOf.get(String(id)); return !!p && !p.unitsSold && !p.sold && !p.lost; };
@@ -593,6 +623,8 @@ function report(stock, orders, settings = {}, opts = {}) {
     generatedAt: now, days, from, settings: S,
     totals: {
       sold, lost, lostPct: sold + lost ? round((lost / (sold + lost)) * 100, 1) : 0,
+      lostEstimate, lostNotRestocked, lostAll: lost + lostEstimate + lostNotRestocked,
+      lostEstimateProducts: products.filter((p) => p.lostEstimate > 0).length, lostNotRestockedProducts: products.filter((p) => p.lostNotRestocked > 0).length,
       unitsLost: round(dailyRows.reduce((s, d) => s + d.unitsLost, 0), 0),
       outNow: products.filter((p) => p.status === 'Out now' || (p.status === 'Ordered' && p.stock <= 0)).length,
       ordered: products.filter((p) => p.status === 'Ordered').length,
@@ -663,4 +695,4 @@ function productDetail(id, stock, orders, settings = {}, opts = {}) {
 }
 
 module.exports = {
-  CALC_VERSION, TODAY_STATUS, RETURN_MIN_UNITS, HIGH_RETURN_PCT, returnsOf, demandQty, afterLastSale, trend, trendCall, storeTrend, TREND_MIN_UNITS, LOW_UNITS, LOW_DAYS, PACE_DROP, minMax, report, productDetail, episodes, demandPerDay, demandRate, inStockStart, KEEP_DAYS, MIN_IN_STOCK_DAYS, plan, onOrderNow, hourProfile, sellingHours, dayKey, DEFAULT_SETTINGS, HOUR, DAY };
+  CALC_VERSION, TODAY_STATUS, CONF_HIGH, CONF_MEDIUM, NOT_RESTOCKED_DAYS, confidenceOf, lostSplit, RETURN_MIN_UNITS, HIGH_RETURN_PCT, returnsOf, demandQty, afterLastSale, trend, trendCall, storeTrend, TREND_MIN_UNITS, LOW_UNITS, LOW_DAYS, PACE_DROP, minMax, report, productDetail, episodes, demandPerDay, demandRate, inStockStart, KEEP_DAYS, MIN_IN_STOCK_DAYS, plan, onOrderNow, hourProfile, sellingHours, dayKey, DEFAULT_SETTINGS, HOUR, DAY };

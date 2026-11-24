@@ -50,7 +50,7 @@ test('every role’s digest: title + at most 5 lines, plain words, no undefined/
     assert.ok(d.lines.length >= 2 && d.lines.length <= D.MAX_LINES, `${role}: ${d.lines.length} lines`);
     assert.match(d.lines[0], /^Stock-out Watch · Test Store · Thu 19 Nov/);
     assert.doesNotMatch(d.text, /undefined|NaN|null|Infinity|\[object/, role);
-    assert.ok(d.lines.every((l) => l.length <= 160), `${role}: a line is too long`);
+    assert.ok(d.lines.every((l) => l.length <= 160), `${role}: a line is too long: ${d.lines.find((l) => l.length > 160)}`);
   }
 });
 

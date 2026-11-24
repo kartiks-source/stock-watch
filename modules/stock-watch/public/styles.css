@@ -853,3 +853,18 @@ div.cutline { background: var(--amber-soft); color: var(--amber); font-weight: 6
 /* roles off (20 Nov 2026): the pill only switches brands; with one brand it doesn't open */
 details.rolepick.one > summary { cursor: default; }
 details.rolepick.one > summary svg, details.rolepick.one > .menu { display: none; }
+
+/* 1.2.0 · how sure ₹ lost is (LOGIC.md §4c): one small line under the headline, row markers, Confidence chip */
+.headline .lost-sub { flex-basis: 100%; margin: 2px 0 0; color: var(--soft); font-size: 13px; }
+.headline .lost-sub a { color: var(--soft); text-decoration: underline dotted; text-underline-offset: 2px; }
+.headline .lost-sub a:hover { color: var(--ink-2); }
+.lmark { display: inline-block; margin-left: 6px; font-size: 11px; font-weight: 600; color: var(--amber); white-space: nowrap; }
+.lmark.nr { color: var(--soft); }
+.mq .lmark { display: block; margin-left: 0; }
+.bar-row .name .lmark { font-weight: 500; }
+.conf { font-size: 12px; font-weight: 600; white-space: nowrap; }
+.conf.c-high { color: var(--ok); }
+.conf.c-medium { color: var(--ink-2); }
+.conf.c-low { color: var(--amber); }
+@media (max-width: 760px) { .headline .lost-sub { line-height: 2; } .headline .lost-sub a { padding: 8px 0; } }   /* taller tap area without breaking the line */
+.tbl td .lmark { display: block; margin-left: 0; font-size: 10.5px; line-height: 1.2; }   /* under the ₹, so the column doesn't widen */

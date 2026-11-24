@@ -52,6 +52,8 @@ const tabOf = (s) => (ORDER_TODAY.includes(s) ? 'today' : s === 'Order this week
  *   costPerDay (out of stock only) = sales per day × average price paid.
  *   outLost = this open stock-out's ₹ lost; without it the sentence leaves ₹ out (the Sales lost column has the period's).
  */
+/** LOGIC.md §4c: an open stock-out past 30 days with nothing marked ordered. */
+const NOT_RESTOCKED_WHY = 'Out 30+ days, not restocked: restock or drop?';
 function why(p, S, now, outSince = null, outLost = null) {
   const off = TZ.zoneOf(S), lead = +(p.leadDays ?? S.leadDays) || 0, safety = +S.safetyDays || 0;   // the supplier's lead time when set (SW-040)
   const res = { why: '', runsOut: null, orderBy: null, outSince: null, costPerDay: 0 };
@@ -65,7 +67,7 @@ function why(p, S, now, outSince = null, outLost = null) {
     /* SIMP-6: out at the first stock record we have → it was out before then too; we don't know how long */
     const len = h == null ? '' : p.historyFrom != null && outSince <= p.historyFrom ? ` since before ${dateShort(p.historyFrom, off)}`
       : Math.round(h) < 24 ? ` ${Math.max(1, Math.round(h))} h` : ` ${Math.round(h / 24)} d`;
-    res.why = `Out${len}${outLost > 0 ? ` · lost ${money(outLost)} this stock-out` : ''}`;
+    res.why = p.notRestocked ? NOT_RESTOCKED_WHY : `Out${len}${outLost > 0 ? ` · lost ${money(outLost)} this stock-out` : ''}`;   // §4c
     return res;
   }
   if (!(p.perDay > 0) || p.daysLeft == null) { res.why = 'No sales lately'; return res; }
@@ -211,7 +213,7 @@ function reorderRows(reorder, { filter = 'all', q = '' } = {}) {
   return list.filter((p) => (f === 'all' || f === 'ordered' || tabOf(p.status) === f) && (!s || `${p.name} ${p.sku}`.toLowerCase().includes(s)));
 }
 
-const PO_HEAD = ['Vendor', 'Product', 'SKU', 'Variant ID', 'Order qty', 'Unit cost', 'Order value', 'Status', 'Why', 'Order by', 'Stock now', 'Sells per day', 'Days left', 'Sales lost (₹)'];
+const PO_HEAD = ['Vendor', 'Product', 'SKU', 'Variant ID', 'Order qty', 'Unit cost', 'Order value', 'Status', 'Why', 'Order by', 'Stock now', 'Sells per day', 'Days left', 'Sales lost (₹)', 'Confidence', 'Not restocked 30+ d (₹)'];
 /**
  * Lines (header first) for the PO CSV. Same rows and order as the page, grouped by vendor (A–Z, unknown last)
  * so each supplier's lines sit together. Unit cost is blank when unknown; Order value then uses price (LOGIC.md §6).
@@ -228,6 +230,7 @@ function poLines(r, { filter, q, vendors = {}, keep = null } = {}) {   // keep(p
   return [PO_HEAD, ...sorted.map((p) => [
     vOf(p), p.name, p.sku, String(p.id), p.orderQty, p.cost != null ? p.cost : '', p.orderValue, statusLabel(p.status), p.why || '',
     p.orderBy ? localDay(p.orderBy, off) : '', p.stock, p.perDay, p.daysLeft ?? '', p.lost,
+    p.confidence ? p.confidence[0].toUpperCase() + p.confidence.slice(1) : '', p.lostNotRestocked || 0,   // §4c
   ])];
 }
 
@@ -243,6 +246,6 @@ const csvText = (lines, cell = csvCell) => '﻿' + lines.map((l) => l.map(cell).
 const fileDate = (now, zone = TZ.DEFAULT_ZONE) => localDay(now, zone);
 
 module.exports = {
-  money, dayName, dateShort, statusLabel, tabOf, why, mktList, backIn, mktSort, decideKind, salesChanged, DECIDE_CHANGE, DECIDE_FLOOR, DECISIONS,
+  NOT_RESTOCKED_WHY, money, dayName, dateShort, statusLabel, tabOf, why, mktList, backIn, mktSort, decideKind, salesChanged, DECIDE_CHANGE, DECIDE_FLOOR, DECISIONS,
   enrich, enrichDetail, vendorMap, reorderRows, onOrderRows, onOrderSummary, poLines, PO_HEAD, csvCell, csvText, fileDate,
 };

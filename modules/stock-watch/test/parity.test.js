@@ -117,7 +117,8 @@ for (const f of FIXTURES) {
     assert.ok(W.size + S.size > 0 || f.name.startsWith('slow'), 'fixture should put something on a reorder list');
     /* Daily tab totals = Overview totals */
     assert.equal(Math.round(sheet.totals.sold), web.totals.sold, 'sold in the last 30 days');
-    assert.ok(near(sheet.totals.lost, web.totals.lost), `₹ lost in the last 30 days: Sheet ${Math.round(sheet.totals.lost)} vs web ${web.totals.lost}`);
+    /* the Sheet has no confidence split (LOGIC.md §12, §4c): it matches the web app's lostAll */
+    assert.ok(near(sheet.totals.lost, web.totals.lostAll), `₹ lost in the last 30 days: Sheet ${Math.round(sheet.totals.lost)} vs web ${web.totals.lostAll}`);
     if (f.check) f.check(web, sheet);
   });
 }

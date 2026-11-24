@@ -190,8 +190,10 @@ test('overview totals equal the sum of the product rows (partial first day inclu
   const g = demo.generate({ now });
   for (const days of [7, 30]) {
     const r = E.report(g.stock, g.orders, {}, { days, now });
-    const sold = r.products.reduce((s, p) => s + p.sold, 0), lost = r.products.reduce((s, p) => s + p.lost, 0);
-    assert.equal(r.totals.sold, sold); assert.equal(r.totals.lost, lost);
+    const sold = r.products.reduce((s, p) => s + p.sold, 0), lost = r.products.reduce((s, p) => s + p.lostCounted, 0);
+    assert.equal(r.totals.sold, sold); assert.equal(r.totals.lost, lost);   // §4c: the headline = the rows' counted part
+    assert.equal(r.totals.lostAll, r.products.reduce((s, p) => s + p.lost, 0));
+    assert.ok(Math.abs(r.daily.reduce((s, d) => s + d.lost, 0) - lost) <= r.daily.length, 'daily lost = headline (rounding per day only)');
     const ds = r.daily.reduce((s, d) => s + d.sold, 0);
     assert.ok(Math.abs(ds - sold) <= r.daily.length, `daily ${ds} vs rows ${sold}`);   // rounding per day only
   }

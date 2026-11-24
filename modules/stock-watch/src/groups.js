@@ -63,7 +63,7 @@ const blank = (key, label) => ({ key, label, n: 0, needOrder: 0, sold: 0, lost: 
 /** Add one variant row to a group's sums. */
 function add(g, r) {
   g.ids.push(r.id); g.n++;
-  g.sold += r.sold || 0; g.lost += r.lost || 0;
+  g.sold += r.sold || 0; g.lost += r.lostCounted ?? r.lost ?? 0;   // §4c: the headline's ₹ lost (estimates and 30+ d not restocked apart)
   if (r.lostProfit != null) g.lostProfit = (g.lostProfit || 0) + r.lostProfit;
   if (TODAY.includes(r.status)) { g.needOrder++; g.orderValue += r.orderValue || 0; }
   if (r.overstock) g.excessValue += r.excessValue || 0;

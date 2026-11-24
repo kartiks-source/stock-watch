@@ -11,6 +11,14 @@ Older entries: [2026-11](devlog/2026-11.md)
 
 
 
+## 2026-11-24 · 1.2.0 · ₹ lost says how sure it is (SW-066)
+stock-watch 1.2.0, on `main` (not pushed, not deployed). Client's category person: products they know don't sell show sales lost. Sammsara 30 d: ₹5.89 L lost, 43 products with ≤ 3 units sold carried ₹3.61 L (61%).
+- Engine: `rateUnits` = units behind the rate (same lines as `demandRate`), `confidence` high 10+ / medium 5–9 / low ≤ 4. Open stock-out past day 30 with no PO (`onOrderNow` null) → ₹ after day 30 = `lostNotRestocked`. Row `lost` unchanged; `lostCounted` + `lostEstimate` + `lostNotRestocked` = `lost`. `totals.lost` = Σ counted (headline, `lostPct` on it), `lostAll` = old total. Daily `lost` = counted. CALC_VERSION 1.2.0 (snapshots recomputed).
+- Same headline: Overview, Stock-outs, Products totals line, chart, Yesterday, Copy summary, digest (+ parts), weekly snapshots, groups/targets, `/api/v1/summary` (+ `lostEstimate`, `lostNotRestocked`, `lostAll`), PO CSV (+ Confidence, Not restocked). UI: one small line under the headline, links to the rows; markers *estimate* / *not restocked*; optional Confidence column; Stock-outs chips, Products More… (chip row stays one line at 1440); Why "Out 30+ days, not restocked: restock or drop?".
+- Alternatives on live data (engine on `/api/export/backup.json`, read-only; LOGIC §4 table): 30 d A all ₹5,88,692 (63 products) · B chosen ₹3,71,843 (22) + ₹1,64,833 estimate (40) + ₹52,016 not restocked (18) · C drop ≤ 3 units sold ₹2,28,092 (20) · D Poisson 80% lower bound ₹4,68,555 (63) · E cap 30 d ₹5,36,676 (62). 7 d: A ₹1,39,788 · B ₹77,334 · C ₹2,667 · D ₹1,06,275 · E ₹1,15,376.
+- Sheet version has no split: parity compares its total to `lostAll` (LOGIC §12).
+- Open: Products filters are in More… (not chips) to keep one chip row; BACKLOG id SW-065 was taken (Shopify match), this is SW-066.
+
 ## 2026-11-20 · one name everywhere
 repo. GitHub repo renamed KM-TestApp → `stock-watch` (old URL redirects); local folder → `~/Downloads/stock-watch`; old repo `stockout-watch` deleted (user's yes). Merged worktrees removed. Railway service `web` → `stock-watch` pending (dashboard only; then `.railway/railway.ts` + deploy commands). App URL unchanged: Performity allows our key only from that Origin.
 ## 2026-11-20 · 1.1.5 · cancel/refund % and periods match Shopify exactly
