@@ -36,6 +36,7 @@ function bestNow(brand, rows, month) {
       ...p, months: undefined, season: undefined, variantPace: undefined, ids: undefined,
       id: main.id, image: p.image || main.image, adminUrl: p.adminUrl || main.adminUrl, webUrl: p.webUrl !== undefined ? p.webUrl : main.webUrl,
       out: outRows.length > 0, outVariants: outRows.length, variantsLive: vs.length, outSince: outRows.length ? (main.outSince || null) : null,
+      outFromDay: outRows.length ? (p.outFrom || {})[String(main.id)] || null : null,   // 12 months: the day this stock-out began (store day), else null
       stock: vs.reduce((s, r) => s + Math.max(0, r.stock), 0), status: main.status, orderQty: main.orderQty || 0, orderValue: main.orderValue || 0, onOrder: main.onOrder || null,
       daysLeft: main.daysLeft ?? null, why: main.why || '', daysOutMonth: m ? m.daysOut : 0, lostMonth: m ? m.lost : 0, rangeMonth: m ? m.range : '',
     });
@@ -51,7 +52,8 @@ function ads(brand, rows, S = {}) {
     if (!live(r)) continue;
     const b = pm.get(String(r.id)), pace = b ? b.pace : +r.perDay || 0;
     const price = +r.price || (b ? b.product.price : 0) || 0;
-    const row = { id: r.id, name: r.name, sku: r.sku, image: r.image, adminUrl: r.adminUrl, webUrl: r.webUrl, stock: r.stock, pace: Math.round(pace * 100) / 100, price: Math.round(price), perDayValue: Math.round(pace * price), best: !!(b && b.best), status: r.status, why: r.why || '', backIn: r.backIn || null, outSince: r.outSince || null, daysLeft: r.daysLeft ?? null };
+    const outFromDay = b && r.stock <= 0 ? (b.product.outFrom || {})[String(r.id)] || null : null;
+    const row = { outFromDay, id: r.id, name: r.name, sku: r.sku, image: r.image, adminUrl: r.adminUrl, webUrl: r.webUrl, stock: r.stock, pace: Math.round(pace * 100) / 100, price: Math.round(price), perDayValue: Math.round(pace * price), best: !!(b && b.best), status: r.status, why: r.why || '', backIn: r.backIn || null, outSince: r.outSince || null, daysLeft: r.daysLeft ?? null };
     if (r.mkt === 'pause' && (pace > 0 || row.best)) { pause.push(row); continue; }
     if (r.stock > 0 && pace > 0) {
       const cover = r.stock / pace;

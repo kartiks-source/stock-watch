@@ -76,6 +76,13 @@
     return `<svg class="bchart" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Sold and money missed each month">${ticks.join('')}${bars}</svg>`;
   }
   function niceStep(x) { const p = 10 ** Math.floor(Math.log10(Math.max(1, x))); const m = x / p; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * p; }
+  /** "since 4 Nov": the day the stock-out began from the 12 months (whole days), else the engine's time; "since before …"
+      when it began before the 12 months held */
+  const sinceText = (p) => {
+    const b = B(), from = b && b.span && b.span.from;
+    if (p.outFromDay) return p.outFromDay === from ? ` since before ${dayY(from)}` : ` since ${day(p.outFromDay)}${p.outFromDay.slice(0, 4) !== new Date().toISOString().slice(0, 4) ? ` ${p.outFromDay.slice(0, 4)}` : ''}`;
+    return p.outSince ? ` since ${esc(A.dateShort(p.outSince))}` : '';
+  };
   /** §6: a website allocation refilled from the warehouse: its gaps are not counted in the totals */
   const topUp = (p) => (p.allocation ? '<span class="best tu" title="Shopify shows a few pieces topped up from the warehouse: these gaps are refill waits, not counted in the totals (LOGIC §6)">website top-up</span>' : '');
   const heat = (d) => (d <= 0 ? 0 : d < 3 ? 1 : d < 8 ? 2 : d < 15 ? 3 : 4);
@@ -160,7 +167,7 @@
     if (!b.ok) return notReady(b);
     const rows = b.now || [], out = rows.filter((p) => p.out), m = b.months[b.months.length - 1];
     const lost = rows.reduce((s, p) => s + (p.lostMonth || 0), 0);
-    const nowCell = (p) => (p.out ? `<span class="st g-today">Out${p.outSince ? ` since ${esc(A.dateShort(p.outSince))}` : ''}</span>${p.variantsLive > 1 ? ` <small class="muted">${p.outVariants} of ${p.variantsLive} options</small>` : ''}` : `<span class="st ok">In stock · ${inr.format(p.stock)}</span>`);
+    const nowCell = (p) => (p.out ? `<span class="st g-today">Out${sinceText(p)}</span>${p.variantsLive > 1 ? ` <small class="muted">${p.outVariants} of ${p.variantsLive} options</small>` : ''}` : `<span class="st ok">In stock · ${inr.format(p.stock)}</span>`);
     const refill = (p) => (p.onOrder ? `<span class="st g-ordered">Ordered · lands ${esc(A.dateShort(p.onOrder.eta))}</span>` : p.orderQty > 0 ? `<span class="st g-week">Order ${inr.format(p.orderQty)} now</span>` : p.out ? '<span class="st g-today">Not ordered</span>' : '<span class="muted">Enough stock</span>');
     const cols = [
       { k: 'name', label: 'Best seller', f: (p) => A.nameCell(p, false) },
@@ -184,7 +191,7 @@
     const ads = (b && b.ads) || { push: [], pause: [] };
     const top = S().adsAll ? 1e9 : 25;
     const pushRow = (p) => `<div class="arow" data-product="${esc(p.id)}" tabindex="0" role="button">${SW_PROD.cell(p, { extra: p.best ? '<span class="best">Best seller</span>' : '' })}<span class="af"><b>${esc(pace(p.pace))}</b><small>${inr.format(p.coverWeeks)} weeks of stock</small></span></div>`;
-    const pauseRow = (p) => `<div class="arow" data-product="${esc(p.id)}" tabindex="0" role="button">${SW_PROD.cell(p, { extra: p.best ? '<span class="best">Best seller</span>' : '' })}<span class="af"><b class="${p.stock <= 0 ? 'lostv' : 'amberv'}">${p.stock <= 0 ? `Out${p.outSince ? ` since ${esc(A.dateShort(p.outSince))}` : ''}` : `${Math.max(0, Math.round(p.daysLeft || 0))} day${Math.round(p.daysLeft || 0) === 1 ? '' : 's'} left`}</b><small>${esc(p.backIn || '')}</small></span></div>`;
+    const pauseRow = (p) => `<div class="arow" data-product="${esc(p.id)}" tabindex="0" role="button">${SW_PROD.cell(p, { extra: p.best ? '<span class="best">Best seller</span>' : '' })}<span class="af"><b class="${p.stock <= 0 ? 'lostv' : 'amberv'}">${p.stock <= 0 ? `Out${sinceText(p)}` : `${Math.max(0, Math.round(p.daysLeft || 0))} day${Math.round(p.daysLeft || 0) === 1 ? '' : 's'} left`}</b><small>${esc(p.backIn || '')}</small></span></div>`;
     const list = (kind, rows, row, empty) => `<div class="alist">${rows.slice(0, top).map(row).join('') || `<p class="muted">${empty}</p>`}${rows.length > top ? `<div class="more"><button class="btn ghost" id="ads-all">Show all ${rows.length}</button></div>` : ''}</div>`;
     return `<section class="headline"><h1>Push <span class="okv">${ads.push.length}</span> in stock. Pause <span class="lost">${ads.pause.length}</span> that can’t be bought.</h1>
         <p class="muted small">Push = in stock, selling, with at least ${Math.round((ads.coverDays || 21) / 7)} weeks of stock: ads won’t empty the shelf. Pause = out of stock, or it runs out before a refill can land. Best sellers first.</p></section>

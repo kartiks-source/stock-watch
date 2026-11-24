@@ -131,6 +131,14 @@ function paceOf(list, paceFrom, shop) {
   return { perDay, units: use.u, inDays: r2(use.d), basis, few, season, level: r2(level), yearUnits: all.u, yearInDays: r2(all.d) };
 }
 
+/** The first day of the stock-out still running at the end of the span (the last day out or half out), else null. */
+function outRun(list) {
+  if (!list.length || list[list.length - 1].inF >= 1) return null;
+  let i = list.length - 1;
+  while (i > 0 && list[i - 1].inF < 1) i--;
+  return list[i].k;
+}
+
 /** Day keys → "4–11 Oct, 23 Oct" (runs of days). */
 function ranges(keys) {
   const out = []; let a = null, b = null;
@@ -213,7 +221,7 @@ function build(y, catalog = {}, { paceMonths = 6, bestShare = 0.8, links = () =>
     const tp = top.pace;
     out.push({
       productId: p.productId, name: p.name, sku: top.c.sku || '', variantId: top.id, variants: p.variants.length, best: p.best,
-      ids: p.variants.map((v) => v.id), variantPace: Object.fromEntries(p.variants.map((v) => [v.id, r2(v.pace.perDay * (v.pace.season[lastM] ?? 1) / (v.pace.level || 1))])),
+      ids: p.variants.map((v) => v.id), outFrom: Object.fromEntries(p.variants.map((v) => [v.id, outRun(v.dayMap)])), variantPace: Object.fromEntries(p.variants.map((v) => [v.id, r2(v.pace.perDay * (v.pace.season[lastM] ?? 1) / (v.pace.level || 1))])),
       sold: Math.round(p.sold), units: p.units, share: r2(p.share * 100),
       price: Math.round(top.price), pace: { perDay: r2(selling.reduce((s, v) => s + v.pace.perDay, 0)), basis: tp.basis, few: selling.every((v) => v.pace.few), inDays: tp.inDays, months: paceMonths },
       season: tp.season, months: pm,
@@ -292,4 +300,4 @@ function fromRows(stock, orders, { dayOf, now = Date.now() } = {}) {
   return { v: 1, rows: true, at: now, sales: { ...sales, from: first, to: keyPlus(today, -1) }, moves: { ...moves, from: first, to: keyPlus(today, -1) }, anchor: { at: now, day: today, levels } };
 }
 
-module.exports = { OVERSELL, SEASON_UNITS, fromRows, build, variantYear, days, spanOf, shopSeason, paceOf, ranges, dayKeys, keyPlus, monthLabel, MIN_DAYS, FLOOR_DAYS, SEASON_K, SEASON_MIN, SEASON_CAP };
+module.exports = { outRun, OVERSELL, SEASON_UNITS, fromRows, build, variantYear, days, spanOf, shopSeason, paceOf, ranges, dayKeys, keyPlus, monthLabel, MIN_DAYS, FLOOR_DAYS, SEASON_K, SEASON_MIN, SEASON_CAP };

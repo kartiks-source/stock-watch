@@ -609,7 +609,7 @@ async function storeApi(req, res, url, role, id) {
     const month = r.ok ? r.months[r.months.length - 1].key : null;
     const now = r.ok ? sell.bestNow(r, rep.products, month) : [];
     const adl = sell.ads(r.ok ? r : null, rep.products, { ...engine.DEFAULT_SETTINGS, ...d.settings });
-    const slim = (x) => { const { months: _m, season: _s, variantPace: _v, ...rest } = x; return url.searchParams.get('full') === '1' ? x : { ...rest, months: x.best ? x.months : undefined }; };
+    const slim = (x) => { const { months: _m, season: _s, variantPace: _v, outFrom: _o, ...rest } = x; return url.searchParams.get('full') === '1' ? x : { ...rest, months: x.best ? x.months : undefined }; };
     return send(res, 200, { ok: true, ...r, products: (r.products || []).map(slim), now, ads: adl, basis: b.basis, year: year.summary(year.load()), store: here, generatedAt: Date.now(), app: version.current() });
   }
   if (p === '/api/shopify/year' && req.method === 'POST') {   // 1.4.0: admin only; queued like a pull
