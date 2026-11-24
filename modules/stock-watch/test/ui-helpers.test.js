@@ -330,13 +330,13 @@ test('final critic round 2, desktop: daily chart drawn at its width, 200 px tall
   await pg.goto(base + '/?role=all#overview'); await pg.waitForSelector('#daily-chart svg');
   const col = await pg.evaluate(() => {
     const probe = (cls, txt = 'x') => { const e = document.createElement('span'); e.className = cls; e.textContent = txt; document.body.append(e); const c = getComputedStyle(e); const r = [c.color, c.backgroundColor]; e.remove(); return r; };
-    return { up: probe('tr up')[0], ok: probe('st ok'), badge: getComputedStyle(document.querySelector('#n-stockouts')).backgroundColor };
+    return { up: probe('tr up')[0], ok: probe('st ok'), badge: getComputedStyle(document.querySelector('#n-best')).backgroundColor };
   });
   const lum = (rgb) => { const [r, g, b] = rgb.match(/\d+/g).slice(0, 3).map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
   const cr = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
   assert.ok(cr(col.up, 'rgb(255,255,255)') >= 4.5, `UI-2 trend up ${col.up}`);
   assert.ok(cr(col.ok[0], col.ok[1]) >= 4.5, `UI-2 OK pill ${col.ok}`);
-  assert.ok(cr('rgb(255,255,255)', col.badge) >= 4.5, `UI-2 Stock-outs badge ${col.badge}`);
+  assert.ok(cr('rgb(255,255,255)', col.badge) >= 4.5, `UI-2 best sellers out badge (1.4.0: replaces the Stock-outs badge) ${col.badge}`);
   await pg.context().close();
 });
 

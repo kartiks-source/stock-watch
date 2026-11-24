@@ -23,6 +23,8 @@
     ['demandWindowDays', 'Sales history to use (days)', '', 7, 'Days of sales used to work out each product’s daily rate'],
     ['minPerDay', 'Ignore products selling under (per day)', '', 0.1, 'Slower products stay off the reorder list (best sellers never do)'],
     ['smallTopUpDays', 'Flag refills under (days of sales)', '', 1, 'A refill smaller than this many days of sales is flagged “refilled too little”'],
+    ['paceMonths', 'Brand report: months of pace (6 or 12)', '', 6, 'How fast a product sells = units ÷ days in stock over this many months (LOGIC §21)'],
+    ['bestShare', 'Best sellers: products making this % of sales', '', 5, 'Best sellers = the top products that together make this share of the last 12 months’ sales (LOGIC §22)'],
     ['allocationCheck', 'Spot website allocations (1 on, 0 off)', '', 1, 'Stock topped back up to the same few pieces 3+ times in 14 days is a website allocation refilled from a warehouse: no reorder is sized from it (LOGIC §6)'],
   ];
   const whatQs = () => Object.entries(state.what).map(([k, v]) => `&${k}=${encodeURIComponent(v)}`).join('');
@@ -752,7 +754,7 @@
     /* final r2 M5: phone cards sorted by ₹ lost (every tab but Pause / Push / Slow) put ₹ lost top-right, status in the facts */
     const so = state.sort.products, lossSort = !['pause', 'push', 'slow'].includes(f) && (!so || so.k === 'lost');
     return `
-      <section class="headline"><h1>${f === 'pause' ? `Pause promotion on ${inr.format(rows.length)} products` : f === 'push' ? `Push ${inr.format(rows.length)} overstocked products` : 'Products'}</h1>${BUCKET[f] ? `${bucketLine(f, rows)}<p>${inr.format(rows.length)} shown · <span class="nw">${money(tot.sold)} sold</span> · ${inr.format(tot.stock)} pcs in stock</p>` : `<p>${inr.format(rows.length)} shown · <span class="nw">${money(tot.sold)} sold</span> · <span class="lostv">${money(tot.lost)} lost</span> · ${inr.format(tot.stock)} pcs in stock</p>${lostSub(tot, 'products')}`}
+      <section class="headline"><h1>${f === 'pause' ? `Pause promotion on ${inr.format(rows.length)} products` : f === 'push' ? `Push ${inr.format(rows.length)} overstocked products` : 'All products'}</h1>${BUCKET[f] ? `${bucketLine(f, rows)}<p>${inr.format(rows.length)} shown · <span class="nw">${money(tot.sold)} sold</span> · ${inr.format(tot.stock)} pcs in stock</p>` : `<p>${inr.format(rows.length)} shown · <span class="nw">${money(tot.sold)} sold</span> · <span class="lostv">${money(tot.lost)} lost</span> · ${inr.format(tot.stock)} pcs in stock</p>${lostSub(tot, 'products')}`}
         <span class="hfind">${viewSelect()}<input class="search" id="q-products" placeholder="Search or paste a list…" title="Search name, SKU or category, or paste a list of SKUs / names / variant IDs" value="${esc(state.q.products)}">${window.SW_LISTS ? SW_LISTS.pick(state.q.products, { canEdit: !viewOnly(), rerender: () => { if (state.view === 'products') render(); } }) : ''}</span></section>
       <div class="toolbar"><div class="chips">${groupChip()}${productTabs(f).map(([k, l]) => `<button class="chip ${f === k ? 'on' : ''}" data-filter-products="${k}"${MKT_TIP[k] ? ` title="${esc(MKT_TIP[k])}"` : ''}>${l}<span class="c">${countIn(inType, k)}</span></button>`).join('')}
         <select class="chip sel ${moreOn ? 'on' : ''}" id="f-more" aria-label="More filters"><option value="">More…</option>${productMore(f).map(([k, l]) => `<option value="${k}" ${f === k ? 'selected' : ''}>${l} (${countIn(inType, k)})</option>`).join('')}</select></div>
@@ -872,6 +874,15 @@
       : w.ok ? `Weekly sales from Shopify’s reports: ${inr.format(w.variants || 0)} products, ${inr.format(w.weeks || 25)} full weeks (read ${dt(w.at)}); confidence = share of weeks with a sale${w.note ? ` · last try: ${w.note}` : ''}` : w.note;
     return `<p class="muted small" id="weeks-line">${esc(txt)}</p>`;
   }
+  /* 1.4.0: Shopify's 12 months for the brand report (LOGIC §20) */
+  function yearLine(sh) {
+    if (!sh.source) return '';
+    const y = sh.year, btn = viewOnly() ? '' : ' <button class="linkbtn" id="year-read">Read 12 months now</button>';
+    const txt = !y ? '12-month history: read from Shopify’s reports after the next pull'
+      : y.ok ? `12 months from Shopify’s reports: sales ${y.sales.from ? dayKeyShort(y.sales.from) : '–'} → ${y.sales.to ? dayKeyShort(y.sales.to) : '–'}, stock ${y.moves.from ? dayKeyShort(y.moves.from) : '–'} → ${y.moves.to ? dayKeyShort(y.moves.to) : '–'} (read ${dt(y.at)}; ${inr.format(y.calls.last)} reads last time, ${inr.format(y.calls.total)} in all)${y.note ? ` · ${y.note}` : ''}` : (y.note || '12-month history not read yet');
+    return `<p class="muted small" id="year-line">${esc(txt)}${btn}</p>`;
+  }
+  const dayKeyShort = (k) => `${+k.slice(8, 10)} ${MON[+k.slice(5, 7) - 1]} ${k.slice(2, 4)}`;
   function allocLine() {
     const t = state.report.totals; if (!t.allocation) return '';
     const lv = [...new Set(state.report.products.filter((p) => p.allocation).map((p) => p.allocation.level))].sort((a, b) => a - b).join(' / ');
@@ -894,7 +905,7 @@
     return `
       <section class="headline"><h1>Data &amp; settings${manyStores() ? ` <span class="muted">· ${esc((state.report.store && state.report.store.name) || s.storeName)}</span>` : ''}</h1>${manyStores() ? '<p class="muted">Everything on this page is for this store only. The main passwords open every store.</p>' : ''}</section>
       <section class="panel"><div class="panel-head"><h2>${status}</h2>${sh.source ? '<button class="btn" id="shopify-sync">Pull from Shopify now</button>' : ''}</div>
-        <p class="muted">${inr.format(d.stockRows)} stock changes${d.firstStock ? ` (${dt(d.firstStock)} → ${dt(d.lastStock)})` : ''} · ${inr.format(d.orderRows)} order lines${d.firstOrder ? ` (${dt(d.firstOrder)} → ${dt(d.lastOrder)})` : ''}${d.excluded?.variants ? ` · Excluded: ${inr.format(d.excluded.variants)} archived/draft, ${inr.format(d.excluded.pcs)} pcs` : ''}</p>${shopifyCheck()}${historyLine(sh)}${weeksLine(sh)}${allocLine()}${noHistList()}${sh.running ? `<p class="muted small" id="sync-progress">${esc(syncingText(sh.progress))}</p>` : ''}${(sh.writeScopes || []).length ? `<p class="muted small" id="write-note" title="${esc(sh.writeScopes.join(', '))}">Token also allows writes; this app only reads.</p>` : ''}${runHistory()}</section>
+        <p class="muted">${inr.format(d.stockRows)} stock changes${d.firstStock ? ` (${dt(d.firstStock)} → ${dt(d.lastStock)})` : ''} · ${inr.format(d.orderRows)} order lines${d.firstOrder ? ` (${dt(d.firstOrder)} → ${dt(d.lastOrder)})` : ''}${d.excluded?.variants ? ` · Excluded: ${inr.format(d.excluded.variants)} archived/draft, ${inr.format(d.excluded.pcs)} pcs` : ''}</p>${shopifyCheck()}${historyLine(sh)}${weeksLine(sh)}${yearLine(sh)}${allocLine()}${noHistList()}${sh.running ? `<p class="muted small" id="sync-progress">${esc(syncingText(sh.progress))}</p>` : ''}${(sh.writeScopes || []).length ? `<p class="muted small" id="write-note" title="${esc(sh.writeScopes.join(', '))}">Token also allows writes; this app only reads.</p>` : ''}${runHistory()}</section>
 
       ${window.SW_OPS ? SW_OPS.banner(state.ops) : ''}
       <h2 class="sect">Connect your data</h2>
@@ -1166,6 +1177,11 @@
         const j = await api('/api/shopify/history', { method: 'POST' });
         const h = j.history || {};
         toast(j.running ? 'Still rebuilding in the background' : h.note || (h.ok ? `Stock history rebuilt for ${h.kept} of ${h.total} products` : 'Not rebuilt')); await load();
+      }
+      if (t.id === 'year-read') {
+        t.disabled = true; t.textContent = 'Reading…';
+        const j = await api('/api/shopify/year', { method: 'POST' });
+        toast(j.running ? 'Still reading in the background (a few minutes)' : (j.year && j.year.note) || '12 months read'); window.SW_BRAND?.reset(); await load();
       }
       if (t.id === 'new-key') { await api('/api/settings', { method: 'PUT', body: JSON.stringify({ newIngestKey: true }) }); toast('New key made: update X-Ingest-Key in both Flow workflows'); await load(); }
       if (t.id === 'save-settings') {

@@ -915,7 +915,7 @@ body.no-period .top .range, body.no-period .top .rlabel, body.no-period .top .rd
 .headline .lead { font-size: 16px; margin: 4px 0; color: var(--ink); }
 .note { margin: 6px 0 0; padding: 6px 10px; border-radius: 8px; background: var(--amber-soft); color: var(--amber); font-size: 13px; }
 .bgrid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 14px; align-items: start; }
-@media (max-width: 1279.98px) { .bgrid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 1359.98px) { .bgrid { grid-template-columns: minmax(0, 1fr); } }
 .bchart { display: block; overflow: visible; }
 .bchart text { font-size: 11.5px; fill: var(--soft); }
 .bchart .gl { stroke: var(--line); }
@@ -928,7 +928,7 @@ body.no-period .top .range, body.no-period .top .rlabel, body.no-period .top .rd
 .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin: 0 4px 0 8px; vertical-align: -1px; }
 .sw.sold { background: #9CC7E6; } .sw.lost, .sw.out { background: var(--lost); } .sw.in { background: #CFE5F3; } .sw.half { background: #F4B6C2; }
 .mtable { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
-.mtable th { font-size: 12px; color: var(--soft); font-weight: 600; }
+.mtable th { font-size: 12px; color: var(--soft); font-weight: 600; white-space: normal !important; vertical-align: bottom; line-height: 1.25; }
 .mtable th, .mtable td { padding: 6px 8px; white-space: nowrap; }
 .mtable tbody tr { cursor: pointer; }
 .mtable tbody tr:hover, .mtable tbody tr.on { background: var(--brand-wash); }

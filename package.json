@@ -8,7 +8,7 @@
     "test": "npm --prefix modules/stock-watch test",
     "test:agent": "cd modules/stock-watch && node --test --test-reporter=dot test/*.test.js",
     "devlog:rotate": "node scripts/rotate-devlog.js",
-    "test:ui": "node -e \"try{require(process.env.PLAYWRIGHT_PATH||'playwright')}catch{console.error('test:ui needs Playwright: npm ci (root devDependency) or PLAYWRIGHT_PATH');process.exit(2)}\" && node --test modules/stock-watch/test/ui-helpers.test.js modules/stock-watch/test/ui-stores.test.js modules/stock-watch/test/ui-trial.test.js modules/stock-watch/test/ui-people.test.js modules/stock-watch/test/ui-import.test.js modules/stock-watch/test/ui-money.test.js modules/stock-watch/test/ui-review.test.js modules/stock-watch/test/ui-returns.test.js",
+    "test:ui": "node -e \"try{require(process.env.PLAYWRIGHT_PATH||'playwright')}catch{console.error('test:ui needs Playwright: npm ci (root devDependency) or PLAYWRIGHT_PATH');process.exit(2)}\" && node --test modules/stock-watch/test/ui-helpers.test.js modules/stock-watch/test/ui-stores.test.js modules/stock-watch/test/ui-trial.test.js modules/stock-watch/test/ui-people.test.js modules/stock-watch/test/ui-import.test.js modules/stock-watch/test/ui-money.test.js modules/stock-watch/test/ui-review.test.js modules/stock-watch/test/ui-returns.test.js modules/stock-watch/test/ui-brand.test.js",
     "test:smoke": "node modules/stock-watch/test/smoke/smoke.js",
     "stamp": "git diff --quiet HEAD && git rev-parse HEAD > modules/stock-watch/BUILD_SHA && echo \"BUILD_SHA $(cat modules/stock-watch/BUILD_SHA)\" || (echo 'stamp: commit first (uncommitted changes)' >&2; exit 1)"
   },
