@@ -49,7 +49,7 @@ Dockerfile                builds the module deployed on Railway (now: stock-watc
 
 | Module | What | Runs on |
 |---|---|---|
-| `modules/stock-watch` | Stock-out Watch web app: reorder list, ₹ lost to stock-outs, read-only Shopify pull | Railway |
+| `modules/stock-watch` | Stock-out Watch web app: brand report (best sellers out of stock, month by month, 12 months), ads push / pause, restock list, read-only Shopify pull | Railway |
 | `modules/stock-watch-sheets` | The same idea as a Google Sheet + Apps Script, fed by Shopify Flow (no server) | Google Sheets |
 
 ## Rules

@@ -2,6 +2,18 @@
 
 User-facing changes, newest first. Semver: minor when a number's rule changes or a feature lands, patch for fixes. The version in `package.json` matches the top heading. Versions before 0.9.0 were reconstructed from `docs/DEVLOG.md` on 20 Nov 2026 (no tags existed); dates are the DEVLOG dates. Per DEVLOG, nothing from 0.6.0 on has been deployed yet. Since 1.0.0-rc.1, `/health`, `/status` and the page footer show the version and the build's commit (SW-056); `test/docs.test.js` checks the top heading matches `package.json`.
 
+## 1.4.0 · 2026-11-24 · agency proof: best sellers out of stock, month by month
+
+- **New home: Brand report.** "Best sellers ran out on N days in the last 12 months. Money we missed: about ₹X. That is Y% of what the brand sold (₹Z), <dates>." A chart of sold and missed each month, a month table (click a month), a grid of best sellers × months (days out, darker = longer), and the month's list: picture, name, code, links, the dates it was out, days out, "would have sold about N", money missed. CSV of the month table and of the list. Sales up to yesterday and the stock read time are always shown. Sammsara, 12 months to 23 Nov 2026: best sellers ran out on 896 days, about ₹16.6 lakh missed, 2.3% of ₹7.1 Cr sold (+ ₹2.8 lakh on 4 website top-up items, kept apart). While the history is still loading the page says from when, and ranks best sellers on Shopify's last 26 weeks.
+- **12 months from Shopify's own reports** (ShopifyQL, no order download): daily sales and daily stock changes per product for 365 days, all read after the first pull (≈40 small reads), then only new days once a day; 400 days so last year's same month is held for the season; Data shows the reads and has *Read 12 months now*. Without `read_reports` the report uses the days we hold and says so. Checked on Sammsara: sales match Shopify to the paisa.
+- **Pace over 6 months of days in stock** (setting: 6 or 12), with a season per calendar month, smoothed with the months either side (busy / quiet months, capped ×0.5–×2). Best sellers = the products making 80% of 12 months' sales (setting).
+- **₹ lost of long stock-outs** on every page now uses that seasonal pace instead of an old pre-Diwali rate; reorder quantities keep the 28-day rate. Sammsara 30-day sales lost: ₹4.95 L → ₹3.94 L.
+- **Best sellers now:** each best seller, in stock or out since when, days out and money missed this month, refill state (ordered, order N now, not ordered).
+- **Ads: push / pause:** push what's in stock and selling with 3+ weeks of stock (most money a day first); pause what can't be bought. Copy list and CSV.
+- **Every product row shows its picture** (left), name and code, and two links: *Open in Shopify* and *View on website* ("Not on website" when it isn't on the online store). The drawer shows a big picture and its 12 months on the shelf: a day calendar, normal pace a day / week / month, busy and quiet months, money missed per month in one line each. CSVs gain *Shopify admin link* and *Website link*.
+- **Rail:** Brand report, Best sellers now, Ads: push / pause, Restock list, All products, Data. Overview and Stock-outs still open from their links. The period buttons hide on the 12-month pages.
+- Website top-up items (§6) are kept apart in the brand report, as on the other pages.
+
 ## 1.3.0 · 2026-11-24 · stock-outs no longer wiped, warehouse top-ups, 26-week confidence
 
 - **Oversell fix:** an order that raced stock to −1 (all Sammsara variants deny selling at 0) no longer counts as "stock existed" and wipes a real stock-out. Nivaya Table: ₹98 slow seller → ≈₹55k lost, best seller, Out now. A restock seen by a pull, then a sale before that pull, ends the stock-out at the sale instead of erasing it.

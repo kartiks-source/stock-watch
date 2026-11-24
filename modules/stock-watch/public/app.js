@@ -6,7 +6,7 @@
   const esc = (x) => String(x ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
   const state = {
-    days: 30, view: 'overview', report: null, settings: null, source: null,
+    days: 30, view: 'brand', report: null, settings: null, source: null,
     filter: { reorder: 'all', stockouts: 'all', products: 'all' },   // show everything by default; a role (roles.js) or a tab narrows it
     q: { reorder: '', stockouts: '', products: '' },
     sort: { reorder: null, stockouts: null, products: null },
@@ -23,6 +23,8 @@
     ['demandWindowDays', 'Sales history to use (days)', '', 7, 'Days of sales used to work out each product’s daily rate'],
     ['minPerDay', 'Ignore products selling under (per day)', '', 0.1, 'Slower products stay off the reorder list (best sellers never do)'],
     ['smallTopUpDays', 'Flag refills under (days of sales)', '', 1, 'A refill smaller than this many days of sales is flagged “refilled too little”'],
+    ['paceMonths', 'Brand report: months of pace (6 or 12)', '', 6, 'How fast a product sells = units ÷ days in stock over this many months (LOGIC §21)'],
+    ['bestShare', 'Best sellers: products making this % of sales', '', 5, 'Best sellers = the top products that together make this share of the last 12 months’ sales (LOGIC §22)'],
     ['allocationCheck', 'Spot website allocations (1 on, 0 off)', '', 1, 'Stock topped back up to the same few pieces 3+ times in 14 days is a website allocation refilled from a warehouse: no reorder is sized from it (LOGIC §6)'],
   ];
   const whatQs = () => Object.entries(state.what).map(([k, v]) => `&${k}=${encodeURIComponent(v)}`).join('');
@@ -78,6 +80,7 @@
   }
 
   async function reloadReport() {
+    window.SW_BRAND?.reset();   // 1.4.0: best sellers now / ads carry today's report (Mark ordered changes them)
     state.report = await api(`/api/report?days=${state.days}${whatQs()}`);
     header(); render();
   }
@@ -90,6 +93,7 @@
     header();
     render._animate = true; render();
     freshness();
+    if (window.SW_BRAND && !state.brand) SW_BRAND.fetch().then(() => { if (['brand', 'best', 'ads'].includes(state.view)) render(); }).catch(() => {});   // 1.4.0: the rail badge
   }
 
   /* ---------- stale-data banner (SW-019): "Data is X h old" when this store's last Shopify pull is older than the server's
@@ -119,8 +123,7 @@
     else { $('#store-name').textContent = name; document.title = `${name} · Stock-out Watch`; }
     $('#n-reorder').textContent = r.totals.orderToday || '';
     const stillOut = outsByProduct().filter((a) => a.open && !a.dead).length;   // out but not selling don't count (SW-063)
-    $('#n-stockouts').textContent = stillOut || '';
-    $('#n-stockouts').title = `${stillOut} products still out of stock`;
+    if ($('#n-stockouts')) { $('#n-stockouts').textContent = stillOut || ''; $('#n-stockouts').title = `${stillOut} products still out of stock`; }
     const src = state.source, d = r.data, sh = state.shopify || {};
     const err = sh.lastError || src.err;
     const pill = $('#sync-pill');
@@ -398,7 +401,8 @@
   };
   const outDot = (p) => (p.stock != null && p.stock <= 0 ? '<span class="dot" title="Out of stock now"></span>' : '');
   const bestTag = (p) => (p.abc === 'A' ? '<span class="best" title="Best seller: among the products making the top 80% of sales">Best seller</span>' : '');
-  const nameCell = (p, tag = true, sp = false) => `${sp ? `<span class="ispark">${spark(p, 40, 12)}</span>` : ''}${outDot(p)}<span class="pname" title="${esc(p.name)}">${esc(p.name)}</span>${tag ? bestTag(p) : ''}`;
+  /* 1.4.0: picture left, name + code stacked, Shopify / website links (public/prod.js, LOGIC §19) */
+  const nameCell = (p, tag = true, sp = false) => SW_PROD.cell(p, { before: `${sp ? `<span class="ispark">${spark(p, 40, 12)}</span>` : ''}${outDot(p)}`, extra: tag ? bestTag(p) : '' });
   /* SW-021: trend in the decision rows. ≥ 1400 px: its own cell (48×16 spark + chip); narrower: a 40×12 spark at the
      start of the name cell (no extra column; at the start so a long name's … never hides it, and the sparks line up) */
   const trendCell = (p) => `<span class="trc">${spark(p, 48, 16)}${trendOnly(p)}</span>`;
@@ -605,7 +609,7 @@
     const dead = (id) => { const p = prod.get(id); return !!p && !p.unitsSold && !p.sold && !p.lost; };
     for (const s of state.report.stockouts) {
       const pr = prod.get(s.id) || {};
-      const a = m.get(s.id) || { id: s.id, name: s.name, sku: s.sku, times: 0, days: 0, lost: 0, open: false, small: 0, repeat: 0, last: 0, dead: dead(s.id), since: null,
+      const a = m.get(s.id) || { id: s.id, name: s.name, sku: s.sku, image: pr.image, adminUrl: pr.adminUrl, webUrl: pr.webUrl, stock: pr.stock, abc: pr.abc, times: 0, days: 0, lost: 0, open: false, small: 0, repeat: 0, last: 0, dead: dead(s.id), since: null,
         confidence: pr.confidence, rateUnits: pr.rateUnits, heldUnits: pr.heldUnits, weeksSold: pr.weeksSold, weeksLive: pr.weeksLive, nrDays: pr.nrDays, floorPerDay: pr.floorPerDay, units26: pr.units26, historyFrom: pr.historyFrom,
         lostCounted: pr.lostCounted || 0, lostEstimate: pr.lostEstimate || 0, lostNotRestocked: pr.lostNotRestocked || 0, lostAllocation: pr.lostAllocation || 0 };   // §4c
       a.times++; a.days += (s.hoursInPeriod ?? s.hours) / 24; a.lost += s.lost; a.open = a.open || s.open; a.small += s.small ? 1 : 0; a.repeat += s.repeat ? 1 : 0; a.last = Math.max(a.last, s.start);
@@ -628,7 +632,7 @@
     const extra = `${dead.length ? `<p class="muted small" id="dead-note" title="No sales and no sales lost ${inPeriod()}: nothing was lost while they were out">${dead.length} out but not selling, not counted above</p>` : ''}${h && h.ok && h.kept && r.from < h.until ? `<p class="muted small" id="rebuilt-note" title="Shopify keeps no past stock levels; these come from its stock change log, to the hour (LOGIC §1c). The others have no stock record before then, so their sales lost before it are unknown (Data lists them)">Before ${esc(dt(h.until).slice(0, 6))}: rebuilt from Shopify’s change log for ${inr.format(h.kept)} of ${inr.format(h.total)} products</p>` : ''}`;
     const pattern = (a) => [a.small ? `<span class="st small" title="Refilled with less than ${state.report.settings.smallTopUpDays} days of sales, ${a.small}×">Refilled too little</span>` : '', a.repeat ? `<span class="st again" title="Ran out again within a week, ${a.repeat}×">Ran out again</span>` : ''].join(' ') || '–';
     const cols = [
-      { k: 'name', label: 'Product', f: (a) => `<span class="pname" title="${esc(a.name)}">${esc(a.name)}</span>` },
+      { k: 'name', label: 'Product', f: (a) => nameCell(a) },
       { k: 'lost', label: 'Sales lost', r: 1, tip: 'Red = in the headline; grey = not (estimate, not restocked, refill gaps)', f: (a) => `${a.lostCounted > 0 ? `<b class="lostv">${money(a.lostCounted)}</b>` : ''}${lostMark(a)}`, val: lostSort },
       { k: 'confidence', label: 'Confidence', opt: 1, tip: 'How sure the sales lost is: share of Shopify’s last 25 weeks with a sale (High 44%+, Medium 22–43%, Low under 22%); units sold when that isn’t read', f: confCell, val: (a) => ({ high: 3, medium: 2, low: 1 })[a.confidence] || 0 },
       { k: 'times', label: 'Times out', r: 1 },
@@ -644,7 +648,7 @@
       <div class="toolbar"><div class="chips">${groups.map(([k, l, c]) => `<button class="chip ${f === k ? 'on' : ''}" data-filter-stockouts="${k}">${l}<span class="c">${c}</span></button>`).join('')}</div>
         <input class="search" id="q-stockouts" placeholder="Search…" title="Search product or SKU" value="${esc(state.q.stockouts)}"></div>
       ${table('stockouts', cols, rows, 'No stock-outs in this view.', (a) => `
-        <header><h3>${esc(a.name)}</h3><div class="mq">${a.lostCounted > 0 ? `<b class="lostv">${money(a.lostCounted)}</b>` : '<b class="muted">–</b>'}<small>sales lost</small>${lostMark(a)}</div></header>
+        <header><h3>${nameCell(a, false)}</h3><div class="mq">${a.lostCounted > 0 ? `<b class="lostv">${money(a.lostCounted)}</b>` : '<b class="muted">–</b>'}<small>sales lost</small>${lostMark(a)}</div></header>
         <div class="mfacts">${a.open ? '<span class="st g-today">Still out</span>' : ''}<span><b>${a.times}</b>× out</span>${outSince(a) ? `<span>out <b>${esc(outSince(a))}</b></span>` : `<span><b>${n1(a.days)}</b> days out</span>`}${a.small ? '<span class="st small">Refilled too little</span>' : ''}${a.repeat ? '<span class="st again">Ran out again</span>' : ''}</div>`)}`;
   }
 
@@ -692,8 +696,8 @@
     return `<div class="mktbar"><span title="${esc(MKT_TIP[f])}">${n}</span>${rows.length ? `<button class="btn ghost xs" id="copy-skus">Copy ${inr.format(rows.length)} SKUs</button>` : ''}</div>`;   // the list's CSV is in ⋯ (M5)
   }
   function downloadMktCsv(f) {
-    const head = f === 'pause' ? ['Product', 'SKU', 'Variant ID', 'Why', 'Back in stock', 'In stock', 'Days left'] : ['Product', 'SKU', 'Variant ID', 'Overstock ₹', 'In stock', 'Days left'];
-    const body = productRows().map((p) => (f === 'pause' ? [p.name, p.sku, p.id, p.why, p.backIn, p.stock, p.daysLeft ?? ''] : [p.name, p.sku, p.id, p.excessValue, p.stock, p.daysLeft ?? '']));
+    const head = [...(f === 'pause' ? ['Product', 'SKU', 'Variant ID', 'Why', 'Back in stock', 'In stock', 'Days left'] : ['Product', 'SKU', 'Variant ID', 'Overstock ₹', 'In stock', 'Days left']), ...SW_PROD.CSV_HEAD];
+    const body = productRows().map((p) => [...(f === 'pause' ? [p.name, p.sku, p.id, p.why, p.backIn, p.stock, p.daysLeft ?? ''] : [p.name, p.sku, p.id, p.excessValue, p.stock, p.daysLeft ?? '']), ...SW_PROD.csv(p)]);
     saveCsv(`${f === 'pause' ? 'pause-promotion' : 'push-these'}-${isoToday()}.csv`, [head, ...body]);
   }
   const isoToday = () => local(Date.now()).toISOString().slice(0, 10);
@@ -750,7 +754,7 @@
     /* final r2 M5: phone cards sorted by ₹ lost (every tab but Pause / Push / Slow) put ₹ lost top-right, status in the facts */
     const so = state.sort.products, lossSort = !['pause', 'push', 'slow'].includes(f) && (!so || so.k === 'lost');
     return `
-      <section class="headline"><h1>${f === 'pause' ? `Pause promotion on ${inr.format(rows.length)} products` : f === 'push' ? `Push ${inr.format(rows.length)} overstocked products` : 'Products'}</h1>${BUCKET[f] ? `${bucketLine(f, rows)}<p>${inr.format(rows.length)} shown · <span class="nw">${money(tot.sold)} sold</span> · ${inr.format(tot.stock)} pcs in stock</p>` : `<p>${inr.format(rows.length)} shown · <span class="nw">${money(tot.sold)} sold</span> · <span class="lostv">${money(tot.lost)} lost</span> · ${inr.format(tot.stock)} pcs in stock</p>${lostSub(tot, 'products')}`}
+      <section class="headline"><h1>${f === 'pause' ? `Pause promotion on ${inr.format(rows.length)} products` : f === 'push' ? `Push ${inr.format(rows.length)} overstocked products` : 'All products'}</h1>${BUCKET[f] ? `${bucketLine(f, rows)}<p>${inr.format(rows.length)} shown · <span class="nw">${money(tot.sold)} sold</span> · ${inr.format(tot.stock)} pcs in stock</p>` : `<p>${inr.format(rows.length)} shown · <span class="nw">${money(tot.sold)} sold</span> · <span class="lostv">${money(tot.lost)} lost</span> · ${inr.format(tot.stock)} pcs in stock</p>${lostSub(tot, 'products')}`}
         <span class="hfind">${viewSelect()}<input class="search" id="q-products" placeholder="Search or paste a list…" title="Search name, SKU or category, or paste a list of SKUs / names / variant IDs" value="${esc(state.q.products)}">${window.SW_LISTS ? SW_LISTS.pick(state.q.products, { canEdit: !viewOnly(), rerender: () => { if (state.view === 'products') render(); } }) : ''}</span></section>
       <div class="toolbar"><div class="chips">${groupChip()}${productTabs(f).map(([k, l]) => `<button class="chip ${f === k ? 'on' : ''}" data-filter-products="${k}"${MKT_TIP[k] ? ` title="${esc(MKT_TIP[k])}"` : ''}>${l}<span class="c">${countIn(inType, k)}</span></button>`).join('')}
         <select class="chip sel ${moreOn ? 'on' : ''}" id="f-more" aria-label="More filters"><option value="">More…</option>${productMore(f).map(([k, l]) => `<option value="${k}" ${f === k ? 'selected' : ''}>${l} (${countIn(inType, k)})</option>`).join('')}</select></div>
@@ -837,7 +841,7 @@
     const cols = PRODUCT_COLS();
     // Same rule as csvCell in src/rows.js: text starting = + - @ tab CR gets a leading ' (no formulas run in Excel/Sheets).
     const q = (x) => { let v = String(x ?? ''); if (typeof x === 'string' && /^[=+\-@\t\r]/.test(v)) v = `'${v}`; return `"${v.replace(/"/g, '""')}"`; };
-    const lines = [cols.map((c) => c.label), ...productRows().map((p) => cols.map((c) => (c.csv ? c.csv(p) : p[c.k])))].map((l) => l.map(q).join(','));
+    const lines = [[...cols.map((c) => c.label), ...SW_PROD.CSV_HEAD], ...productRows().map((p) => [...cols.map((c) => (c.csv ? c.csv(p) : p[c.k])), ...SW_PROD.csv(p)])].map((l) => l.map(q).join(','));
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob(['﻿' + lines.join('\n')], { type: 'text/csv' }));
     a.download = `products-${isoDay(Date.now())}.csv`; a.click(); URL.revokeObjectURL(a.href);
@@ -870,6 +874,15 @@
       : w.ok ? `Weekly sales from Shopify’s reports: ${inr.format(w.variants || 0)} products, ${inr.format(w.weeks || 25)} full weeks (read ${dt(w.at)}); confidence = share of weeks with a sale${w.note ? ` · last try: ${w.note}` : ''}` : w.note;
     return `<p class="muted small" id="weeks-line">${esc(txt)}</p>`;
   }
+  /* 1.4.0: Shopify's 12 months for the brand report (LOGIC §20) */
+  function yearLine(sh) {
+    if (!sh.source) return '';
+    const y = sh.year, btn = viewOnly() ? '' : ' <button class="linkbtn" id="year-read">Read 12 months now</button>';
+    const txt = !y ? '12-month history: read from Shopify’s reports after the next pull'
+      : y.ok ? `12 months from Shopify’s reports: sales ${y.sales.from ? dayKeyShort(y.sales.from) : '–'} → ${y.sales.to ? dayKeyShort(y.sales.to) : '–'}, stock ${y.moves.from ? dayKeyShort(y.moves.from) : '–'} → ${y.moves.to ? dayKeyShort(y.moves.to) : '–'} (read ${dt(y.at)}; ${inr.format(y.calls.last)} reads last time, ${inr.format(y.calls.total)} in all)${y.note ? ` · ${y.note}` : ''}` : (y.note || '12-month history not read yet');
+    return `<p class="muted small" id="year-line">${esc(txt)}${btn}</p>`;
+  }
+  const dayKeyShort = (k) => `${+k.slice(8, 10)} ${MON[+k.slice(5, 7) - 1]} ${k.slice(2, 4)}`;
   function allocLine() {
     const t = state.report.totals; if (!t.allocation) return '';
     const lv = [...new Set(state.report.products.filter((p) => p.allocation).map((p) => p.allocation.level))].sort((a, b) => a - b).join(' / ');
@@ -892,7 +905,7 @@
     return `
       <section class="headline"><h1>Data &amp; settings${manyStores() ? ` <span class="muted">· ${esc((state.report.store && state.report.store.name) || s.storeName)}</span>` : ''}</h1>${manyStores() ? '<p class="muted">Everything on this page is for this store only. The main passwords open every store.</p>' : ''}</section>
       <section class="panel"><div class="panel-head"><h2>${status}</h2>${sh.source ? '<button class="btn" id="shopify-sync">Pull from Shopify now</button>' : ''}</div>
-        <p class="muted">${inr.format(d.stockRows)} stock changes${d.firstStock ? ` (${dt(d.firstStock)} → ${dt(d.lastStock)})` : ''} · ${inr.format(d.orderRows)} order lines${d.firstOrder ? ` (${dt(d.firstOrder)} → ${dt(d.lastOrder)})` : ''}${d.excluded?.variants ? ` · Excluded: ${inr.format(d.excluded.variants)} archived/draft, ${inr.format(d.excluded.pcs)} pcs` : ''}</p>${shopifyCheck()}${historyLine(sh)}${weeksLine(sh)}${allocLine()}${noHistList()}${sh.running ? `<p class="muted small" id="sync-progress">${esc(syncingText(sh.progress))}</p>` : ''}${(sh.writeScopes || []).length ? `<p class="muted small" id="write-note" title="${esc(sh.writeScopes.join(', '))}">Token also allows writes; this app only reads.</p>` : ''}${runHistory()}</section>
+        <p class="muted">${inr.format(d.stockRows)} stock changes${d.firstStock ? ` (${dt(d.firstStock)} → ${dt(d.lastStock)})` : ''} · ${inr.format(d.orderRows)} order lines${d.firstOrder ? ` (${dt(d.firstOrder)} → ${dt(d.lastOrder)})` : ''}${d.excluded?.variants ? ` · Excluded: ${inr.format(d.excluded.variants)} archived/draft, ${inr.format(d.excluded.pcs)} pcs` : ''}</p>${shopifyCheck()}${historyLine(sh)}${weeksLine(sh)}${yearLine(sh)}${allocLine()}${noHistList()}${sh.running ? `<p class="muted small" id="sync-progress">${esc(syncingText(sh.progress))}</p>` : ''}${(sh.writeScopes || []).length ? `<p class="muted small" id="write-note" title="${esc(sh.writeScopes.join(', '))}">Token also allows writes; this app only reads.</p>` : ''}${runHistory()}</section>
 
       ${window.SW_OPS ? SW_OPS.banner(state.ops) : ''}
       <h2 class="sect">Connect your data</h2>
@@ -950,18 +963,18 @@
       const d = await api(`/api/product/${encodeURIComponent(id)}?days=${state.days}${whatQs()}`);
       const p = d.product, now = state.report.generatedAt, from = state.report.from, gap = noHistory(p, from);
       body.innerHTML = `
-        ${manyStores() ? `<p class="dstore">${esc(SW_STORES.name())}</p>` : ''}<h2 id="drawer-title">${esc(p?.name || id)}</h2>
-        <div class="toolbar">${p ? status(p) + bestTag(p) : ''}<span class="mono muted">${esc(p?.sku || '')}</span></div>
+        ${manyStores() ? `<p class="dstore">${esc(SW_STORES.name())}</p>` : ''}${p ? SW_PROD.hero(p, `<div class="toolbar">${status(p) + bestTag(p)}</div>`) : `<h2 id="drawer-title">${esc(id)}</h2>`}
         ${p?.why ? `<p class="dwhy">${whyCell(p)}</p>` : ''}
         <section class="tiles dtiles">
           <div class="tile amber"><b>${p?.orderQty ? `${inr.format(p.orderQty)} pcs` : '–'}</b><span>order now${p?.orderQty ? ` · ${money(p.orderValue)} ${atCost()}` : ''}${p?.paceQty != null ? `<br><small id="pace-qty" title="Sales are falling (${p.trendPct ?? '–'}% this product, ${state.report.totals.storeTrendPct ?? '–'}% the typical product): the same order at the last 14 days’ in-stock pace, ${n1(p.pacePerDay)} a day">${inr.format(p.paceQty)} pcs at last 2 weeks’ pace</small>` : ''}</span></div>
           <div class="tile ${p?.daysLeft != null && p.daysLeft <= 3 ? 'lost' : ''}"><b>${p?.daysLeft == null ? (p?.stock <= 0 ? '0' : '–') : n1(p.daysLeft)}</b><span>days left · ${p?.stock ?? '–'} in stock</span></div>
           <div class="tile"><b title="${n1(p?.perDay)} per in-stock day">${rate(p?.perDay)}</b><span>sells while in stock${p?.lowData ? ' · <abbr title="Under 5 units and 14 in-stock days to go on: capped at units ÷ days since its first sale, and never a best seller (LOGIC §3)">low data</abbr>' : ''}</span></div>
           ${gap ? `<div class="tile" id="lost-unknown" title="No stock record before ${esc(dateShort(gap))}, so stock-outs before then can’t be seen (Shopify’s change log didn’t add up for it)"><b>${p.lost ? money(p.lost) : 'Unknown'}</b><span>sales lost${p.lost ? ` since ${esc(dateShort(gap))}` : ''} · before ${esc(dateShort(gap))}: unknown</span></div>`
-    : `<div class="tile lost"><b>${money(p?.lost)}</b><span>sales lost${p?.lostProfit != null ? ` · ${money(p.lostProfit)} profit` : ''}${p && p.lost ? ` · confidence ${esc((CONF_LABEL[p.confidence] || '–').toLowerCase())}${weeksText(p) ? ` (${esc(weeksText(p))})` : ''}` : ''}</span>${p && p.lost ? lostSplitLine(p) : ''}</div>`}
+    : `<div class="tile lost"><b>${money(p?.lost)}</b><span>missed ${esc(inPeriod())} (${esc(periodDates(state.report))})${p?.lostProfit != null ? ` · ${money(p.lostProfit)} profit` : ''}${p && p.lost ? ` · confidence ${esc((CONF_LABEL[p.confidence] || '–').toLowerCase())}${weeksText(p) ? ` (${esc(weeksText(p))})` : ''}` : ''}</span>${p && p.lost ? lostSplitLine(p) : ''}</div>`}
           ${p?.returnPct != null ? `<div class="tile rtile" id="returns-tile" title="${esc(RETURNS_TIP)}"><span>Cancelled or refunded: <b class="${p.returnPct >= HIGH_RETURN ? 'amberv' : ''}">${n1(p.returnPct)}%</b> (${inr.format(p.unitsReturned)} of ${inr.format(p.unitsOrdered)} ordered${p.unitsCancelled ? `, ${inr.format(p.unitsCancelled)} cancelled` : ''}) · ${money(p.refundValue)} back</span></div>` : ''}
         </section>
         ${p && (viewOnly() ? p.onOrder : p.orderQty > 0 || p.onOrder) ? orderForm(p) : ''}
+        ${window.SW_BRAND ? SW_BRAND.drawerYear(d.year) : ''}
         <div class="panel"><div class="panel-head"><h2>Trend</h2>${p ? trendChip(p) : ''}</div>${p ? `<div class="wk">${spark(p, 320, 44)}<div class="wknums">${(p.weeks || []).map((w, i) => `<span title="${esc(weekTip(w, i))}" class="${w.outDays ? 'wo' : ''}"><b>${w.units == null ? '–' : inr.format(w.units)}</b><small>${dateShort(weekStart(i))}</small></span>`).join('')}</div></div>
           <p class="muted small">Units sold per week, week starting on the date shown; rose = out of stock part of that week.</p>` : ''}</div>
         <div class="panel chart"><h2>Stock level</h2>${stockChart(d.timeline, from, now, gap)}<span class="muted" style="font-size:13px">${gap ? `<span id="nohist-note">Hatched = no stock history before ${esc(dateShort(gap))}: Shopify’s change log didn’t add up for it. </span>` : ''}Shaded = out of stock.</span></div>
@@ -995,10 +1008,15 @@
   };
 
   /* ---------- render + events ---------- */
-  const VIEWS = { overview, reorder, stockouts, products, data: dataView };
+  /* 1.4.0: the agency's pages first (public/brand.js): Brand report (home), Best sellers now, Ads; then Restock list
+     (reorder), All products, Data. Overview and Stock-outs stay reachable by their links (#overview, #stockouts). */
+  const VIEWS = { ...(window.SW_BRAND ? SW_BRAND.views : {}), overview, reorder, stockouts, products, data: dataView };
+  const HOME = window.SW_BRAND ? 'brand' : 'overview';
+  const NO_PERIOD = new Set(['brand', 'best', 'ads']);   // 12 months / now: the period buttons don't apply
   function render() {
     if (!state.report) return;
-    if (state.view === 'data' && viewOnly()) { state.view = 'overview'; history.replaceState(null, '', '#overview'); }
+    if (state.view === 'data' && viewOnly()) { state.view = HOME; history.replaceState(null, '', `#${HOME}`); }
+    document.body.classList.toggle('no-period', NO_PERIOD.has(state.view));
     $$('#tabs a').forEach((a) => a.classList.toggle('on', a.dataset.view === state.view));
     $('#view').classList.toggle('calm', !render._animate); render._animate = false;   // bars animate when a page opens, not on every filter or keystroke
     $('#view').innerHTML = (VIEWS[state.view] || overview)() + (viewOnly() ? '<form class="phone-only" method="post" action="/logout"><button class="btn ghost" type="submit">Sign out</button></form>' : '');
@@ -1029,6 +1047,7 @@
     fitTables();
     fitChart();
     window.SW_MONEY?.after(state.view);   // SW-041: dim rows over budget, draw the cut line
+    window.SW_BRAND?.after(state.view);   // 1.4.0: the month chart at its real width
   }
   /* final r2 M1: fade the chips row's edge only on a side that has more chips to scroll to */
   function chipEdges(c) {
@@ -1068,10 +1087,11 @@
       if (prev) prev.textContent = text; else b.insertAdjacentHTML('beforebegin', `<div class="sx-hint">${esc(text)}</div>`);
     });
   }
-  function route() { closeDrawer(); render._animate = true; state.view = (location.hash || '#overview').slice(1) in VIEWS ? (location.hash || '#overview').slice(1) : 'overview'; render(); window.scrollTo(0, 0); }
+  function route() { closeDrawer(); render._animate = true; const h = (location.hash || `#${HOME}`).slice(1); state.view = h in VIEWS ? h : HOME; render(); window.scrollTo(0, 0); }
 
   document.addEventListener('click', async (e) => {
     if (e.target.closest('.rz')) return;
+    if (e.target.closest('a.plink')) return;   // 1.4.0: Shopify / website links open in a new tab, not the drawer
     if (e.target.closest('.mpick') && !e.target.matches('input')) return;   // the label's own click; the checkbox click follows
     if (e.target.matches('input.pick')) { const id = e.target.dataset.pick; if (e.target.checked) state.pick.add(id); else state.pick.delete(id); render(); return; }
     if (e.target.id === 'toast-act' && toast._do) { const run = toast._do; $('#toast').hidden = true; toast._do = null; run().catch((err) => toast(err.message)); return; }
@@ -1158,6 +1178,11 @@
         const h = j.history || {};
         toast(j.running ? 'Still rebuilding in the background' : h.note || (h.ok ? `Stock history rebuilt for ${h.kept} of ${h.total} products` : 'Not rebuilt')); await load();
       }
+      if (t.id === 'year-read') {
+        t.disabled = true; t.textContent = 'Reading…';
+        const j = await api('/api/shopify/year', { method: 'POST' });
+        toast(j.running ? 'Still reading in the background (a few minutes)' : (j.year && j.year.note) || '12 months read'); window.SW_BRAND?.reset(); await load();
+      }
       if (t.id === 'new-key') { await api('/api/settings', { method: 'PUT', body: JSON.stringify({ newIngestKey: true }) }); toast('New key made: update X-Ingest-Key in both Flow workflows'); await load(); }
       if (t.id === 'save-settings') {
         const patch = {}; $$('[data-setting]').forEach((i) => { patch[i.dataset.setting] = i.dataset.trial ? i.value.trim().replace(',', '.') : i.value; });
@@ -1218,7 +1243,7 @@
     if (e.key === 'Escape') closeDrawer();
     if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('.mcard[data-id], tr[data-id]')) { e.preventDefault(); if (e.target.closest('.groups')) { openGroup(e.target.dataset.id); return; } lastRow = e.target; openProduct(e.target.dataset.id); }
     if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('th[data-k]')) { e.preventDefault(); e.target.click(); }
-    if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('div[data-product]')) { e.preventDefault(); lastRow = e.target; openProduct(e.target.dataset.product); }   // Overview rows (critic UI-3)
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('[data-product][role=button]')) { e.preventDefault(); lastRow = e.target; openProduct(e.target.dataset.product); }   // Overview rows (critic UI-3)
   });
   $('#drawer').addEventListener('click', (e) => { if (e.target.id === 'drawer') closeDrawer(); });
   /* M7: phones get an opaque strip behind the sticky × once the drawer scrolls (styles.css .scrolled) */
@@ -1228,14 +1253,15 @@
   document.addEventListener('scroll', (e) => { if (e.target.classList && e.target.classList.contains('chips')) chipEdges(e.target); }, true);   // final r2 M1
   let wasNarrow = narrow();
   let wasTier = tier();
-  window.addEventListener('resize', () => { if (narrow() !== wasNarrow || tier() !== wasTier) { wasNarrow = narrow(); wasTier = tier(); render(); } else { fitTables(); fitChart(); } });
+  window.addEventListener('resize', () => { if (narrow() !== wasNarrow || tier() !== wasTier) { wasNarrow = narrow(); wasTier = tier(); render(); } else { fitTables(); fitChart(); window.SW_BRAND?.after(state.view); } });
 
   async function copy(text) {
     try { await navigator.clipboard.writeText(text); toast('Copied'); }
     catch { const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); toast('Copied'); }
   }
 
-  state.view = (location.hash || '#overview').slice(1);
+  state.view = (location.hash || `#${HOME}`).slice(1);
+  window.SW_BRAND?.init({ state, api, esc, inr, table, nameCell, saveCsv, copy, toast, render, status, dateShort, dt, viewOnly, rate });   // 1.4.0 (brand.js)
   window.SW_MONEY?.init({ state, api, toast, money, esc, inr, storeUrl, copy, viewOnly, dateShort, render, reload: reloadReport });   // Sprint 3 A-money (money.js)
   window.SW_ROLES?.start(state);   // land on the chosen role's home page (SW-020)
   load().catch((e) => { $('#view').innerHTML = `<p class="pad">Couldn’t load: ${esc(e.message)}</p>`; });

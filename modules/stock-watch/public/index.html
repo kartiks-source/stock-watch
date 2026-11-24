@@ -13,21 +13,25 @@
 <body>
   <!-- Layout follows the Performity app: icon rail on the left, top bar, page title + subtitle, white cards on a pale blue page. -->
   <nav class="rail" id="tabs" aria-label="Sections">
-    <a href="#overview" data-view="overview">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg>
-      <span>Overview</span>
+    <a href="#brand" data-view="brand">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+      <span class="rl">Brand report</span><span class="rs">Report</span>
+    </a>
+    <a href="#best" data-view="best">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z"/></svg>
+      <span class="rl">Best sellers now</span><span class="rs">Best sellers</span><em id="n-best"></em>
+    </a>
+    <a href="#ads" data-view="ads">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4h3l6 4V6L7 10z"/><path d="M16.5 9a4 4 0 0 1 0 6M19 6.5a7.5 7.5 0 0 1 0 11"/></svg>
+      <span class="rl">Ads: push / pause</span><span class="rs">Ads</span>
     </a>
     <a href="#reorder" data-view="reorder">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h2.2l2.3 11h10.8l2.2-8H6.6"/><circle cx="9.5" cy="19" r="1.4"/><circle cx="17" cy="19" r="1.4"/></svg>
-      <span>Reorder</span><em id="n-reorder"></em>
-    </a>
-    <a href="#stockouts" data-view="stockouts">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21.5 20h-19z"/><path d="M12 10v4.5M12 17.2v.1"/></svg>
-      <span>Stock-outs</span><em id="n-stockouts"></em>
+      <span class="rl">Restock list</span><span class="rs">Restock</span><em id="n-reorder"></em>
     </a>
     <a href="#products" data-view="products">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 8.5 4.5v9L12 21l-8.5-4.5v-9z"/><path d="M3.5 7.5 12 12l8.5-4.5M12 12v9"/></svg>
-      <span>Products</span>
+      <span class="rl">All products</span><span class="rs">Products</span>
     </a>
     <a href="#data" data-view="data" class="rail-end">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3c4.4 0 8 1.3 8 3s-3.6 3-8 3-8-1.3-8-3 3.6-3 8-3z"/><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>
@@ -37,7 +41,7 @@
 
   <div class="shell">
     <header class="top">
-      <a class="brand" href="#overview" aria-label="Stock-out Watch home">
+      <a class="brand" href="#brand" aria-label="Stock-out Watch home">
         <img src="/favicon.svg" alt="" width="26" height="26"><b>Stock-out Watch</b>
       </a>
       <details class="colpick rolepick"><summary class="store-pill" title="Store · switch brand" aria-label="Store menu"><span id="store-name" class="store-name">Store</span>
@@ -72,6 +76,8 @@
   <script src="/digest-ui.js"></script>
   <script src="/people.js"></script>
   <script src="/import-ui.js"></script>
+  <script src="/prod.js"></script>
+  <script src="/brand.js"></script>
   <script src="/money.js"></script>
   <script src="/weekly.js"></script>
   <script src="/targets.js"></script>

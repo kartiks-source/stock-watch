@@ -233,7 +233,7 @@ function reorderRows(reorder, { filter = 'all', q = '' } = {}) {
   return list.filter((p) => (f === 'all' || f === 'ordered' || tabOf(p.status) === f) && (!s || `${p.name} ${p.sku}`.toLowerCase().includes(s)));
 }
 
-const PO_HEAD = ['Vendor', 'Product', 'SKU', 'Variant ID', 'Order qty', 'Unit cost', 'Order value', 'Status', 'Why', 'Order by', 'Stock now', 'Sells per day', 'Days left', 'Sales lost (₹)', 'Confidence', 'Not restocked 30+ d (₹)'];
+const PO_HEAD = ['Vendor', 'Product', 'SKU', 'Variant ID', 'Order qty', 'Unit cost', 'Order value', 'Status', 'Why', 'Order by', 'Stock now', 'Sells per day', 'Days left', 'Sales lost (₹)', 'Confidence', 'Not restocked 30+ d (₹)', 'Shopify admin link', 'Website link'];
 /**
  * Lines (header first) for the PO CSV. Same rows and order as the page, grouped by vendor (A–Z, unknown last)
  * so each supplier's lines sit together. Unit cost is blank when unknown; Order value then uses price (LOGIC.md §6).
@@ -251,6 +251,7 @@ function poLines(r, { filter, q, vendors = {}, keep = null } = {}) {   // keep(p
     vOf(p), p.name, p.sku, String(p.id), p.orderQty, p.cost != null ? p.cost : '', p.orderValue, statusLabel(p.status), p.why || '',
     p.orderBy ? localDay(p.orderBy, off) : '', p.stock, p.perDay, p.daysLeft ?? '', p.lost,
     p.confidence ? p.confidence[0].toUpperCase() + p.confidence.slice(1) : '', p.lostNotRestocked || 0,   // §4c
+    p.adminUrl || '', p.webUrl || (p.webUrl === null ? 'Not on website' : ''),   // 1.4.0 (LOGIC §19)
   ])];
 }
 

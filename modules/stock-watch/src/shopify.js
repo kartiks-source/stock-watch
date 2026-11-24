@@ -56,9 +56,14 @@ async function gql(doc, variables = {}, { fetchImpl = fetch, tries = 0, version 
   if (r.status === 404) throw new Error('Store not found: check SHOPIFY_STORE (the part before .myshopify.com)');
   if (!r.ok) throw new Error(`Shopify: HTTP ${r.status}`);
   const j = await r.json();
-  if (j.errors?.some((e) => e.extensions?.code === 'THROTTLED')) {
+  const th = j.errors?.find((e) => e.extensions?.code === 'THROTTLED');
+  if (th) {
     if (tries >= 8) throw new Error('Shopify kept throttling');
-    await sleep(3000); return gql(doc, variables, { fetchImpl, tries: tries + 1, version });
+    /* 1.4.0: ShopifyQL is limited per minute (extensions.cost.windowResetAt, checked on Sammsara 24 Nov 2026): wait for the
+       window to reset (≤ 65 s) instead of retrying every 3 s into the same full window */
+    const reset = Date.parse(th.extensions?.cost?.windowResetAt || '');
+    await sleep(Number.isFinite(reset) ? Math.min(65000, Math.max(3000, reset - Date.now() + 800)) : 3000);
+    return gql(doc, variables, { fetchImpl, tries: tries + 1, version });
   }
   if (j.errors?.length) {
     const msg = j.errors.map((e) => e.message).join('; ');
@@ -72,12 +77,16 @@ async function gql(doc, variables = {}, { fetchImpl = fetch, tries = 0, version 
   return j.data;
 }
 
+/** 1.4.0: product images are Shopify's CDN copies at this width (small, for 40–48 px rows and a 160 px drawer at 2×). */
+const IMG_PX = 320;
 const STOCK_Q = `query Stock($after: String) {
   productVariants(first: 250, after: $after) {
     pageInfo { hasNextPage endCursor }
-    nodes { id sku title price createdAt inventoryQuantity inventoryItem { tracked unitCost { amount } } product { id title status productType tags vendor } }
+    nodes { id sku title price createdAt inventoryQuantity inventoryItem { tracked unitCost { amount } } product { id title status productType tags vendor handle onlineStoreUrl publishedAt featuredMedia { preview { image { url(transform: { maxWidth: ${IMG_PX} }) } } } } }
   }
 }`;
+/** 1.4.0: the shop's own address, for "View on website" links when a product has no onlineStoreUrl (LOGIC §19). */
+const SHOP_Q = 'query Shop { shop { myshopifyDomain primaryDomain { url } } }';
 
 const LINE_FIELDS = 'id quantity currentQuantity sku variant { id } discountedUnitPriceAfterAllDiscountsSet { shopMoney { amount } } taxLines { priceSet { shopMoney { amount } } }';
 /** Stored order prices are ex tax since 1.1.1. A store whose orders were read before (tax-inclusive) re-reads them once. */
@@ -150,6 +159,7 @@ function diffStock(variants, lastQty, t) {
       status: tracked ? status : (status === 'ACTIVE' ? 'UNTRACKED' : status), tracked, active: tracked && status === 'ACTIVE',
       stock: Number.isFinite(now) ? now : null, seenAt: t,
       ...(Number.isFinite(Date.parse(v.createdAt)) ? { createdAt: Date.parse(v.createdAt) } : {}),   // 1.3.0: weeks live for G26 confidence (LOGIC §4c)
+      ...productLinks(v.product),   // 1.4.0: image, handle, website address (LOGIC §19)
     };
     if (!tracked) excluded.untracked++; else if (status !== 'ACTIVE') excluded.notActive++;
     if (!catalog[id].active || !Number.isFinite(now)) continue;
@@ -159,6 +169,19 @@ function diffStock(variants, lastQty, t) {
     rows.push({ t, variantId: id, sku: v.sku || '', product: v.product?.title || '', variant, before, now, price: Number(v.price) || 0, ...(v.product?.productType ? { type: v.product.productType } : {}), ...(v.product?.vendor ? { vendor: v.product.vendor } : {}), ...(cost ? { cost } : {}) });
   }
   return { rows, lastQty: next, catalog, excluded };
+}
+
+/** 1.4.0 (LOGIC §19): what the catalog keeps to show and link a product. image = Shopify CDN URL (https://cdn.shopify.com
+ *  only, else none); handle; web = onlineStoreUrl (set only when the product is on the online store); published = has a
+ *  publishedAt date. Read-only fields of the stock query, nothing else. */
+function productLinks(pr) {
+  const out = {};
+  const img = pr?.featuredMedia?.preview?.image?.url;
+  if (typeof img === 'string' && /^https:\/\/cdn\.shopify\.com\//.test(img)) out.image = img;
+  if (typeof pr?.handle === 'string' && /^[a-z0-9][a-z0-9-]*$/i.test(pr.handle)) out.handle = pr.handle;
+  if (typeof pr?.onlineStoreUrl === 'string' && /^https:\/\//.test(pr.onlineStoreUrl)) out.web = pr.onlineStoreUrl;
+  if (pr && pr.publishedAt) { out.published = true; const t = Date.parse(pr.publishedAt); if (Number.isFinite(t)) out.publishedAt = t; }   // when it went on the online store (the brand report counts from then, LOGIC §20)
+  return out;
 }
 
 /** Unit price paid after every discount, without tax: when the order's prices include tax (taxesIncluded, e.g. GST
@@ -263,7 +286,19 @@ async function pullStock(lastQty, { q = gql, now = Date.now() } = {}) {
     all.push(...d.productVariants.nodes);
     after = d.productVariants.pageInfo.hasNextPage ? d.productVariants.pageInfo.endCursor : null;
   } while (after);
-  return diffStock(all, lastQty || {}, now);
+  const out = diffStock(all, lastQty || {}, now);
+  out.shop = await shopInfo(q);
+  return out;
+}
+
+/** 1.4.0: { domain: 'brand.myshopify.com', web: 'https://www.brand.com' } or null (never fails a pull). */
+async function shopInfo(q = gql) {
+  try {
+    const s = (await q(SHOP_Q, {}))?.shop;
+    const domain = String(s?.myshopifyDomain || '').toLowerCase();
+    const web = String(s?.primaryDomain?.url || '').replace(/\/+$/, '');
+    return { domain: /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(domain) ? domain : null, web: /^https:\/\/[^\s/]+$/i.test(web) ? web : null };
+  } catch (e) { console.warn('shop info:', e.message); return null; }
 }
 
 /**
@@ -315,4 +350,4 @@ async function pullOrders(since, { q = gql, now = Date.now(), onPage = () => {} 
   return { total, cursor };
 }
 
-module.exports = { gql, assertReadOnly, diffStock, orderRows, reversalEvents, refundsByLine, netUnitPrice, pullStock, pullOrders, API_VERSION, PRICE_BASIS, ORDER_FIELDS, SCOPES: ['read_products', 'read_inventory', 'read_orders'] };
+module.exports = { gql, assertReadOnly, diffStock, productLinks, shopInfo, SHOP_Q, IMG_PX, orderRows, reversalEvents, refundsByLine, netUnitPrice, pullStock, pullOrders, API_VERSION, PRICE_BASIS, ORDER_FIELDS, SCOPES: ['read_products', 'read_inventory', 'read_orders'] };
