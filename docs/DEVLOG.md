@@ -17,6 +17,7 @@ stock-watch 1.2.0, on `main` (not pushed, not deployed). Client's category perso
 - Same headline: Overview, Stock-outs, Products totals line, chart, Yesterday, Copy summary, digest (+ parts), weekly snapshots, groups/targets, `/api/v1/summary` (+ `lostEstimate`, `lostNotRestocked`, `lostAll`), PO CSV (+ Confidence, Not restocked). UI: one small line under the headline, links to the rows; markers *estimate* / *not restocked*; optional Confidence column; Stock-outs chips, Products More… (chip row stays one line at 1440); Why "Out 30+ days, not restocked: restock or drop?".
 - Alternatives on live data (engine on `/api/export/backup.json`, read-only; LOGIC §4 table): 30 d A all ₹5,88,692 (63 products) · B chosen ₹3,71,843 (22) + ₹1,64,833 estimate (40) + ₹52,016 not restocked (18) · C drop ≤ 3 units sold ₹2,28,092 (20) · D Poisson 80% lower bound ₹4,68,555 (63) · E cap 30 d ₹5,36,676 (62). 7 d: A ₹1,39,788 · B ₹77,334 · C ₹2,667 · D ₹1,06,275 · E ₹1,15,376.
 - Sheet version has no split: parity compares its total to `lostAll` (LOGIC §12).
+- Owner asked for two more (high-ticket concern): F price bands 30 d ₹4,31,522 (27 products; moves 5: Seville, Dahlia, Kyoto, Celeste, Aspen) · G weeks with a sale ₹5,10,356 (52; moves 30 of 40 estimates). 7 d: F ₹91,972 · G ₹1,11,787. No ₹10k+ product has ₹ lost. App stays on B (LOGIC §4).
 - Open: Products filters are in More… (not chips) to keep one chip row; BACKLOG id SW-065 was taken (Shopify match), this is SW-066.
 
 ## 2026-11-20 · one name everywhere
