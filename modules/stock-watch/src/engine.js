@@ -78,7 +78,7 @@ function episodes(changes, now) {
   for (let i = 0; i < changes.length; i++) {
     const c = changes[i], was = wasBefore(changes, i), is = num(c.now);
     if (!open && is <= 0 && (was > 0 || out.length === 0)) open = { start: c.t };
-    else if (open && is > 0) { out.push({ start: open.start, end: c.t, topUp: is, open: false }); open = null; }
+    else if (open && is > 0) { out.push({ start: open.start, end: c.t, topUp: is, open: false, endSrc: c.src || null }); open = null; }
   }
   if (open) out.push({ start: open.start, end: now, topUp: 0, open: true });
   return out;
@@ -108,18 +108,51 @@ function cutBySpells(eps, spells) {
   return out;
 }
 
+/** How often the Shopify pull runs (server.js SYNC_MINUTES, default 2 hours): a stock row from a pull is stamped with the
+ *  pull's time, so the change it shows happened up to this long before (LOGIC.md §2). */
+const SYNC_MINUTES = 120;
+/** First index i with changes[i].t >= t (changes sorted oldest first). */
+function firstAtOrAfter(changes, t) {
+  let lo = 0, hi = changes.length;
+  while (lo < hi) { const m = (lo + hi) >> 1; if (changes[m].t < t) lo = m + 1; else hi = m; }
+  return lo;
+}
+/** An oversell (1.3.0, LOGIC.md §2): the stock rows log the shelf going below 0 for this line: a row with stock before ≤ 0
+ *  and stock after lower, in the line's hour (rebuilt rows are stamped at the hour's start) or up to one pull later
+ *  (Shopify rows are stamped at the pull). Such a sale was taken at 0 (a checkout race on a "deny" variant), so it says
+ *  nothing about stock being there. */
+function oversold(o, changes, syncMs) {
+  for (let i = firstAtOrAfter(changes, o.t - HOUR); i < changes.length && changes[i].t <= o.t + syncMs; i++) {
+    const was = wasBefore(changes, i);
+    if (was <= 0 && num(changes[i].now) < was) return true;
+  }
+  return false;
+}
+
 /**
  * A sale proves there was stock (M1, LOGIC.md §2): an out spell starts no earlier than the last order line inside it.
  * Lines in the spell's first hour don't count (the sale that emptied the shelf, or a stock row stamped late).
- * Rebuilt history can miss a refill (Aspen: 1 → 0 on 2 Oct, then 2 sold on 31 Oct); "sell when out of stock" lets a
- * product sell at 0 or below. Either way nobody was turned away before that sale.
+ * Rebuilt history can miss a refill (Aspen: 1 → 0 on 2 Oct, then 2 sold on 31 Oct). Nobody was turned away before that sale.
+ * Two exceptions (1.3.0):
+ *   - an oversell (oversold(): a logged drop below 0 for that line) proves nothing and is skipped (Nivaya: out a month,
+ *     one order raced to −1, and the whole month was wiped);
+ *   - a spell ended by a Shopify pull row (stamped at the pull, up to one pull interval after the restock): a sale in that
+ *     last interval came after the restock, so it ends the spell at that sale instead of moving its start.
+ * changes = the product's stock rows (oldest first); syncMs = the pull interval.
  */
-function afterLastSale(eps, lines) {
+function afterLastSale(eps, lines, changes = [], syncMs = SYNC_MINUTES * 60e3) {
   if (!lines.length || !eps.length) return eps;
   return eps.map((e) => {
-    let last = null;
-    for (const o of lines) if (o.t > e.start + HOUR && o.t < e.end && demandQty(o) > 0 && (last == null || o.t > last)) last = o.t;
-    return last == null ? e : { ...e, start: last, soldInside: true };
+    const lateFrom = !e.open && e.endSrc === 'shopify' ? e.end - syncMs : Infinity;
+    let last = null, late = null;
+    for (const o of lines) {
+      if (!(o.t > e.start + HOUR && o.t < e.end && demandQty(o) > 0) || oversold(o, changes, syncMs)) continue;
+      if (o.t >= lateFrom) { if (late == null || o.t < late) late = o.t; } else if (last == null || o.t > last) last = o.t;
+    }
+    let x = e;
+    if (late != null) x = { ...x, end: late, endAtSale: true };
+    if (last != null) x = { ...x, start: last, soldInside: true };
+    return x;
   });
 }
 
@@ -297,7 +330,7 @@ function trendCall(pct, base) {
 
 /** Bumped whenever a rule that changes a number changes (LOGIC.md): saved daily snapshots made under another value
  *  are worked out again (src/weekly.js), so the weekly panel never mixes old and new maths. */
-const CALC_VERSION = '1.2.0';   // 1.2.0: headline ₹ lost leaves out low-confidence estimates and 30+ d not restocked (§4c); 1.1.3: demand counts units returned after the sale (demandQty); 1.1.1: sale inside a stock-out moves its start (afterLastSale)
+const CALC_VERSION = '1.3.0';   // 1.3.0: oversells and pull-timed restocks in afterLastSale (§2); 1.2.0: headline ₹ lost leaves out low-confidence estimates and 30+ d not restocked (§4c); 1.1.3: demand counts units returned after the sale (demandQty); 1.1.1: sale inside a stock-out moves its start (afterLastSale)
 
 /** Order today rows (Out now, Critical, Order now) are one group, biggest ₹ of sales a day first (SIMP-2) */
 const TODAY_STATUS = ['Out now', 'Critical', 'Order now'];
@@ -362,6 +395,7 @@ const DEFAULT_SETTINGS = {
 function report(stock, orders, settings = {}, opts = {}) {
   const S = { ...DEFAULT_SETTINGS, ...settings };
   const now = opts.now || Date.now();
+  const syncMs = (+opts.syncMinutes > 0 ? +opts.syncMinutes : SYNC_MINUTES) * 60e3;   // the pull interval (afterLastSale, §2)
   /* opts.from (e.g. the 1st of this month, see src/period.js) overrides opts.days; never more than 90 days back */
   const from = opts.from != null ? Math.min(now, Math.max(now - 90 * DAY, opts.from)) : now - Math.max(1, Math.min(90, Math.round(opts.days || 30))) * DAY;
   /* "N days" from the page = store-calendar days (src/period.js, 1.1.5): from = start of the day N − 1 days ago, days = N */
@@ -438,7 +472,7 @@ function report(stock, orders, settings = {}, opts = {}) {
     const spells = (p.spells || []).slice();
     if (p.inactive) spells.push({ from: Math.min(now, Math.max(p.inactiveSince, p.changes.length ? p.changes[p.changes.length - 1].t : 0)), to: Infinity });
     spells.sort((a, b) => a.from - b.from);
-    const eps = afterLastSale(cutBySpells(episodes(p.changes, now), spells), p.lines);
+    const eps = afterLastSale(cutBySpells(episodes(p.changes, now), spells), p.lines, p.changes, syncMs);
     if (p.inactive) for (const e of eps) if (e.open) { e.open = false; e.inactive = true; }
     const pFirst = Number.isFinite(p.first) ? p.first : demandFrom;
     const pFrom = Math.max(demandFrom, pFirst);   // a new launch isn't diluted by days before it existed
@@ -686,7 +720,7 @@ function productDetail(id, stock, orders, settings = {}, opts = {}) {
   for (const k of TZ.dayKeys(first, now, zone)) units[k] = 0;
   for (const o of lines) if (o.t >= from) { const k = dayKey(o.t, zone); if (k in units) units[k] += num(o.qty); }
   /* same numbers as the main report (the store-wide hourly pattern), this product only */
-  const r = report(stock, orders, S, { now, from, days: opts.from != null ? opts.days : undefined, catalog: opts.catalog, onOrder: opts.onOrder, suppliers: opts.suppliers, reversals: opts.reversals });
+  const r = report(stock, orders, S, { ...opts, now, from, days: opts.from != null ? opts.days : undefined });   // every report option (catalog, Mark ordered, suppliers, reversals, pull interval, weekly sales)
   const c = own(opts.catalog, String(id));
   if (!timeline.length && c && c.stock != null) timeline.push({ t: from, stock: num(c.stock) }, { t: now, stock: num(c.stock) });   // never moved: flat at its stock now
   return { id, product: r.products.find((p) => String(p.id) === String(id)) || null, timeline,
@@ -695,4 +729,4 @@ function productDetail(id, stock, orders, settings = {}, opts = {}) {
 }
 
 module.exports = {
-  CALC_VERSION, TODAY_STATUS, CONF_HIGH, CONF_MEDIUM, NOT_RESTOCKED_DAYS, confidenceOf, lostSplit, RETURN_MIN_UNITS, HIGH_RETURN_PCT, returnsOf, demandQty, afterLastSale, trend, trendCall, storeTrend, TREND_MIN_UNITS, LOW_UNITS, LOW_DAYS, PACE_DROP, minMax, report, productDetail, episodes, demandPerDay, demandRate, inStockStart, KEEP_DAYS, MIN_IN_STOCK_DAYS, plan, onOrderNow, hourProfile, sellingHours, dayKey, DEFAULT_SETTINGS, HOUR, DAY };
+  CALC_VERSION, TODAY_STATUS, CONF_HIGH, CONF_MEDIUM, NOT_RESTOCKED_DAYS, confidenceOf, lostSplit, RETURN_MIN_UNITS, HIGH_RETURN_PCT, returnsOf, demandQty, afterLastSale, oversold, SYNC_MINUTES, trend, trendCall, storeTrend, TREND_MIN_UNITS, LOW_UNITS, LOW_DAYS, PACE_DROP, minMax, report, productDetail, episodes, demandPerDay, demandRate, inStockStart, KEEP_DAYS, MIN_IN_STOCK_DAYS, plan, onOrderNow, hourProfile, sellingHours, dayKey, DEFAULT_SETTINGS, HOUR, DAY };

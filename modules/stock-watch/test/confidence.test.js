@@ -148,5 +148,5 @@ test('the same headline in /api/v1/summary, the digest, the weekly snapshot, gro
 });
 
 test('CALC_VERSION moved, so saved weekly snapshots are worked out again under the new headline', () => {
-  assert.equal(E.CALC_VERSION, '1.2.0');
+  assert.equal(E.CALC_VERSION, '1.3.0');
 });
