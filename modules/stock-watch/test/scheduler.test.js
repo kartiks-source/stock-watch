@@ -29,7 +29,7 @@ test('pull loop: stores one after the other, never two at once; a manual pull qu
   C.refreshCollections = async () => ({ skipped: true });
   require('../src/token-scopes').check = async () => ({ handles: [], write: [] });   // SW-051 scope check: stubbed like the reads
   const ql = [];   // SW-063: the history rebuild runs once per store, after its first good pull, through gql
-  S.gql = async (doc, vars, opts) => { ql.push([scope.id(), opts && opts.version]); return { shopifyqlQuery: { tableData: { columns: [{ name: 'hour' }, { name: 'product_variant_id' }, { name: 'inventory_adjustment_change' }], rows: [] }, parseErrors: [] } }; };
+  S.gql = async (doc, vars, opts) => { ql.push([scope.id(), opts && opts.version, /^query History/.test(doc)]); return { shopifyqlQuery: { tableData: { columns: [{ name: 'hour' }, { name: 'product_variant_id' }, { name: 'inventory_adjustment_change' }], rows: [] }, parseErrors: [] } }; };
 
   const loop = pullAll();
   const manual = syncShopify('beta');                       // while the loop starts: queued like any other pull
@@ -46,7 +46,7 @@ test('pull loop: stores one after the other, never two at once; a manual pull qu
     assert.ok(j.shopify.historyRebuiltAt && j.shopify.history.ok, `${id} history rebuilt`);
   }
   assert.equal(new Set(ql.map((x) => x[0])).size, 3);
-  assert.equal(ql.filter((x) => x[0] === 'beta').length, ql.filter((x) => x[0] === 'alpha').length, 'beta pulled twice, rebuilt once');
+  assert.equal(ql.filter((x) => x[0] === 'beta' && x[2]).length, ql.filter((x) => x[0] === 'alpha' && x[2]).length, 'beta pulled twice, rebuilt once');   // 1.4.0: the 12-month read goes on at the second pull (src/year.js)
   assert.ok(ql.every((x) => x[1] === '2025-10'));
 });
 

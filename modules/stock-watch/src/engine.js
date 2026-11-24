@@ -417,6 +417,8 @@ const DEFAULT_SETTINGS = {
   coverDays: 30,             // a reorder should last this long
   safetyDays: 3,
   demandWindowDays: 28,
+  paceMonths: 6,             // 1.4.0: brand report pace, months of in-stock days (LOGIC §21)
+  bestShare: 80,             // 1.4.0: best sellers = products making the top 80% of 12 months' sales (LOGIC §22)
   smallTopUpDays: 7,         // a top-up under this many days of sales is "small"
   minPerDay: 0.2,            // slower sellers are left out of alerts
   allocationCheck: 1,        // 1.3.0: spot website allocations topped up from a warehouse (§6); 0 = off
