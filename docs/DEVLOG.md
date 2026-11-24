@@ -11,6 +11,9 @@ Older entries: [2026-11](devlog/2026-11.md)
 
 
 
+## 2026-11-24 · 1.2.1 · stale banner, digest cost wording, This month hovers
+stock-watch 1.2.1, on `main` (not pushed, not deployed). Banner uses server `freshness.stale` / `staleAfterMin` (255 min at 2-hour pull), not a hard 45; Ops/Buyer digest "at selling price" without costs; group hovers use the period label. Docs: 15-min pull / 45-min stale → 2 h (`SYNC_MINUTES`) / 255 min; LOGIC §6a describes Plan settings + Advanced planning rules (no Assumptions bar). Tests: digest unit, ui-review banner + hovers.
+
 ## 2026-11-24 · 1.2.0 · ₹ lost says how sure it is (SW-066)
 stock-watch 1.2.0, on `main` (not pushed, not deployed). Client's category person: products they know don't sell show sales lost. Sammsara 30 d: ₹5.89 L lost, 43 products with ≤ 3 units sold carried ₹3.61 L (61%).
 - Engine: `rateUnits` = units behind the rate (same lines as `demandRate`), `confidence` high 10+ / medium 5–9 / low ≤ 4. Open stock-out past day 30 with no PO (`onOrderNow` null) → ₹ after day 30 = `lostNotRestocked`. Row `lost` unchanged; `lostCounted` + `lostEstimate` + `lostNotRestocked` = `lost`. `totals.lost` = Σ counted (headline, `lostPct` on it), `lostAll` = old total. Daily `lost` = counted. CALC_VERSION 1.2.0 (snapshots recomputed).

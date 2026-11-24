@@ -2,7 +2,7 @@
 
 Stock-out Watch shows which bestsellers to reorder before they run out, and what every stock-out cost in sales. Brands that spend heavily on ads can then see whether a bad day came from the ads or from an empty shelf.
 
-- **Shopify, read-only.** With a store key (from Azure Key Vault, or a Railway variable as a stop-gap) it reads stock every 15 minutes and new orders straight from Shopify. It can't change the store: every call is checked and anything but a read is refused.
+- **Shopify, read-only.** With a store key (from Azure Key Vault, or a Railway variable as a stop-gap) it reads stock every 2 hours by default (`SYNC_MINUTES`) and new orders straight from Shopify. It can't change the store: every call is checked and anything but a read is refused.
 - **Or no key at all.** Data can also come from the store's own Shopify Flow (into a Google Sheet or straight to this app), or as a CSV upload.
 - **Several stores in one app** (ADR-0015). Every brand the Performity key may use is a store; pick it from the store pill in the top bar. Each store's data lives in its own folder and never mixes with another's.
 - **Plain Node.js, zero dependencies.** One process, data kept in JSON files (one folder per store).
@@ -30,7 +30,7 @@ Requires Node 20 or newer.
 
 **Everything shows, always.** Roles are switched off in the UI (20 Nov 2026, at the user's request): the store pill only switches brands, and old `/?role=` links are ignored (the code stays in `public/roles.js` in case roles come back). Reorder opens on its All tab, every optional column is on (untick in Columns…; on a narrow laptop the right-most ones step aside and a note names them), and Overview shows every panel.
 
-**Stores.** The store pill in the top bar lists every store with a dot: green = data fresh, amber = last good pull over 45 minutes ago, red = the last pull or sync failed. Choosing one opens it (`?store=<id>` in the address, remembered on this browser). With one store the pill shows just its name. Every page, export, digest and setting is for the chosen store.
+**Stores.** The store pill in the top bar lists every store with a dot: green = data fresh, amber = last good pull stale (over 255 minutes ago at the default 2-hour pull), red = the last pull or sync failed. Choosing one opens it (`?store=<id>` in the address, remembered on this browser). With one store the pill shows just its name. Every page, export, digest and setting is for the chosen store.
 
 ## How the numbers work
 
@@ -60,7 +60,7 @@ The app pulls straight from Shopify into its own storage. It never connects to a
 
 - **Read permissions needed:** `read_products`, `read_inventory`, `read_orders`. Nothing else.
 - **Read-only, enforced in code:** every request goes through one guard (`src/shopify.js`) that refuses anything except a GraphQL query, so even a token with write access can't change the store.
-- **What it reads:** every 15 minutes, each variant's total stock (a stock change is stored only when the number moved) and the orders created since the last read. The first read loads the last 60 days of orders.
+- **What it reads:** every 2 hours by default (`SYNC_MINUTES`), each variant's total stock (a stock change is stored only when the number moved) and the orders created since the last read. The first read loads the last 60 days of orders.
 - **Gentle on the store:** it pauses whenever less than half of Shopify's request budget is left, so other apps on the store aren't slowed down.
 - **Keys:** kept in memory for 30 minutes, never written to disk, logs or the page. If Shopify rejects a token, it's fetched again at once, so a rotated key is picked up without a restart.
 
@@ -83,7 +83,7 @@ Where the credentials come from (Railway variables, nothing typed into the page)
 
    Use the row formats below.
 2. In the sheet: **File → Share → Publish to web**. Publish each of the two tabs as CSV.
-3. Paste both links under **Data & settings → Google Sheet**. The app syncs every 15 minutes.
+3. Paste both links under **Data & settings → Google Sheet**. The app syncs every 2 hours by default (`SYNC_MINUTES`).
 
 ### B. Shopify Flow → this app directly
 Use Flow's **Send HTTP request** action (POST) to the URLs shown under Data & settings (they end in `?store=<id>`: each store has its own URL and key), with the header `X-Ingest-Key: <key>` (the key is under Data & settings → Shopify Flow, masked until you press Show key):
@@ -160,5 +160,5 @@ test/              node --test
 
 - **Storage:** JSON files suit a few stores with a few months of data each (ADR-0003 counts the sum of all stores). For many stores, move `src/store.js` to Postgres; the rest is unchanged.
 - **History:** it starts when data starts flowing. Shopify keeps no stock history, so lost-sales numbers build up from day one.
-- **Stock timing:** read every 15 minutes, so a stock-out is timed to within 15 minutes, and one that starts and ends between two reads is missed. For exact timing, also send stock changes through Shopify Flow (option B above).
+- **Stock timing:** read every 2 hours by default (`SYNC_MINUTES`); stock-out hours come from Shopify's change log, and one that starts and ends between two reads is missed. For exact timing, also send stock changes through Shopify Flow (option B above).
 - **Stores:** one password for every store (no per-store access yet). A full round of pulls takes one pull per store, one after the other.

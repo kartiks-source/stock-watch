@@ -279,7 +279,7 @@ function loadDemo() {
   return g;
 }
 
-/* ---------- Shopify, read-only pull (stock every 15 minutes, new orders since the last pull) ----------
+/* ---------- Shopify, read-only pull (stock every 2 hours by default, SYNC_MINUTES; new orders since the last pull) ----------
  * One pull at a time across all stores (one queue): Performity allows 30 calls/min per IP and the Shopify app's
  * rate limit is shared. A store already queued or pulling returns the same promise. */
 const pulls = new Map();      // store id → its queued or running pull
@@ -356,7 +356,7 @@ function rebuildHistory(id) {
   return p;
 }
 
-/** The 15-minute loop: brand list, then each store's sheet sync and Shopify pull, one store at a time. */
+/** The pull loop (every SYNC_MIN, 2 hours by default): brand list, then each store's sheet sync and Shopify pull, one store at a time. */
 let pullingAll = null;
 function pullAll() {
   if (pullingAll) return pullingAll;
@@ -373,7 +373,7 @@ function pullAll() {
 /* ---------- freshness (SW-019): is the Shopify data recent? ---------- */
 const STALE_MIN = Math.max(45, SYNC_MIN * 2 + 15);   // two missed pulls (+15 min slack)
 const BOOT_AT = Date.now();
-/** The current store's: age of its last good Shopify pull. Stale when it's more than 45 min old (or none 45 min after start). Off without Shopify. */
+/** The current store's: age of its last good Shopify pull. Stale when it is more than STALE_MIN old (or none that long after start; 255 min at the default 2-hour pull). Off without Shopify. */
 function freshness(now = Date.now()) {
   if (!keys.status().source) return { shopify: false, lastPull: null, ageMin: null, stale: false, staleAfterMin: STALE_MIN };
   const st = store.load().shopify; const ref = st.lastSync || BOOT_AT;

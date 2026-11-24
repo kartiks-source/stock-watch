@@ -83,12 +83,12 @@ const BUILD = {
   ],
   founder: (r, ctx) => [L.order(r), L.stillOut(r), L.yesterday(ctx.yesterday), L.overstock(r)],
   ops: (r, ctx) => [
-    r.totals.orderToday ? `Order today: ${plural(r.totals.orderToday, 'line')}, ${money(r.totals.orderValueNow)} at cost.` : 'Nothing needs ordering today.',
+    r.totals.orderToday ? `Order today: ${plural(r.totals.orderToday, 'line')}, ${money(r.totals.orderValueNow)} ${r.totals.hasCost ? 'at cost' : 'at selling price'}.` : 'Nothing needs ordering today.',
     ...L.topOrders(r, 3, (p, i) => `${i + 1}. ${cut(p.name)}: order ${inr.format(p.orderQty)} pcs (${left(p)}).`),
     ctx.yesterday ? `Yesterday: ${ctx.yesterday.ranOut} ran out, ${ctx.yesterday.back} back in stock.` : null,
   ],
   buyer: (r) => [
-    r.totals.orderToday ? `Order today: ${plural(r.totals.orderToday, 'line')}, ${money(r.totals.orderValueNow)} at cost.` : 'Nothing needs ordering today.',
+    r.totals.orderToday ? `Order today: ${plural(r.totals.orderToday, 'line')}, ${money(r.totals.orderValueNow)} ${r.totals.hasCost ? 'at cost' : 'at selling price'}.` : 'Nothing needs ordering today.',
     ...orderToday(r).slice().sort((a, b) => b.orderValue - a.orderValue).slice(0, 3).map((p) => `${cut(p.name)}: ${inr.format(p.orderQty)} pcs · ${money(p.orderValue)}.`),
   ],
   marketing: (r) => {

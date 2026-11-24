@@ -2,6 +2,12 @@
 
 User-facing changes, newest first. Semver: minor when a number's rule changes or a feature lands, patch for fixes. The version in `package.json` matches the top heading. Versions before 0.9.0 were reconstructed from `docs/DEVLOG.md` on 20 Nov 2026 (no tags existed); dates are the DEVLOG dates. Per DEVLOG, nothing from 0.6.0 on has been deployed yet. Since 1.0.0-rc.1, `/health`, `/status` and the page footer show the version and the build's commit (SW-056); `test/docs.test.js` checks the top heading matches `package.json`.
 
+## 1.2.1 · 2026-11-24
+
+- The "Data is X h old" banner follows the server's stale rule (`freshness.stale`, `staleAfterMin`: 255 minutes at the default 2-hour pull), no longer its own 45 minutes, and says how long a pull may take.
+- Ops and Buyer digests say "at selling price" when there are no unit costs (was always "at cost"), as the page does.
+- Group view on This month: the Sold and Sales lost hovers say "this month" (was "in the last month days").
+
 ## 1.2.0 · 2026-11-24 · ₹ lost says how sure it is
 
 - The headline *sales lost* now counts only products whose sales rate rests on **5 or more units** (High 10+, Medium 5–9). Products with 4 or fewer sales behind the rate are an **estimate**, shown apart, and so is the part of a stock-out **still open after 30 days with nothing marked ordered** ("not restocked"). Under the headline, one small line: "+ ₹Y estimate from few sales · ₹Z on items out 30+ days, not restocked", each opening those rows. Sammsara, 30 days to 24 Nov: **₹3.72 L lost (5.9% of demand)**, + ₹1.65 L estimate on 40 products, + ₹52k not restocked on 18; before, all of it (₹5.89 L, 9%) was one number and 61% of it sat on products that sold 3 units or fewer. 7 days: ₹77k (7.4%), was ₹1.40 L (12.5%).

@@ -41,7 +41,7 @@ Google Sheet CSV / upload ───┘
 | `src/log.js` | one-line JSON logs `{time, level, msg, store, …}` (SW-054); `captureConsole()` makes every `console.*` line JSON; every line scrubbed of `shpat_`/Bearer/X-Api-Key/`key=`; request line per API call (path only); boot line names set variables, never values |
 | `src/lock.js` | one app per `DATA_DIR` (SW-055): `instance.lock` with a 30 s heartbeat, taken over after 2 min; without it the server refuses writes (503) and starts no work |
 | `src/capacity.js` | capacity warnings (25 MB, 150k rows, disk 80%) for `/status` and Data (`public/ops.js`), LOGIC §14a |
-| `server.js` | HTTP server, API, Flow ingest, sheet sync, Shopify pull every 15 min (one store at a time, `pullAll`), demo loader; `openStore` / `inStore` / `eachStore` run work for one store |
+| `server.js` | HTTP server, API, Flow ingest, sheet sync, Shopify pull every 2 hours by default, `SYNC_MINUTES` (one store at a time, `pullAll`), demo loader; `openStore` / `inStore` / `eachStore` run work for one store |
 | `src/scope.js` | which store the current work is for: `run(id, fn)`, `id()`, `dir()` → `DATA_DIR/stores/<id>`; store id rule (uuid or `^[a-z0-9][a-z0-9-]{0,60}$`); `useDir()` for tests only |
 | `src/stores.js` | the store registry (ADR-0015): `list()`, `refresh()` (Performity brand list, last good one kept in `DATA_DIR/stores.json`), `pick(?store, cookie)` → id or 404/503 |
 | `src/migrate.js` | one-time, crash-safe move of an old single-store `DATA_DIR` into `stores/<home id>/` once per `DATA_DIR` (copy, SHA-256 check, marker, atomic rename, delete originals that still match) |
@@ -150,4 +150,4 @@ ADMIN_PASSWORD=x SHOPIFY_STORE=brand SHOPIFY_CLIENT_ID=… SHOPIFY_CLIENT_SECRET
 1. Connect the first real store via Key Vault; compare 10 days of orders and stock for 10 SKUs against Shopify admin.
 2. Alert when a pull fails or data is older than expected.
 3. Move storage to Postgres when the stores together pass ADR-0003's triggers (sum of `/status` `storeBytes`), or a store needs more than a few months of data.
-4. Push stock changes through Shopify Flow too, so stock-outs are timed to the minute rather than to 15 minutes.
+4. Push stock changes through Shopify Flow too, so stock-outs are timed to the minute rather than to the pull (every 2 hours by default).

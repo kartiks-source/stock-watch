@@ -68,3 +68,38 @@ for (const [w, h] of [[1440, 900], [390, 844]]) {
     assert.deepEqual(pg.errors, []);
   });
 }
+
+/* 1.2.1: the stale banner follows the server's freshness (staleAfterMin, stale), never a page-side 45 minutes;
+ * group-view hovers on This month say "this month" (not "in the last month days"). */
+test('1.2.1: stale banner uses staleAfterMin; This month group hovers use the period label', opts, async () => {
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const pg = await ctx.newPage();
+  pg.errors = []; pg.on('pageerror', (e) => pg.errors.push(e.message));
+  let fresh = null;
+  await pg.route(/\/api\/report(\?|$)/, async (route) => {
+    const res = await route.fetch(); const j = await res.json();
+    if (fresh) j.freshness = { ...fresh(), shopify: true };
+    await route.fulfill({ response: res, json: j });
+  });
+  const banner = () => pg.$eval('#stale', (el) => (el.hidden ? null : el.textContent));
+  fresh = () => ({ lastPull: Date.now() - 100 * 60e3, ageMin: 100, stale: false, staleAfterMin: 255 });
+  await pg.goto(`${base}/#overview`); await pg.waitForSelector('#view .headline h1');
+  assert.equal(await banner(), null, '100 min old at a 255-min threshold: no banner (was shown past 45)');
+  fresh = () => ({ lastPull: Date.now() - 300 * 60e3, ageMin: 300, stale: true, staleAfterMin: 255 });
+  await pg.reload(); await pg.waitForSelector('#stale:not([hidden])');
+  assert.match(await banner(), /Data is 5 h old\.[\s\S]*within 4\.3 h/);
+  fresh = () => ({ lastPull: Date.now() - 60 * 60e3, ageMin: 60, stale: false, staleAfterMin: 45 });
+  await pg.reload(); await pg.waitForSelector('#stale:not([hidden])');
+  assert.match(await banner(), /Data is 60 min old\.[\s\S]*within 45 min/, 'a shorter server threshold is honoured too');
+
+  fresh = null;
+  await pg.goto(`${base}/#products`); await pg.waitForSelector('#f-view');
+  await pg.click('.range button[data-days="month"]');
+  await pg.waitForFunction(() => document.querySelector('.range button[data-days="month"]').classList.contains('on'));
+  await pg.selectOption('#f-view', 'type');
+  await pg.waitForSelector('.desk th[data-k="sold"]');
+  const tips = await pg.$$eval('.desk th[data-k="sold"], .desk th[data-k="lost"]', (t) => t.map((x) => x.title));
+  assert.deepEqual(tips, ['₹ sold this month', 'Sales lost to stock-outs this month']);
+  assert.deepEqual(pg.errors, []);
+  await ctx.close();
+});

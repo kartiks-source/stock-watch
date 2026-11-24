@@ -269,3 +269,15 @@ test('no unit costs: the digest says "at selling price", never "cash" (SIMP-1)',
   assert.match(d.text, /Overstock at selling price: ₹5,000 in 2 products/);
   assert.doesNotMatch(d.text, /Cash/);
 });
+
+test('1.2.1: Ops and Buyer digests say "at selling price" without unit costs, "at cost" with them', () => {
+  const r = ctx.report({ days: 30, now });
+  for (const role of ['ops', 'buyer']) {
+    r.totals = { ...r.totals, hasCost: false, orderToday: 3, orderValueNow: 12345 };
+    const no = D.build({ report: r, yesterday: r.yesterday, role, storeName: 'S', now }).text;
+    assert.match(no, /Order today: 3 lines, ₹12,345 at selling price\./, role);
+    assert.doesNotMatch(no, /at cost/, role);
+    r.totals = { ...r.totals, hasCost: true };
+    assert.match(D.build({ report: r, yesterday: r.yesterday, role, storeName: 'S', now }).text, /₹12,345 at cost\./, role);
+  }
+});

@@ -9,7 +9,7 @@ What to do when something breaks, and how to get data back. For secrets and who 
 | App | Railway project `stock-watch`, service `web`, one replica: https://web-production-d8d7a911.up.railway.app |
 | Data | Railway volume at `/data`, **one folder per store** (ADR-0015): `/data/stores/<id>/` holds `store.json` (rows, settings, ingest key, Shopify cursor, catalog, change log, digest settings) plus sidecar files `onorder.json` (Mark ordered), `decisions.json` (Decide), `catalog.json` (collections cache). For every store: `/data/secret` (session key), `/data/stores.json` (last good store list), `/data/access.json` (per-store people, scrypt hashes; previous copy `access.json.bak`; SW-062: not in app backups, covered by volume backups; to undo a People change copy `.bak` over it and restart). `<id>` = the Performity brand_id, the Key Vault store handle, or `sammsara-demo` / `second-demo`; `GET /api/stores` lists them. Shapes: `modules/stock-watch/FORMATS.md` |
 | App backups | `/data/stores/<id>/backups/` (below) |
-| Health | `GET /health` → `{"ok":true}`, 503 when the store can't be read or saved; `GET /status` → freshness and row counts, 503 when Shopify data is over 45 min old or saving fails (both no login) |
+| Health | `GET /health` → `{"ok":true}`, 503 when the store can't be read or saved; `GET /status` → freshness and row counts, 503 when Shopify data is stale (older than max(45 min, 2 × pull interval + 15 min): 255 min at the default 2-hour pull) or saving fails (both no login) |
 | Logs | Railway dashboard → service → Deployments → View logs (lines start `backup:`, `restore:`, `shopify:`) |
 
 ## Uptime monitor (SW-019)
@@ -17,7 +17,7 @@ What to do when something breaks, and how to get data back. For secrets and who 
 Railway's health check only restarts a dead deploy; nobody is told. Set up one external monitor (owner, once; free tiers are enough):
 
 1. UptimeRobot (or Better Stack) → new **HTTP(s)** monitor `https://web-production-d8d7a911.up.railway.app/health`, every 5 minutes, alert when the status is not 200 (UptimeRobot: keyword monitor for `"ok":true` also catches a wrong page). This one means "the app is down or can't save".
-2. A second monitor on `/status`, every 5 minutes, alert when not 200 for 2 checks in a row (one 15-minute pull can run late). This one means "the numbers are stale": the Shopify pull is failing or stuck. Without Shopify connected `/status` stays 200 unless saving fails.
+2. A second monitor on `/status`, every 5 minutes, alert when not 200 for 2 checks in a row (a pull every 2 hours by default, `SYNC_MINUTES`, can run late). This one means "the numbers are stale": the Shopify pull is failing or stuck. Without Shopify connected `/status` stays 200 unless saving fails.
 3. Alert contacts: the owner's phone/email and the team channel. `ALERT_WEBHOOK_URL` already posts pull failures from inside the app; the monitor covers the case where the app itself is down.
 4. Record the monitor's name and who gets alerts in `docs/DEVLOG.md`. Status: not yet set up.
 
@@ -52,9 +52,9 @@ Run `railway` directly (not through `timeout` or another wrapper: the SDK checks
   - On today's Railway (demo, no key) the first store is `sammsara-demo`. **Connect Performity before this release only if the current data should land in a brand (set `PERFORMITY_BRAND_ID` to pick which).**
   - `Refusing to start: DATA_DIR holds single-store files … and stores/<id> already holds data`: someone ran both layouts. Nothing was moved. Decide which is right: move the old top-level files into `/data/old-<date>/` (or the folder's files aside), then restart.
   - `migrate: left in DATA_DIR (changed or new since the move …)`: a file at the top changed after the copy (an old version ran?). The store folder holds the copy from the move; compare and delete the top-level file by hand.
-- **Pulls:** one store at a time, every 15 minutes; logs say `shopify (<store name>): …`. Alerts name the store.
+- **Pulls:** one store at a time, every 2 hours by default (`SYNC_MINUTES`); logs say `shopify (<store name>): …`. Alerts name the store.
 - **Store ids in URLs:** `/?store=<id>`. An id not in the list is a 404 for `/api` (never a folder lookup); the page itself then opens the default store.
-- **Picker:** the store pill (phones: the store bar under the top bar) lists every store with a dot: green ok, amber data over 45 minutes old, red last pull failed (hover / second line says why). With one store it shows only the name. Links to send someone: `/?store=<id>#reorder` (the address bar always carries it).
+- **Picker:** the store pill (phones: the store bar under the top bar) lists every store with a dot: green ok, amber data stale (over 255 minutes old at the default 2-hour pull), red last pull failed (hover / second line says why). With one store it shows only the name. Links to send someone: `/?store=<id>#reorder` (the address bar always carries it).
 - **Checking a release with two stores locally:** no key → two demo stores (`Sammsara (demo)`, `Second store (demo)`, different numbers). Performity stand-in: `STAND_IN_BRANDS=2 PORT=4499 node modules/stock-watch/scripts/stand-in-token-api.js`, then the app with `PERFORMITY_POC_API_URL=http://localhost:4499 PERFORMITY_POC_API_KEY=stand-in-key ADMIN_PASSWORD=…`: two stores, red dots until `SHOPIFY_DEV_TOKEN` (+ `_2`) point at development stores.
 
 ## Deploy and roll back
@@ -122,7 +122,7 @@ The app restores on start, per store: if `/data/stores/<id>/restore.json` exists
 2. `cp /data/stores/<id>/backups/<file> /data/stores/<id>/restore.json` (a backup goes back into **its own** store's folder only)
 3. Restart the service right away (dashboard → service → ⋯ → Restart). Copying into `store.json` directly would be overwritten by the running app's next save; `restore.json` is only read at start.
 4. Check the logs for `restore: store.json replaced`, sign in, and check the Data page row counts and the last stock/order times.
-5. If the store had Shopify connected, the next pull (within 15 minutes) fills in orders since the backup. Stock-out history between the backup and now can't be recovered.
+5. If the store had Shopify connected, the next pull (within 2 hours by default, `SYNC_MINUTES`) fills in orders since the backup. Stock-out history between the backup and now can't be recovered.
 
 **From a downloaded export or a Railway volume backup:** restore the Railway volume backup from the dashboard (it replaces the whole volume; then restart), or copy the exported file to `/data/stores/<id>/restore.json` (the store it was exported from) and restart as above.
 

@@ -91,9 +91,10 @@
     freshness();
   }
 
-  /* ---------- stale-data banner (SW-019): "Data is X h old" when this store's last Shopify pull is over 45 minutes old ----------
+  /* ---------- stale-data banner (SW-019): "Data is X h old" when this store's last Shopify pull is older than the server's
+     threshold (freshness.staleAfterMin = max(45, 2 × pull interval + 15): 255 min at the default 2-hour pull).
      From the report's freshness (this store only; /status covers every store, ADR-0015), aged on the page every minute. */
-  const STALE_MIN = 45;
+  const STALE_DEFAULT = 255;   // only until a report says otherwise
   const asTime = (v) => (typeof v === 'number' && v > 1e12 ? v : typeof v === 'string' && Number.isFinite(Date.parse(v)) ? Date.parse(v) : null);
   const ageText = (min) => (min < 90 ? `${Math.round(min)} min` : min < 48 * 60 ? `${n1(min / 60)} h` : `${n1(min / 1440)} days`);
   function freshness() {
@@ -101,11 +102,12 @@
     const last = asTime(f.lastPull) ?? asTime(sh.lastSync);
     const connected = !!f.shopify || !!sh.source;
     const age = last ? (Date.now() - last) / 60e3 : null;
-    const stale = connected && (f.stale === true || (age != null && age > STALE_MIN));
+    const after = Number.isFinite(f.staleAfterMin) ? f.staleAfterMin : STALE_DEFAULT;
+    const stale = connected && (f.stale === true || (age != null && age > after));
     const el = $('#stale');
     if (!stale) { el.hidden = true; return; }
     const err = sh.lastError;
-    el.innerHTML = `<b>${age != null ? `Data is ${ageText(age)} old.` : 'Data may be out of date.'}</b> <span>${last ? `Last Shopify pull ${dt(last)}` : 'No Shopify pull yet'}${err ? ` · ${esc(err)}` : ''}${sh.running ? ' · pulling now…' : ''}. Numbers may not show the latest stock and orders.</span> <a href="#data">Data &amp; settings</a>`;
+    el.innerHTML = `<b>${age != null ? `Data is ${ageText(age)} old.` : 'Data may be out of date.'}</b> <span>${last ? `Last Shopify pull ${dt(last)}` : 'No Shopify pull yet'}${err ? ` · ${esc(err)}` : ''}${sh.running ? ' · pulling now…' : ''}. Pulls should land within ${ageText(after)}; numbers may not show the latest stock and orders.</span> <a href="#data">Data &amp; settings</a>`;
     el.hidden = false;
   }
   setInterval(() => { if (state.report) freshness(); }, 60e3);
@@ -767,8 +769,8 @@
     { k: 'label', label: LENS_ONE[lens], f: (g) => `<span class="pname" title="${esc(g.label)}">${esc(g.label)}</span>` },
     { k: 'n', label: 'Products', r: 1, tip: 'Product rows (variants) in this group: what a click shows', f: (g) => inr.format(g.n) },
     { k: 'needOrder', label: 'Need order', r: 1, tip: 'Products to order today, of all in the group', f: (g) => (g.needOrder ? `<b>${inr.format(g.needOrder)}</b><span class="muted"> of ${inr.format(g.n)}</span>` : `<span class="muted">0 of ${inr.format(g.n)}</span>`) },
-    { k: 'sold', label: 'Sold', r: 1, tip: `₹ sold in the last ${state.days} days`, f: (g) => money(g.sold) },
-    { k: 'lost', label: 'Sales lost', r: 1, tip: `Sales lost to stock-outs in the last ${state.days} days`, f: (g) => (g.lost ? `<span class="lostv">${money(g.lost)}</span>` : '–') },
+    { k: 'sold', label: 'Sold', r: 1, tip: `₹ sold ${inPeriod()}`, f: (g) => money(g.sold) },
+    { k: 'lost', label: 'Sales lost', r: 1, tip: `Sales lost to stock-outs ${inPeriod()}`, f: (g) => (g.lost ? `<span class="lostv">${money(g.lost)}</span>` : '–') },
     ...(hasCost ? [{ k: 'lostProfit', label: 'Profit lost', r: 1, tip: 'Units lost × (price paid − unit cost)', val: (g) => g.lostProfit ?? -1, f: (g) => (g.lostProfit ? `<span class="lostv">${money(g.lostProfit)}</span>` : '–') }] : []),
     { k: 'orderValue', label: 'Order ₹', r: 1, tip: `To order today for this group, ${atCost()}`, f: (g) => (g.orderValue ? `<b>${money(g.orderValue)}</b>` : '–') },
     { k: 'excessValue', label: 'Overstock ₹', r: 1, tip: `Stock beyond need, overstocked products only, ${atCost()}`, f: (g) => (g.excessValue ? `<span class="plumv">${money(g.excessValue)}</span>` : '–') },
