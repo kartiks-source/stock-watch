@@ -213,9 +213,11 @@ function build(y, catalog = {}, { paceMonths = 6, bestShare = 0.8, links = () =>
   const variants = [];
   for (const { id, c, ds } of vlist) {
     const sl = (y.sales.by && y.sales.by[id]) || {};
-    let su = 0, sn = 0;
-    for (const k of keys) { const x = sl[k]; if (x) { su += Number(x[0]) || 0; sn += Number(x[1]) || 0; } }
-    const price = su > 0 && sn > 0 ? sn / su : Number(c.price) || 0;
+    /* 1.4.5: sold and price over the same 12 months as the month table (Shopify's totals for those months), not the whole
+       span (which reaches back into the 13th month); the span only when it never sold inside the 12 months */
+    let su = 0, sn = 0, au = 0, an = 0;
+    for (const k of keys) { const x = sl[k]; if (!x) continue; const u = Number(x[0]) || 0, n = Number(x[1]) || 0; au += u; an += n; if (inMonths.has(monthOf(k))) { su += u; sn += n; } }
+    const price = su > 0 && sn > 0 ? sn / su : au > 0 && an > 0 ? an / au : Number(c.price) || 0;
     const pace = paceOf(ds.list, paceFrom, shop);
     /* 1.4.4 (LOGIC §22): the same parts as every other page (§4c). opts.rowInfo[variantId] = { confidence, nrDays, ordered,
        allocation } from today's report. Per day out, in this order: after day nrDays of the stock-out still running with
