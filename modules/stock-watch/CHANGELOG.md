@@ -4,7 +4,7 @@ User-facing changes, newest first. Semver: minor when a number's rule changes or
 
 ## 1.4.5 · 2026-11-24 · product sales over the same 12 months as the month table
 
-- **A product's "Sold" and average price on the brand report now cover the same 12 calendar months as the month table** (1 Dec 2025 – 23 Nov 2026), so they match Shopify's sales report for those dates. Before, they also counted 21–30 Nov 2025 and all of Oct–Nov 2025 history that was read (Oakwood showed 178 units / ₹9.16 L; Shopify, Dec–Nov: 150 / ₹7.67 L). The best-seller list (top 80% of 12 months) uses the corrected totals. Money missed is unchanged except where the price moved by a few rupees.
+- **A product's "Sold" and average price on the brand report now cover the same 12 calendar months as the month table** (1 Dec 2025 – 23 Nov 2026), so they match Shopify's sales report for those dates. Before, they also counted 21 Oct – 30 Nov 2025 (Oakwood showed 178 units / ₹9.16 L; Shopify, Dec–Nov: 150 / ₹7.67 L). The best-seller list (top 80% of 12 months) uses the corrected totals: 41 products, was 43; their 12-month money missed is ₹13.95 L, was ₹14.23 L. All products: ₹28.08 L, was ₹27.83 L (the average price moved).
 
 ## 1.4.4 · 2026-11-24 · Best sellers | All products, one best-seller list, the same parts everywhere
 
