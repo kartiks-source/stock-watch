@@ -119,7 +119,7 @@ test('Products filters: no duplicate lists; overstock tile opens Push these (cri
   const chips = await pg.$$eval('[data-filter-products]', (b) => b.map((x) => x.dataset.filterProducts));
   const more = await pg.$$eval('#f-more option', (o) => o.map((x) => x.value).filter(Boolean));
   assert.equal(chips.length, 7);   // + High returns (SW-064); 1.2.0 Estimates / Not restocked are in More… (LOGIC §4c)
-  assert.ok(more.includes('estimate') && more.includes('notrestocked'), `More… has the §4c filters: ${more}`); assert.equal(more.length, 8, `More… options ${more}`);
+  assert.ok(more.includes('estimate') && more.includes('notrestocked'), `More… has the §4c filters: ${more}`); assert.equal(more.length, more.includes('warehouse') ? 9 : 8, `More… options ${more}`);   // 1.3.0: + Top-up from warehouse when a product is an allocation
   assert.ok(!more.includes('over') && !more.includes('decide'), 'Overstock = Push these; Slow sellers = Slow sellers to decide');
   await pg.selectOption('#f-more', 'slow'); await pg.waitForSelector('.tbl.desk');
   assert.ok((await heads(pg)).includes('Decide'), 'Slow sellers carries the Decide column');
@@ -388,17 +388,69 @@ test('§4c: "+ ₹ estimate · ₹ not restocked" under the headline opens those
     await pg.goto(base + '/#overview'); await pg.waitForSelector('#view .headline h1');
     const r = await pg.evaluate(() => fetch('/api/report?days=30').then((x) => x.json()));
     const t = r.totals;
-    assert.ok(t.lost + t.lostEstimate + t.lostNotRestocked === t.lostAll, 'parts add up');
+    assert.ok(t.lost + t.lostEstimate + t.lostNotRestocked + t.lostAllocation === t.lostAll, 'parts add up');
     if (!t.lostEstimate && !t.lostNotRestocked) { assert.equal(await pg.$('#lost-sub'), null, 'nothing apart: no line'); await pg.context().close(); continue; }
     const kind = t.lostEstimate ? 'estimate' : 'notrestocked';
+    assert.match(await pg.textContent('#lost-sub'), /^Not in ₹/, '1.3.0 (UI-5): the line says these are not in the headline');
     await pg.click(`#lost-sub a[data-filter="${kind}"]`);
     await pg.waitForSelector('#f-more.on');
     assert.equal(await pg.inputValue('#f-more'), kind);
     assert.ok((await pg.$$(`#view .lmark`)).length > 0, 'rows carry a marker');
+    /* UI-3: the filtered view leads with that part's own ₹, never "₹0 lost" */
+    assert.match(await pg.textContent('#bucket-line'), /^₹[\d,.]+( L)? (estimated from few sales|after day \d+)/);
+    assert.equal(await pg.$('#view .headline .lostv'), null, 'no "₹0 lost" in the filtered view');
     await pg.goto(base + '/#stockouts'); await pg.waitForSelector('#lost-sub');
     await pg.click(`#lost-sub a[data-filter="${kind}"]`);
     await pg.waitForSelector(`[data-filter-stockouts="${kind}"].on`);
     if (w > 760) assert.ok((await heads(pg)).includes('Confidence'), 'Stock-outs has the Confidence column');
+    assert.equal(await pg.evaluate(() => document.documentElement.scrollWidth - innerWidth), 0);
+    assert.deepEqual(pg.errors, []);
+    await pg.context().close();
+  }
+});
+
+/* 1.3.0: counted ₹ red / the rest grey, allocation rows, "out since", still-out apart, drawer split; 1440 and 390 */
+test('1.3.0: grey parts apart, Top-up from warehouse, "since <date>" for open stock-outs, still-out apart, drawer split', opts, async () => {
+  for (const [w, h] of [[1440, 900], [390, 844]]) {
+    const pg = await page(w, h); pg.setDefaultTimeout(10000);
+    await pg.goto(base + '/#products'); await pg.waitForSelector('#view .headline h1');
+    const r = await pg.evaluate(() => fetch('/api/report?days=30').then((x) => x.json()));
+    const t = r.totals;
+    /* a row whose ₹ is all estimate shows grey "₹X est.", never in red */
+    const est = r.products.find((p) => p.lostEstimate > 0 && !p.lostCounted);
+    if (est) {
+      const sel = w > 760 ? `.tbl.desk tr[data-id="${est.id}"]` : `.mcard[data-id="${est.id}"]`;
+      await pg.selectOption('#f-more', 'estimate'); await pg.waitForSelector(sel);
+      assert.equal(await pg.$eval(`${sel} .lmark`, (e) => !!e.parentElement.querySelector('.lostv')), false, `${w}: an estimate-only row's Sales lost has no red ₹`);
+      assert.match(await pg.textContent(`${sel} .lmark`), /^₹[\d,.]+( L)? est\.$/);
+      const grey = await pg.$eval(`${sel} .lmark`, (e) => getComputedStyle(e).color);
+      const soft = await pg.evaluate(() => { const d = document.createElement('span'); d.style.color = 'var(--soft)'; document.body.append(d); const c = getComputedStyle(d).color; d.remove(); return c; });
+      assert.equal(grey, soft, `${w}: the estimate is grey (UI-8: phones too)`);
+    }
+    /* website allocations: their own status, not on Reorder, a note there */
+    if (t.allocation && w > 760) {   // phones hide the .exp lines on Reorder (M8: the first card starts high); Products and Data say it there
+      await pg.goto(base + '/#reorder'); await pg.waitForSelector('#alloc-note');
+      assert.match(await pg.textContent('#alloc-note'), /website allocation refilled from the warehouse.*Check the warehouse\./);
+      await pg.click('#alloc-note a'); await pg.waitForSelector('#f-more.on');
+      assert.equal(await pg.inputValue('#f-more'), 'warehouse');
+      assert.match(await pg.textContent('#view'), /Top-up from warehouse/);
+    }
+    if (t.allocation && w <= 760) { await pg.goto(base + '/#products'); await pg.waitForSelector('#f-more'); await pg.selectOption('#f-more', 'warehouse'); await pg.waitForSelector('.mcard'); assert.match(await pg.textContent('#view'), /Top-up from warehouse/); }
+    /* Stock-outs: open stock-outs say since when; the still-out ₹/day is the counted part, the rest apart */
+    await pg.goto(base + '/#stockouts'); await pg.waitForSelector('#view .headline h1');
+    const txt = await pg.textContent('#view');
+    if (r.stockouts.some((s) => s.open && !s.notSelling)) assert.match(txt, /since (before )?\d+ \w{3}/, `${w}: "since <date>" for an open stock-out`);
+    if (t.stillOutPerDayApart > 0) assert.match(await pg.textContent('#still-apart'), /^\+₹[\d,.]+( L)?\/day not counted$/);
+    /* drawer: the split in words under the ₹ (touch has no tooltips) */
+    const split = r.products.find((p) => p.lost > 0 && p.lost !== p.lostCounted && p.stock != null);
+    if (split) {
+      await pg.goto(base + '/#products'); await pg.waitForSelector('#q-products');
+      const sel = w > 760 ? `.tbl.desk tr[data-id="${split.id}"]` : `.mcard[data-id="${split.id}"]`;
+      await pg.fill('#q-products', split.sku || split.name); await pg.waitForSelector(sel);
+      await pg.click(sel); await pg.waitForSelector('#lost-split');
+      assert.match(await pg.textContent('#lost-split'), /^in headline ₹[\d,.]+( L)? · /);
+      await pg.keyboard.press('Escape');
+    }
     assert.equal(await pg.evaluate(() => document.documentElement.scrollWidth - innerWidth), 0);
     assert.deepEqual(pg.errors, []);
     await pg.context().close();

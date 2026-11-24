@@ -189,7 +189,7 @@ ${error ? `<p class="e" role="alert">${error}</p>` : ''}
 }
 const publicSettings = (s, role = access.ADMIN) => access.visibleSettings(s, role);
 /* The planning assumptions people can tweak. Same limits whether trying a value or saving it. */
-const LIMITS = { leadDays: [0, 180], coverDays: [1, 365], safetyDays: [0, 60], demandWindowDays: [7, 90], smallTopUpDays: [1, 60], minPerDay: [0, 100], tzOffsetMin: [-720, 840] };
+const LIMITS = { leadDays: [0, 180], coverDays: [1, 365], safetyDays: [0, 60], demandWindowDays: [7, 90], smallTopUpDays: [1, 60], minPerDay: [0, 100], tzOffsetMin: [-720, 840], allocationCheck: [0, 1] };   // allocationCheck (1.3.0, LOGIC §6): 1 on, 0 off
 const PLAN_KEYS = ['leadDays', 'coverDays', 'safetyDays'];   // the three shown under Plan settings
 const clampSetting = (k, v) => (v == null || String(v).trim() === '' || !Number.isFinite(+v) ? undefined : Math.min(LIMITS[k][1], Math.max(LIMITS[k][0], +v)));
 /** Saved settings, with any ?leadDays=… style trial values on top (not saved). */
@@ -291,7 +291,8 @@ function shopifyStatus(id = scope.id()) {
   const k = keys.status(id); const st = store.load().shopify;
   return { source: k.source, store: k.store, secretName: k.secretName || null, kind: k.kind || null, ready: k.ready, missing: k.missing,
     lastSync: st.lastSync, lastError: st.lastError, lastTry: st.lastTry, running: pulls.has(id), progress: runs.progress(progress.get(id) || null),
-    backfilled: !!st.ordersCursor, scopes: shopify.SCOPES, apiVersion: shopify.API_VERSION, writeScopes: st.writeScopes || [], history: st.history || null, priceBasis: st.priceBasis || null, orderFields: st.orderFields || null };
+    backfilled: !!st.ordersCursor, scopes: shopify.SCOPES, apiVersion: shopify.API_VERSION, writeScopes: st.writeScopes || [], history: st.history || null, priceBasis: st.priceBasis || null, orderFields: st.orderFields || null,
+    weekSales: st.weekSales ? (({ by: _by, ...w }) => w)(st.weekSales) : null };   // 1.3.0: summary only, not the per-variant table
 }
 /** Pull one store from Shopify (default: the current store). Queued behind any other store's pull. */
 function syncShopify(id = scope.id()) {

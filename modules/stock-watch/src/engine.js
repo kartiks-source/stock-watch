@@ -694,7 +694,7 @@ function report(stock, orders, settings = {}, opts = {}) {
   const perDayValue = (p) => (rank(p.status) === 0 ? p._plan.demand : 0);   // ₹ of sales a day at stake, Order today rows only
   reorder.sort((a, b) => rank(a.status) - rank(b.status) || perDayValue(b) - perDayValue(a) || (a.abc || 'C').localeCompare(b.abc || 'C') || b.lost - a.lost || b.perDay - a.perDay);
   stockouts.sort((a, b) => b.lost - a.lost);
-  products.sort((a, b) => b.lost - a.lost || b.sold - a.sold);
+  products.sort((a, b) => b.lostCounted - a.lostCounted || b.lost - a.lost || b.sold - a.sold);   // 1.3.0 (UI-2): the headline's part first, so a list adds up to it
 
   const dailyRows = Object.entries(daily).map(([day, d]) => ({
     day, sold: Math.round(d.sold), lost: Math.round(d.lost), lostEstimate: Math.round(d.lostEstimate), lostNotRestocked: Math.round(d.lostNotRestocked), lostAllocation: Math.round(d.lostAllocation), units: d.units, unitsLost: round(d.unitsLost, 1), outSkus: d.outSkus.size,

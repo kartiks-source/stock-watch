@@ -868,3 +868,8 @@ details.rolepick.one > summary svg, details.rolepick.one > .menu { display: none
 .conf.c-low { color: var(--amber); }
 @media (max-width: 760px) { .headline .lost-sub { line-height: 2; } .headline .lost-sub a { padding: 8px 0; } }   /* taller tap area without breaking the line */
 .tbl td .lmark { display: block; margin-left: 0; font-size: 10.5px; line-height: 1.2; }   /* under the ₹, so the column doesn't widen */
+/* 1.3.0: the parts of ₹ lost not in the headline are grey under the counted ₹ (UI-2), on phones too (UI-8); drawer split (UI-7) */
+.lmark, .lmark.nr { color: var(--soft); font-weight: 500; }
+.mcard .mq small.lmark, .mcard .mq small.lmark.nr { color: var(--soft); font-size: 11px; font-weight: 500; }
+.tile .lsplit { display: block; order: -1; margin-top: 4px; font-size: 12px; color: var(--soft); }
+.headline .bucket { flex-basis: 100%; margin: 2px 0 0; }

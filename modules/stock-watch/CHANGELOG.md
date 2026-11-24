@@ -2,6 +2,17 @@
 
 User-facing changes, newest first. Semver: minor when a number's rule changes or a feature lands, patch for fixes. The version in `package.json` matches the top heading. Versions before 0.9.0 were reconstructed from `docs/DEVLOG.md` on 20 Nov 2026 (no tags existed); dates are the DEVLOG dates. Per DEVLOG, nothing from 0.6.0 on has been deployed yet. Since 1.0.0-rc.1, `/health`, `/status` and the page footer show the version and the build's commit (SW-056); `test/docs.test.js` checks the top heading matches `package.json`.
 
+## 1.3.0 · 2026-11-24 · stock-outs no longer wiped, warehouse top-ups, 26-week confidence
+
+- **Oversell fix:** an order that raced stock to −1 (all Sammsara variants deny selling at 0) no longer counts as "stock existed" and wipes a real stock-out. Nivaya Table: ₹98 slow seller → ≈₹55k lost, best seller, Out now. A restock seen by a pull, then a sale before that pull, ends the stock-out at the sale instead of erasing it.
+- **Website allocations:** a variant topped back up to the same few pieces (≤ 10) 3+ times in 14 days, each gap under 48 h, is "Top-up from warehouse": out of Order today and its ₹, Why "Shopify shows a website allocation (~N pcs, refilled from the warehouse). Warehouse stock isn't in Shopify, so we can't size a reorder: check the warehouse.", refill-gap ₹ shown apart, never in the headline. Setting *Spot website allocations* (1/0). Sammsara Order today ₹25.2 L → ₹9.4 L.
+- **Confidence from 26 weeks of Shopify sales:** one ShopifyQL read a day per store (weekly net units per variant, read-only, never fails a pull, skipped without read_reports). Confidence = share of the last 25 full weeks with a sale (High ≥ 44%, Medium 22–43%, Low < 22%); products live under 8 weeks use units (max of the rate's units and all units held). "sold in N of 25 weeks" in the Why cell and drawer.
+- **Floor rate:** a product out since before our orders start, with sales in Shopify's 26 weeks, gets units ÷ 182 a day; its ₹ goes to not restocked (was ₹0 "out but not selling").
+- **Not-restocked cutoff** = max(30, lead + buffer + 14) days; the store lead time reads "7 d (assumed)" until a supplier's is set.
+- **Still out ₹/day** counts the headline's part only; the rest shows as "+₹Y/day not counted" (page and digest).
+- **Page:** row ₹ = counted part in red, the rest grey ("+₹X est.", "not restocked", "refill gaps"), lists sort by the counted part; the line under the headline starts "Not in ₹X:" and says "₹Y after day 30 on N items not restocked"; Estimates / Not restocked views lead with their own ₹; slow sellers line shows only the counted part; open stock-outs show "since <date>"; the drawer spells out the split; grey markers on phones too; "1 a week" (not "1 every 1 weeks"); the stock chart never labels tomorrow's date.
+- Weekly movers use the headline's part; the digest's "7 days before" keeps Mark ordered as it stood then. Weekly snapshots are worked out again (rules 1.3.0).
+
 ## 1.2.1 · 2026-11-24
 
 - The "Data is X h old" banner follows the server's stale rule (`freshness.stale`, `staleAfterMin`: 255 minutes at the default 2-hour pull), no longer its own 45 minutes, and says how long a pull may take.
