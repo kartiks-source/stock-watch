@@ -2,6 +2,14 @@
 
 User-facing changes, newest first. Semver: minor when a number's rule changes or a feature lands, patch for fixes. The version in `package.json` matches the top heading. Versions before 0.9.0 were reconstructed from `docs/DEVLOG.md` on 20 Nov 2026 (no tags existed); dates are the DEVLOG dates. Per DEVLOG, nothing from 0.6.0 on has been deployed yet. Since 1.0.0-rc.1, `/health`, `/status` and the page footer show the version and the build's commit (SW-056); `test/docs.test.js` checks the top heading matches `package.json`.
 
+## 1.4.7 · 2026-11-25 · status history, unlimited stock, price of the time, one 30-day rule
+
+- **Every product shows Active, Draft or Archived** and since when; the side panel lists every period Shopify can tell us about.
+- **"Continue selling when out of stock"** products are never counted as out of stock (Sammsara: 1 product), and no product is left out any more.
+- **Money missed uses the price of the time**, not the 12-month average.
+- **One rule for every stock-out:** its first 30 days can be sure, the days after are shown apart, also when it was refilled later.
+- Sammsara on the same data: all products ₹32.2 L → ₹28.7 L, best sellers ₹15.2 L → ₹14.8 L, last 30 days ₹5.34 L → ₹5.46 L. Accuracy test in LOGIC §27.
+
 ## 1.4.6 · 2026-11-25 · fixes from the logic, data and UI critics
 
 - **"12 months" is now the last 365 days**, so nothing jumps at the start of a month (on 2 Dec all of December 2025 would have vanished). The first month shown is part of one, with its dates.

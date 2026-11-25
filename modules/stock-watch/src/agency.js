@@ -65,7 +65,7 @@ function dayKeys(a, b) { const out = []; for (let k = a; k <= b; k = keyPlus(k, 
  * One variant's days. → null (no stock now: not tracked) | { dropped: true, low } | { list: [{ k, end, start, u, over, inF }], live }
  * live = first day it counts (its creation day, then its first day in stock, when created inside the span).
  */
-function days(y, id, keys, createdDay = null, { skip = null, end: endDay = null } = {}) {
+function days(y, id, keys, createdDay = null, { skip = null, end: endDay = null, always = false } = {}) {
   const L0 = y.anchor && Object.hasOwn(y.anchor.levels, id) ? Number(y.anchor.levels[id]) : null;
   if (L0 == null || !Number.isFinite(L0)) return null;
   const mv = (y.moves.by && y.moves.by[id]) || {}, sl = (y.sales.by && y.sales.by[id]) || {};
@@ -77,7 +77,7 @@ function days(y, id, keys, createdDay = null, { skip = null, end: endDay = null 
     ends.set(k, L); if (L < low) low = L;
     L -= Number(mv[k] || 0);
   }
-  if (low < floor) return { dropped: true, low };
+  if (low < floor && !always) return { dropped: true, low };
   const list = [];
   let live = keys[0];
   if (createdDay && createdDay > keys[0]) live = createdDay;
@@ -88,8 +88,9 @@ function days(y, id, keys, createdDay = null, { skip = null, end: endDay = null 
     const u = Math.max(0, Number((sl[k] || [0])[0]) || 0);
     const over = Math.min(u, Math.max(0, Math.max(0, -end) - Math.max(0, -start)));
     let inF = start > 0 && end > 0 ? 1 : start <= 0 && end <= 0 ? (u - over > 0 ? 1 : 0) : 0.5;
+    if (always) inF = 1;   // 1.4.7: keeps selling at 0 (Shopify "continue selling"): never an empty shelf
     if (!started) { if (inF === 0) continue; started = true; }   // created inside the span: counts from its first day in stock
-    list.push({ k, end, start, u, over, inF });
+    list.push({ k, end, start, u, over: always ? 0 : over, inF });
   }
   return { list, live: list.length ? list[0].k : null };
 }
@@ -189,11 +190,9 @@ const emptyMonth = () => ({ out: 0, outDays: [], units: 0, lost: 0, apart: 0, nr
  *   inactive spells we saw (drafted, then active again): skipped;
  *   re-published inside the span (Shopify moves publishedAt): the days from its last sale before that to the new date are
  *     skipped (it may have been hidden); never sold before it → it starts at publishedAt;
- *   soft: before this day the brand is known to hide it when empty (re-published, or not on sale now): only the first 30
- *     days of a stock-out can be "sure", the rest is "restock or drop?";
  *   inactive now: up to the day it went inactive; when it was already inactive at our first read (date unknown), its last sale.
  */
-function lifeOf(y, id, c, keys, { dayOf, firstSeenDay, winFrom }) {
+function lifeOf(y, id, c, keys, { dayOf, firstSeenDay, winFrom, offOf = null }) {
   const sl = (y.sales.by && y.sales.by[id]) || {}, key = (t) => (dayOf && Number.isFinite(+t) && +t > 0 ? dayOf(+t) : null);
   const soldDays = Object.keys(sl).filter((k) => Number(sl[k][0]) > 0).sort();
   const made = key(c.createdAt), pub = key(c.publishedAt), gaps = [];
@@ -202,13 +201,14 @@ function lifeOf(y, id, c, keys, { dayOf, firstSeenDay, winFrom }) {
     const before = soldDays.filter((k) => k < pub).pop();
     if (before) gaps.push([keyPlus(before, 1), keyPlus(pub, -1)]); else from = pub;
   }
+  for (const [a, b] of (offOf && offOf(c)) || []) { const ka = key(a), kb = key(b); if (ka && kb) gaps.push([ka, kb]); }   // 1.4.7: Shopify's own draft / archived periods
   for (const s of Array.isArray(c.spells) ? c.spells : []) { const a = key(s.from), b = key(s.to); if (a && b) gaps.push([a, b]); }
   let end = null;
   if (c.active === false) {
     const since = key(c.inactiveSince), known = since && firstSeenDay && since > keyPlus(firstSeenDay, 1);
     end = known ? keyPlus(since, -1) : soldDays[soldDays.length - 1] || keyPlus(keys[0], -1);
   }
-  return { from, end, soft: c.active === false ? '9999' : gaps.length && pub && from !== pub ? pub : null, sold: soldDays.some((k) => k >= winFrom), skip: gaps.length ? (k) => gaps.some(([a, b]) => k >= a && k <= b) : null };
+  return { from, end, sold: soldDays.some((k) => k >= winFrom), skip: gaps.length ? (k) => gaps.some(([a, b]) => k >= a && k <= b) : null };
 }
 
 /** 1.4.6 (§4c G26): variantId → the full weeks of weekSales in which it could be bought on at least one day. */
@@ -228,7 +228,7 @@ function weeksOpen(r, ws, dayOf) {
  * The report. catalog = store.catalog ({ variantId → productId, product, variant, sku, price, active, createdAt, … }).
  * opts: { paceMonths = 6, bestShare = 0.8, zone, links: (catalogEntry) → { image, adminUrl, webUrl }, month: 'YYYY-MM' }.
  */
-function build(y, catalog = {}, { paceMonths = 6, bestShare = 0.8, links = () => ({}), dayOf = null, apart = null, rankBy = null, detail = null, rowInfo = null, frozen = null, firstSeenDay = null } = {}) {
+function build(y, catalog = {}, { paceMonths = 6, bestShare = 0.8, links = () => ({}), dayOf = null, apart = null, rankBy = null, detail = null, rowInfo = null, frozen = null, firstSeenDay = null, offOf = null } = {}) {
   const sp = spanOf(y);
   if (!sp) return { ok: false, reason: !y || !y.anchor ? 'none' : 'short' };
   const keys = dayKeys(sp.from, sp.through);
@@ -250,16 +250,16 @@ function build(y, catalog = {}, { paceMonths = 6, bestShare = 0.8, links = () =>
   const vlist = [], dropped = [];
   for (const [id, c] of Object.entries(catalog || {})) {
     if (!c || c.tracked === false) continue;
-    const gone = c.active === false, L = lifeOf(y, id, c, keys, { dayOf, firstSeenDay, winFrom });
+    const gone = c.active === false, L = lifeOf(y, id, c, keys, { dayOf, firstSeenDay, winFrom, offOf });
     if (gone && !L.sold) continue;   // 1.4.6: a draft or archived product keeps its past when it sold in the window
-    const ds = days(y, id, keys, L.from, { skip: L.skip, end: L.end });
+    const ds = days(y, id, keys, L.from, { skip: L.skip, end: L.end, always: !!c.oversell });
     if (!ds) continue;
     if (ds.dropped && !gone) dropped.push(id);   // unsure: its sales still count (best-seller rank, sold), no days, no ₹
-    vlist.push({ id, c, soft: L.soft, ds: ds.dropped ? { list: [], live: null, unsure: true } : ds });
+    vlist.push({ id, c, ds: ds.dropped ? { list: [], live: null, unsure: true } : ds });
   }
   const shop = shopSeasonOf(vlist.filter((v) => v.c.active !== false).map((v) => v.ds.list), keys, y);
   const variants = [];
-  for (const { id, c, ds, soft } of vlist) {
+  for (const { id, c, ds } of vlist) {
     const sl = (y.sales.by && y.sales.by[id]) || {};
     /* 1.4.5: sold and price over the same 12 months as the month table (Shopify's totals for those months), not the whole
        span (which reaches back into the 13th month); the span only when it never sold inside the 12 months */
@@ -267,6 +267,10 @@ function build(y, catalog = {}, { paceMonths = 6, bestShare = 0.8, links = () =>
     for (const k of keys) { const x = sl[k]; if (!x) continue; const u = Number(x[0]) || 0, n = Number(x[1]) || 0; au += u; an += n; if (inWin(k)) { su += u; sn += n; } }
     const price = su > 0 && sn > 0 ? sn / su : au > 0 && an > 0 ? an / au : Number(c.price) || 0;
     const pace = paceOf(ds.list, paceFrom, shop);
+    /* 1.4.7: the price of the time: what people paid in that month and the months either side (2+ sold), else the 12 months' */
+    const byM = new Map(); for (const k of keys) { const x = sl[k]; if (!x) continue; const m = monthOf(k), q = byM.get(m) || { u: 0, n: 0 }; q.u += Number(x[0]) || 0; q.n += Number(x[1]) || 0; byM.set(m, q); }
+    const monthPrice = {};
+    for (const m of new Set([...monthKeys, nowM])) { let u = 0, n = 0; for (const q of [monthOf(keyPlus(`${m}-01`, -1)), m, monthOf(keyPlus(`${m}-28`, 4))]) { const z = byM.get(q); if (z) { u += z.u; n += z.n; } } monthPrice[m] = u >= 2 && n > 0 ? n / u : price; }
     /* 1.4.4 (LOGIC §22): the same parts as every other page (§4c). opts.rowInfo[variantId] = { confidence, nrDays, ordered,
        allocation } from today's report. Per day out, in this order: after day nrDays of the stock-out still running with
        nothing marked ordered → "restock or drop?" (nr); a website top-up (alloc, §6); low confidence → a guess (est); else
@@ -274,29 +278,31 @@ function build(y, catalog = {}, { paceMonths = 6, bestShare = 0.8, links = () =>
     const info = (rowInfo && rowInfo[String(id)]) || null;
     const isApart = !!((apart && apart.has(String(id))) || (info && info.allocation));
     const gone = c.active === false;   // 1.4.6: not on sale now: no report row, so the rules' plain form (30 days; under 10 sold = a guess)
-    const openFrom = outRun(ds.list), nrFrom = openFrom && (info || gone) && !(info && info.ordered) ? keyPlus(openFrom, Math.max(1, Math.round(+(info && info.nrDays) || 30))) : null;
+    /* 1.4.7: one rule for every stock-out, ended or running: its first nrDays (30) days can be sure, the days after are apart
+       ("restock or drop?"); only a running one marked ordered keeps counting */
+    const openFrom = outRun(ds.list), nrD = Math.max(1, Math.round(+(info && info.nrDays) || 30)), ordered = !!(info && info.ordered);
     const low = info && info.confidence ? info.confidence === 'low' : gone && su < 10;
     const perMonth = {};
-    let run = 0, prevK = null, firstOut = 0;   // firstOut: ₹ missed in the first 30 days of each stock-out (for the best-seller rank)
+    let run = 0, prev = null, firstOut = 0;   // firstOut: ₹ missed in the first 30 days of each stock-out (for the best-seller rank)
     for (const x of ds.list) {
       const m = monthOf(x.k);
-      run = x.inF < 1 ? (prevK && keyPlus(prevK, 1) === x.k ? run + 1 : 1) : 0; prevK = x.k;
+      run = x.inF < 1 ? (run && keyPlus(prev.k, 1) === x.k && !(prev.end > 0) ? run + 1 : 1) : 0; prev = x;   // a day that ended with stock ends the run
       if (!inWin(x.k)) continue;
       const pm = perMonth[m] || (perMonth[m] = emptyMonth());
       const outF = 1 - x.inF; pm.inDays += x.inF;
       if (outF <= 0) continue;
       const exp = pace.level > 0 ? pace.perDay * (pace.season[m] ?? 1) / pace.level : pace.perDay;
-      const v = outF * exp * price;
+      const v = outF * exp * monthPrice[m];
       pm.out += outF; pm.outDays.push(x.k); pm.units += outF * exp; pm.lost += v;
       if (run <= FIRST_OUT_DAYS) firstOut += v;
-      if ((nrFrom && x.k >= nrFrom) || (soft && x.k < soft && run > FIRST_OUT_DAYS)) pm.nr += v; else if (isApart) pm.apart += v; else if (low) pm.est += v; else pm.cu += outF * exp;
+      if (run > nrD && !(ordered && openFrom && x.k >= openFrom)) pm.nr += v; else if (isApart) pm.apart += v; else if (low) pm.est += v; else pm.cu += outF * exp;
     }
     /* 1.4.6: a closed month keeps the ₹ it closed with (src/closed.js); only months wholly inside the window */
     if (frozen) for (const m of monthKeys) {
       const fz = frozen[m] && `${m}-01` >= winFrom ? frozen[m][id] : null;
       if (fz) perMonth[m] = { ...(perMonth[m] || emptyMonth()), units: fz[0], lost: fz[1], apart: fz[2], nr: fz[3], est: fz[4], cu: fz[5] };
     }
-    variants.push({ id, c, ds, price, pace, perMonth, sold: sn, units: su, dayMap: ds.list, isApart, gone, firstOut });
+    variants.push({ id, c, ds, price, monthPrice, pace, perMonth, sold: sn, units: su, dayMap: ds.list, isApart, gone, firstOut });
   }
   const byP = new Map();
   for (const v of variants) {
@@ -334,7 +340,7 @@ function build(y, catalog = {}, { paceMonths = 6, bestShare = 0.8, links = () =>
     out.push({
       productId: p.productId, name: p.name, sku: top.c.sku || '', variantId: top.id, variants: p.variants.length, best: p.best, ...(p.gone ? { inactive: true } : {}),
       monthPace: Object.fromEntries(p.variants.map((v) => [v.id, { ...Object.fromEntries(Object.keys(shop).map((m) => [m, r4(v.pace.perDay * seasonFor(v.pace.season, m) / (v.pace.level || 1))])), _: r4(v.pace.perDay * seasonFor(v.pace.season, nowM) / (v.pace.level || 1)) }])),   // 1.4.3: §21 expected pace per month, for the engine's ₹ lost
-      variantPrice: Object.fromEntries(p.variants.map((v) => [v.id, r4(v.price)])),
+      variantPrice: Object.fromEntries(p.variants.map((v) => [v.id, { ...Object.fromEntries(Object.entries(v.monthPrice).map(([m, x]) => [m, r4(x)])), _: r4(v.monthPrice[nowM]) }])),   // 1.4.7: per month
       noPace: p.variants.filter((v) => v.ds.unsure || (v.pace.few && v.dayMap.length < 60)).map((v) => v.id),   // 1.4.6: new or unsure: §3–§4's own rate, not 0
       ids: p.variants.map((v) => v.id), outFrom: Object.fromEntries(p.variants.map((v) => [v.id, outRun(v.dayMap)])), variantPace: Object.fromEntries(p.variants.map((v) => [v.id, r2(v.pace.perDay * seasonFor(v.pace.season, nowM) / (v.pace.level || 1))])),
       sold: Math.round(p.sold), units: p.units, share: r2(p.share * 100),

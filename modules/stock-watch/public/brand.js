@@ -70,7 +70,7 @@
   const inScopeOf = (m, k) => (m && m[k] ? m[k] : { lost: m ? m.lost : 0 });
   const inScope = (m) => (m && m[scope()] ? { ...m, ...m[scope()], bestOut: m[scope()].out ?? m.bestOut } : m);
   /** "Not counted" in one small line (the same parts as every page, LOGIC §4c, §22). */
-  const apartLine = (h) => { const parts = [h.nr ? `${rs(h.nr)} where nothing was ordered for 30+ days (restock or drop?)` : '', h.est ? `${rs(h.est)} a guess: products that hardly sell` : '', h.apart ? `${rs(h.apart)} while the warehouse topped up a few pieces` : ''].filter(Boolean); return parts.length ? `<p class="muted small" id="brand-apart">Not counted in ${rs(h.lost)}: ${parts.join(' · ')}.</p>` : ''; };
+  const apartLine = (h) => { const parts = [h.nr ? `${rs(h.nr)} after a product had been empty 30 days (restock or drop?)` : '', h.est ? `${rs(h.est)} a guess: products that hardly sell` : '', h.apart ? `${rs(h.apart)} while the warehouse topped up a few pieces` : ''].filter(Boolean); return parts.length ? `<p class="muted small" id="brand-apart">Not counted in ${rs(h.lost)}: ${parts.join(' · ')}.</p>` : ''; };
   const B = () => S().brand;
   const loading = '<p class="muted pad">Reading the 12 months…</p>';
 
@@ -176,7 +176,7 @@
     return b.products.filter((p) => (all || p.best) && p.months && p.months[m] && (p.months[m].daysOut > 0 || p.months[m].lost > 0))
       .map((p) => ({ ...p, id: p.variantId, x: { ...p.months[m], counted: p.months[m].counted ?? p.months[m].lost } })).sort((a, c) => c.x.counted - a.x.counted || c.x.lost - a.x.lost || c.x.daysOut - a.x.daysOut);
   }
-  const notCounted = (x) => (x.lost > x.counted + 1 ? ` <small class="muted" title="${esc([x.nr ? `${exact(x.nr)} after day 30 with nothing ordered (restock or drop?)` : '', x.est ? `${exact(x.est)} a guess (hardly sells)` : '', x.apart ? `${exact(x.apart)} warehouse top-up` : ''].filter(Boolean).join(' · '))}">+${rs(x.lost - x.counted)} not counted</small>` : '');
+  const notCounted = (x) => (x.lost > x.counted + 1 ? ` <small class="muted" title="${esc([x.nr ? `${exact(x.nr)} after its first 30 days empty (restock or drop?)` : '', x.est ? `${exact(x.est)} a guess (hardly sells)` : '', x.apart ? `${exact(x.apart)} warehouse top-up` : ''].filter(Boolean).join(' · '))}">+${rs(x.lost - x.counted)} not counted</small>` : '');
   function monthDetail(b, m) {
     if (!m) return '';
     const mm = b.months.find((x) => x.key === m) || {};
@@ -199,7 +199,7 @@
   function csvMonths() {
     const b = B();
     const sc = scope(), w = scopeName(sc);
-    const head = ['Month', 'From', 'To', 'Sold ₹ (net, ex GST)', `Missed ₹ (${w}, counted)`, '% of sales', `${sc === 'all' ? 'Products' : 'Best sellers'} out`, `Days out (${w})`, 'Not counted: restock or drop? ₹', 'Not counted: a guess ₹', 'Not counted: warehouse top-up ₹', 'Missed ₹ (all products, every part)'];
+    const head = ['Month', 'From', 'To', 'Sold ₹ (net, ex GST)', `Missed ₹ (${w}, counted)`, '% of sales', `${sc === 'all' ? 'Products' : 'Best sellers'} out`, `Days out (${w})`, 'Not counted: after 30 days empty (restock or drop?) ₹', 'Not counted: a guess ₹', 'Not counted: warehouse top-up ₹', 'Missed ₹ (all products, every part)'];
     const rows = b.months.filter((m) => m.days).map((m) => { const x = m[sc]; return [monthText(m), m.from, m.to, m.sold, x.lost, x.pct, x.out, x.daysOut, x.nr, x.est, x.apart, m.lostAll]; });
     A.saveCsv(`brand-report-months-${sc === 'all' ? 'all-products' : 'best-sellers'}-${b.asOf.through}.csv`, [head, ...rows]);
   }

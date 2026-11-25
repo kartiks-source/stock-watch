@@ -8,7 +8,7 @@
  */
 const { sideFile } = require('./sidefile');
 const agency = require('./agency');
-const RULES = '1.4.6', GRACE = 3;
+const RULES = '1.4.7', GRACE = 3;
 const file = sideFile('closed.json');
 const r2 = (x) => Math.round((Number(x) || 0) * 100) / 100;
 const read = () => { try { return file.read(); } catch (e) { console.warn('closed.json:', e.message); return null; } };

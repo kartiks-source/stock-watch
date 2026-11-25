@@ -62,7 +62,7 @@ test('days it was drafted (a spell) are no stock-out', () => {
 test('re-published: what was before its last sale stays; the gap to the new date is not a stock-out; never sold before → starts there', () => {
   const y = year('2025-10-21', '2026-11-25', [['2026-02-01', '2026-02-10'], ['2026-06-01', '2026-07-30']]);
   const p = one(A.build(y, cat({ publishedAt: at('2026-07-31') }), { dayOf, rowInfo: info() }));
-  assert.ok(p.months['2026-02'].counted > 8000); assert.ok(!p.months['2026-06']); assert.ok(!p.months['2026-07'] || p.months['2026-07'].lost <= 600);
+  assert.ok(p.months['2026-02'].counted > 6000); assert.ok(!p.months['2026-06']); assert.ok(!p.months['2026-07'] || p.months['2026-07'].lost <= 600);
   const z = year('2025-10-21', '2026-11-25'); for (const k of Object.keys(z.sales.by[1])) if (k < '2026-07-10') { delete z.sales.by[1][k]; }
   assert.equal(A.lifeOf(z, '1', cat({ publishedAt: at('2026-07-10') })[1], A.dayKeys('2025-10-21', '2026-11-24'), { dayOf, winFrom: '2025-11-25' }).from, '2026-07-10');
 });
@@ -118,13 +118,41 @@ test('sure or guess: only weeks it could be bought, never under 8', () => {
   assert.equal(E.confidenceOfWeeks(4, 25), 'low'); assert.equal(E.confidenceOfWeeks(4, 13), 'medium');
 });
 
-test('a hidden or drafted product: only the first 30 days of a stock-out are sure, the rest is restock or drop', () => {
-  const y = year('2025-10-21', '2026-11-25', [['2026-03-01', '2026-05-29']]);   // 90 days
-  const p = one(A.build(y, cat({ active: false, inactiveSince: at('2026-11-20') }), { dayOf, firstSeenDay: '2026-09-01' }));
-  const on = one(A.build(y, cat(), { dayOf, rowInfo: info() }));   // never hidden: every day counts
-  assert.equal(on.counted, on.lost); assert.ok(Math.abs(p.lost - on.lost) < on.lost * 0.05);
-  assert.ok(p.counted < p.lost * 0.5 && p.counted > p.lost * 0.2, `${p.counted} of ${p.lost}`);
-  assert.equal(p.months['2026-05'].counted, 0); assert.equal(p.months['2026-05'].nr, p.months['2026-05'].lost);
+test('1.4.7: one rule: the first 30 days of a stock-out are sure, the days after are apart, ended or not', () => {
+  const y = year('2025-10-21', '2026-11-25', [['2026-03-01', '2026-05-29']]);   // 90 days, refilled
+  const p = one(A.build(y, cat(), { dayOf, rowInfo: info() }));
+  assert.ok(p.counted < p.lost * 0.5 && p.counted > p.lost * 0.2); assert.equal(p.months['2026-05'].counted, 0);
+  const t = one(A.build(year('2025-10-21', '2026-11-25', [['2026-03-01', '2026-03-20']]), cat(), { dayOf, rowInfo: info() })); assert.equal(t.counted, t.lost, '20 days: all sure');
+});
+
+test('1.4.7: money missed uses the price of the time', () => {
+  const y = year('2025-10-21', '2026-11-25', [['2026-11-10', '2026-11-19']]);
+  for (const [k, x] of Object.entries(y.sales.by[1])) if (k >= '2026-09-01') { x[1] = 1500; }
+  const v = one(A.build(y, cat(), { dayOf })); const m = v.months['2026-11'];
+  assert.equal(Math.round(m.lost / m.units / 10) * 10, 1500); assert.ok(v.price < 1200, 'the 12-month average is lower');
+  assert.equal(v.variantPrice['1']['2026-11'], 1500); assert.equal(v.variantPrice['1']['2026-03'], 1000);
+});
+
+test('1.4.7: "continue selling at 0" is never an empty shelf, on the brand report and in the report', () => {
+  const y = year('2025-10-21', '2026-11-25', [['2026-06-01', '2026-06-20']]); y.moves.by[1]['2025-10-24'] = 400;   // the log goes far below zero
+  assert.equal(one(A.build(y, cat(), { dayOf })).unsure, 1);
+  const r = A.build(y, cat({ oversell: true }), { dayOf }); assert.equal(one(r).lost, 0); assert.equal(one(r).daysOut, 0); assert.deepEqual(r.dropped, []);
+  const now = at('2026-11-25'), rep = (c) => E.report([{ t: now - 20 * 864e5, variantId: '1', sku: 'S', product: 'P', variant: '', before: 5, now: 0, price: 100 }], [{ t: now - 25 * 864e5, order: 'A', line: '1', variantId: '1', sku: 'S', qty: 3, price: 100 }], {}, { days: 30, now, catalog: c }).products[0];
+  assert.ok(rep(cat()).lost > 0); assert.equal(rep(cat({ oversell: true })).lost, 0);
+});
+
+test('1.4.7: status periods: active since the website date; Shopify’s changes; unknown before its record; drafts', () => {
+  const S = require('../src/status'), D = (k) => at(k), H = D('2026-08-28');
+  const f = (c, log = []) => S.periods({ createdAt: D('2024-01-01'), ...c }, log, H).map((p) => [p.status, p.from && dayOf(p.from), p.to && dayOf(p.to)]);
+  assert.deepEqual(S.parse({ createdAt: '2026-09-17T06:14:00Z', action: 'status_changed', message: 'A B changed product status from draft to active: X.' }), [Date.parse('2026-09-17T06:14:00Z'), 'DRAFT', 'ACTIVE']);
+  assert.equal(S.parse({ createdAt: '2026-09-17', action: 'published', message: 'included a product' }), null);
+  assert.deepEqual(f({ status: 'ACTIVE', publishedAt: D('2024-01-01') }), [['ACTIVE', '2024-01-01', null]]);
+  assert.deepEqual(f({ status: 'ACTIVE', publishedAt: D('2026-07-10') }), [['UNKNOWN', '2024-01-01', '2026-07-10'], ['ACTIVE', '2026-07-10', null]]);
+  assert.deepEqual(f({ status: 'DRAFT' }), [['UNKNOWN', '2024-01-01', '2026-08-28'], ['DRAFT', '2026-08-28', null]]);
+  const log = [[D('2026-09-10'), 'ACTIVE', 'DRAFT'], [D('2026-09-17'), 'DRAFT', 'ACTIVE'], [D('2026-10-05'), 'ACTIVE', 'ARCHIVED']];
+  assert.deepEqual(f({ status: 'ARCHIVED' }, log), [['UNKNOWN', '2024-01-01', '2026-08-28'], ['ACTIVE', '2026-08-28', '2026-09-10'], ['DRAFT', '2026-09-10', '2026-09-17'], ['ACTIVE', '2026-09-17', '2026-10-05'], ['ARCHIVED', '2026-10-05', null]]);
+  assert.deepEqual(S.offSpells(S.periods({ status: 'ARCHIVED', createdAt: D('2024-01-01') }, log, H)), [[D('2026-09-10'), D('2026-09-17')]]);
+  assert.deepEqual(f({ status: 'ACTIVE', spells: [{ from: D('2026-11-21'), to: D('2026-11-23'), status: 'DRAFT' }], publishedAt: D('2026-11-23') }).slice(-3), [['ACTIVE', '2026-11-21', '2026-11-21']].slice(1).concat([['ACTIVE', '2026-08-28', '2026-11-21'], ['DRAFT', '2026-11-21', '2026-11-23'], ['ACTIVE', '2026-11-23', null]]));
 });
 
 test('sure or guess in the report: 4 of 13 buyable weeks is fairly sure, 3 sales stay a guess, 4 in 2 weeks are out of 12', () => {

@@ -1077,3 +1077,12 @@ body.no-period .top .range, body.no-period .top .rlabel, body.no-period .top .rd
 }
 .month-line .linkbtn { display: inline-flex; width: auto; padding: 0 4px; color: var(--brand); }
 @media (min-width: 1181px) and (max-width: 1400px) { .tbl table[data-table="products"] td:first-child { max-width: 320px; } }   /* names readable; the last optional columns step aside (fitTables) */
+
+/* 1.4.7: active / draft / archived */
+.life { font-size: 11.5px; color: var(--soft); }
+.life.on::before, .life.offl::before { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 4px; vertical-align: 1px; background: #1b7a4b; }
+.life.offl::before { background: #8a94a6; }
+.life-row { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; margin: 6px 0; font-size: 13px; }
+.life-row b { min-width: 76px; } .life-row.on b { color: #1b7a4b; }
+.life-row small { flex-basis: 100%; }
+@media (max-width: 759.98px) { .pl2 { flex-wrap: wrap; } .pl2 .life { flex-basis: 100%; } }

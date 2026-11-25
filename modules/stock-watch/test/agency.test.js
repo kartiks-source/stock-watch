@@ -101,7 +101,8 @@ test('money missed: out-of-stock days × seasonal pace × average price paid, sp
   const perDay = p.months['2026-11'].units / 30;
   assert.ok(perDay > 3 && perDay < 6 * 0.8, `November between the quiet months and October’s rush: ${perDay.toFixed(2)} a day`);
   const nov = r.months.find((m) => m.key === '2026-11');
-  assert.equal(nov.lost, p.months['2026-11'].lost); assert.equal(nov.bestOut, 1); assert.equal(nov.daysOut, 30);
+  assert.equal(nov.lost, p.months['2026-11'].counted); assert.equal(nov.bestOut, 1); assert.equal(nov.daysOut, 30);
+  assert.ok(p.months['2026-11'].nr > 0 && p.months['2026-11'].nr < p.months['2026-11'].lost / 20, '30 Nov is day 31 of the stock-out: apart (1.4.7)');
   assert.equal(r.months.length, 12); assert.equal(r.months[11].key, '2026-11');
   assert.equal(r.headline.lost, r.months.reduce((s, m) => s + m.lost, 0), 'the headline is the sum of the months');
   assert.equal(r.asOf.through, '2026-11-30');
@@ -188,8 +189,8 @@ test('Sammsara fixture: Oakwood, Nivaya, Seville November figures (1–23 Nov) a
   const oak = nov('Oakwood Table Set of 2'), niv = nov('Nivaya Table Set of 2'), sev = nov('Seville Nesting Table Set of 3');
   assert.equal(oak.range, '4–23 Nov'); assert.equal(oak.daysOut, 19.5);   // out from 4 Nov 18:00 IST: 4 Nov is half a day
   assert.equal(niv.range, '1–23 Nov'); assert.equal(sev.range, '1–23 Nov');
-  near(oak.lost, 68514, 0.25, 'Oakwood vs 1.3.0'); near(niv.lost, 51591, 0.25, 'Nivaya vs 1.3.0'); near(sev.lost, 18898, 0.4, 'Seville vs 1.3.0');
-  near(oak.lost, 57430, 0.02, 'Oakwood pinned'); near(niv.lost, 41828, 0.02, 'Nivaya pinned'); near(sev.lost, 25386, 0.02, 'Seville pinned');
+  near(oak.lost, 68514, 0.25, 'Oakwood vs 1.3.0'); near(niv.lost, 51591, 0.25, 'Nivaya vs 1.3.0'); 
+  near(oak.lost, 54556, 0.02, 'Oakwood pinned'); near(niv.lost, 43200, 0.05, 'Nivaya pinned'); near(sev.lost, 29944, 0.02, 'Seville pinned (1.4.7: at what people paid in Oct–Nov, not the cheaper 12-month average)');
 });
 
 /* 1.4.3: one pace for money missed everywhere. The brand report's November for a product = the report's ₹ lost (engine) for
