@@ -1085,4 +1085,43 @@ body.no-period .top .range, body.no-period .top .rlabel, body.no-period .top .rd
 .life-row { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; margin: 6px 0; font-size: 13px; }
 .life-row b { min-width: 76px; } .life-row.on b { color: #1b7a4b; }
 .life-row small { flex-basis: 100%; }
-@media (max-width: 759.98px) { .pl2 { flex-wrap: wrap; } .pl2 .life { flex-basis: 100%; } }
+
+/* 1.4.8 phone layout: one header row (store + sync; the period row only where it is used), rows with the whole name, code and
+   status on one line, the two links in the free bottom-right corner (44 px, clear of the name) */
+.m-apart > summary { list-style: none; }
+@media (max-width: 759.98px) {
+  .top { height: auto; min-height: 0; padding: 4px 10px; z-index: 20; }
+  .top .brand { display: none; }
+  .storebar:not([hidden]) { margin: 6px 10px 0; padding-right: 54px; position: relative; }
+  .shell { position: relative; }
+  .top .sync-pill { position: absolute; right: 10px; width: 46px; height: 46px; display: inline-grid; place-items: center; padding: 0; }
+  body.no-period .top { position: absolute; inset: 0 0 auto 0; height: 0; padding: 0; border: 0; background: none; }
+  body.no-period .top .sync-pill { top: 6px; }
+  body:not(.no-period) .top { min-height: 48px; padding-right: 64px; }
+  body:not(.no-period) .top .sync-pill { top: 2px; right: 10px; }
+  body:not(.no-period) .storebar:not([hidden]) { padding-right: 0; }
+  .storebar .store-m { min-height: 44px; }
+  .rdates { white-space: nowrap; width: auto; margin: 0 0 0 2px; }
+  .rail a .rs, .rail a > span { white-space: nowrap; }
+  .rail a { font-size: 10px; letter-spacing: -.01em; }
+
+  .headline h1 { font-size: 19px; line-height: 1.25; }
+  .brand-h .scope { margin-bottom: 2px; }
+  .headline .lead { font-size: 14px; }
+  .m-apart > summary { display: inline-block; padding: 8px 0; font-size: 13px; color: var(--soft); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+
+  .mcard, .arow, .t5 { position: relative; }
+  .pl1 { display: block; white-space: normal; }
+  .pl1 .pname { white-space: normal; line-height: 1.3; }
+  .pl1 .best { margin-left: 6px; }
+  .pl2 { gap: 8px; min-height: 18px; flex-wrap: wrap; }
+  .mcard h3 .thumb, .arow .thumb, .t5 .thumb { width: 52px; height: 52px; align-self: flex-start; }
+  .mcard h3 .prod, .arow .prod, .t5 .prod { align-items: flex-start; }
+  .mcard .pl2 .plinks, .arow .pl2 .plinks, .t5 .pl2 .plinks { position: absolute; right: 2px; bottom: 0; gap: 0; }
+  .mcard .mfacts { padding-right: 88px; min-height: 30px; align-items: center; }
+  .mcard .mfacts .why { white-space: normal; }
+  .mcard header:has(.prod) .mspark { display: none; }
+  .mcard header { gap: 10px; }
+  .arow .af, .t5 .af { padding-left: 62px; padding-right: 88px; min-height: 26px; }
+  .hrow .pl2 .plinks { display: none; }   /* the grid is a heat map: the links are in the panel one tap away */
+}
