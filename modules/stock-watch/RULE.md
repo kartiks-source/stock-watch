@@ -51,4 +51,4 @@ A month is locked 3 days after it ends: empty days, speed, like-for-like, price,
 - Someone may have bought another product instead. That isn't taken off.
 - Our record begins on the first day Shopify's two reports both hold; gaps in the first weeks carry no ₹.
 - Money on products that are not back yet can't be checked against a comeback; the page says how much that is.
-- The range held 86–88% of the time when the method was checked blind (one product: 83%), not the 90% it aims at.
+- The range held 86–88% of the time when the method was checked blind (before this code was written, in a separate build), not the 90% it aims at. One product: 88%, checked on the same data, so not blind.
