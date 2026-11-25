@@ -603,7 +603,7 @@
         <p class="exp">Each order covers lead time (${r.settings.leadDays} d, assumed until set per supplier) + days the stock should last + buffer, at the product’s in-stock sales rate. Biggest sales a day first.${t.hasCost ? '' : ' <span id="nocost-reorder">No unit costs in Shopify: ₹ are at selling price.</span>'}</p>
         ${t.allocation ? `<p class="exp" id="alloc-note"><a href="#products" data-go="products" data-filter="warehouse">${inr.format(t.allocation)} ${t.allocation === 1 ? 'product is' : 'products are'} a website allocation refilled from the warehouse</a>: not on this list, because warehouse stock isn’t in Shopify. Check the warehouse.</p>` : ''}`;
     return `
-      <section class="headline">${head}${scopeLine()}</section>
+      <section class="headline">${head}${narrow() ? '' : scopeLine()}</section>
       ${planBar()}
       <div class="toolbar"><div class="chips">${groups.map(([k, l, c]) => `<button class="chip ${f === k ? 'on' : ''}" data-filter-reorder="${k}">${l}<span class="c">${c}</span></button>`).join('')}</div>
         <input class="search" id="q-reorder" placeholder="Search…" title="Search product or SKU" value="${esc(state.q.reorder)}">${colPicker('reorder', cols)}${window.SW_MONEY && !ordered ? SW_MONEY.toggle() : ''}${dlMenu('reorder', storeUrl(`/api/export/reorder.csv?days=${state.days}${whatQs()}&filter=${f}&q=${encodeURIComponent(state.q.reorder)}${window.SW_MONEY && !ordered ? SW_MONEY.qs() : ''}`), pickable.length ? `<button class="linkbtn" id="pick-all">Tick all ${pickable.length} in view</button>` : '')}</div>

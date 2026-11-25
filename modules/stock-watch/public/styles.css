@@ -1101,7 +1101,7 @@ body.no-period .top .range, body.no-period .top .rlabel, body.no-period .top .rd
   body:not(.no-period) .top .sync-pill { top: 2px; right: 10px; }
   body:not(.no-period) .storebar:not([hidden]) { padding-right: 0; }
   .storebar .store-m { min-height: 44px; }
-  .rdates { white-space: nowrap; width: auto; margin: 0 0 0 2px; }
+  .plan { margin: 0; } .rdates { white-space: nowrap; width: auto; margin: 0 0 0 2px; }
   .rail a .rs, .rail a > span { white-space: nowrap; }
   .rail a { font-size: 10px; letter-spacing: -.01em; }
 
@@ -1112,7 +1112,7 @@ body.no-period .top .range, body.no-period .top .rlabel, body.no-period .top .rd
 
   /* 1.4.9 cards: the picture on the left, everything else stacked beside it, the money top right and the links under it */
   .mcard, .arow, .t5 { position: relative; }
-  .mcards { gap: 0; background: var(--card); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .mcards { gap: 0; margin-top: 2px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
   .mcard { padding: 7px 8px 7px 10px; gap: 1px; min-height: 66px; border: 0; border-radius: 0; box-shadow: none; border-bottom: 1px solid var(--line); border-left: 4px solid transparent; }
   .mcard:last-child { border-bottom: 0; }
   .mcard:has(.prod) { padding-left: 70px; }
@@ -1159,7 +1159,14 @@ body.no-period .top .range, body.no-period .top .rlabel, body.no-period .top .rd
 .scope-top:empty, .scopebar:empty { display: none; }
 .scopebar { display: none; }
 @media (max-width: 759.98px) {
-  .scopebar:not(:empty) { display: block; margin: 6px 10px 0; }
-  .scopebar .scope { display: flex; } .scopebar .scope button { flex: 1; min-height: 44px; }
+  .scope .wl { display: none; }
+  .storebar:not([hidden]) { width: 42%; margin: 6px 0 0 10px; padding-right: 0; align-self: flex-start; }
+  body:not(.no-period) .storebar:not([hidden]), body.no-period .storebar:not([hidden]) { padding-right: 0; }
+  .storebar .sm-n { display: none; }
+  .scopebar:not(:empty) { display: block; margin: 6px 10px 0 calc(42% + 18px); }
+  .storebar:not([hidden]) + .scopebar:not(:empty) { margin-top: -46px; }
+  body.no-period .scopebar:not(:empty) { margin-right: 64px; }
+  .scopebar .scope { display: flex; } .scopebar .scope button { flex: 1 1 auto; min-height: 44px; padding: 0 6px; white-space: nowrap; font-size: 12.5px; }
+  .headline .scopeline { font-size: 12.5px; margin: 2px 0 0; }
   .wrap { padding-top: 8px; }
 }
