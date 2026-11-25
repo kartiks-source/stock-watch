@@ -2,6 +2,17 @@
 
 User-facing changes, newest first. Semver: minor when a number's rule changes or a feature lands, patch for fixes. The version in `package.json` matches the top heading. Versions before 0.9.0 were reconstructed from `docs/DEVLOG.md` on 20 Nov 2026 (no tags existed); dates are the DEVLOG dates. Per DEVLOG, nothing from 0.6.0 on has been deployed yet. Since 1.0.0-rc.1, `/health`, `/status` and the page footer show the version and the build's commit (SW-056); `test/docs.test.js` checks the top heading matches `package.json`.
 
+## 1.4.6 · 2026-11-25 · fixes from the logic, data and UI critics
+
+- **"12 months" is now the last 365 days**, so nothing jumps at the start of a month (on 2 Dec all of December 2025 would have vanished). The first month shown is part of one, with its dates.
+- **Closed months keep their money:** marking ordered, restocking, drafting or a new price no longer changes a month the client has seen. Drafted and archived products keep their past.
+- **Best sellers:** running out no longer pushes a product off the list. Sammsara: 44 (was 41).
+- **Sure or a guess** looks only at weeks a product could be bought, and needs a sale in 4 or more.
+- **Ads:** top sellers that are refilled a few at a time are no longer on the pause list; they have their own "keep ads on" list.
+- **The side panel, chart and lists say the same money:** the counted part, with the rest beside it.
+- 7/14/30/60-day pages: products that were once oversold get their older stock history back (rebuilt at the next pull).
+- Sammsara on the same data: all products ₹28.1 L → ₹32.2 L, best sellers ₹13.9 L → ₹15.2 L, last 30 days ₹4.85 L → ₹5.30 L. 1.4.5's change now has tests, and saved weekly snapshots are retaken.
+
 ## 1.4.5 · 2026-11-24 · product sales over the same 12 months as the month table
 
 - **A product's "Sold" and average price on the brand report now cover the same 12 calendar months as the month table** (1 Dec 2025 – 23 Nov 2026), so they match Shopify's sales report for those dates. Before, they also counted 21 Oct – 30 Nov 2025 (Oakwood showed 178 units / ₹9.16 L; Shopify, Dec–Nov: 150 / ₹7.67 L). The best-seller list (top 80% of 12 months) uses the corrected totals: 41 products, was 43; their 12-month money missed is ₹13.95 L, was ₹14.23 L. All products: ₹28.08 L, was ₹27.83 L (the average price moved).

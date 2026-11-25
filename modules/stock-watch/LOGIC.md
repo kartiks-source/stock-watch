@@ -1154,3 +1154,26 @@ The last 30 days to the hour (Why, sales lost with its confidence, every stock-o
 - The page keeps the last 30 product answers keyed by product, period, trial values, store and `rev`, and fetches a product 150 ms after the pointer rests on (or keyboard focus reaches) its row.
 - Measured on Sammsara's data (local copy, read-only): `/api/product` 0.19–0.40 s → 2–3 ms warm, 0.24 s right after a change; `/api/report?days=30` 545 KB → 58.5 KB gzipped, 40 ms → 6 ms warm; `/api/brand` 354 KB / 0.2 s → 58 KB / 5 ms warm. Railway's CPU is slower (the live drawer took 0.72 s before), so expect a few times these cold numbers there; warm answers are cached either way.
 - **Can be wrong:** a change made outside the app's own writes (none today) would wait for the 1–10 minute limits.
+
+## 26. 1.4.6: rules changed after the critics (wins over the sections above where they differ)
+
+| Rule | Now | Before |
+|---|---|---|
+| "12 months" (§20–§22, §24) | the **last 365 full days** ending yesterday, for headline, sold, average price, best-seller rank and the month table. The first month shown is usually part of one (its dates are given), so there can be 13 | 12 calendar months: on the 2nd of a month a whole month vanished |
+| Best sellers (§7a, §22) | top 80% of **sold + what it would have sold in the first 30 days of each stock-out**; a product not on sale now is never one | sold only: a long stock-out pushed a best seller off the list |
+| Closed months (`src/closed.js`, closed.json) | once a month has been over for 3 full days and the 12 months hold all of it, its ₹ per variant is saved and shown from then on, whatever is marked ordered, restocked, drafted or repriced later. Sold and days out stay Shopify's. The best-seller list is today's, so a best-seller month total can move when the list does; all-products months do not, while they are wholly inside the 365 days. A rules change (RULES) or the pace setting closes them again | recalculated every time |
+| Drafted / archived products | kept when they sold in the window, up to the day they went inactive (already inactive at our first read: up to their last sale). Out of the season index, best sellers, restock and ads | dropped, with their past |
+| Re-published (Shopify moves `publishedAt`) | the days between its last sale before that and the new date are skipped; never sold before → starts there | everything before the new date was dropped |
+| Drafted for a while (`spells`) | those days are skipped | counted as out |
+| Hidden when empty (re-published, or not on sale now) | only the first 30 days of a stock-out can be counted; the rest is "restock or drop?" | – |
+| Still out (`outRun`) | the last day must end empty, and a day that ended with stock breaks the run | half days joined into one long stock-out |
+| Confidence (§4c G26) | share of the weeks it **could be bought** (any day in stock), when it sold in 4+ weeks; never out of fewer than 12. Otherwise all 25 weeks, as before | always all weeks since it was created |
+| New (under 60 days held) or unsure variants | §3–§4's own rate | ₹ lost 0 on every page |
+| Season, days 2–7 of a month | the same month last year | 1 |
+| Drawer (§24) | money missed = the counted part; the rest is `apart` | both together |
+| Ads (§23, §15c) | a product refilled a few pieces at a time and in stock is never paused: list `keep` | on the pause list |
+| 60-day rebuild (§1c) | stock may walk to 2 below min(now, 0), as in §20; stores rebuild once (history rules v3) | any oversell dropped the product's older history |
+
+Known and not changed: a stock-out that ended counts every day (except hidden products), one still running 30 (§4c); the price is a 12-month average; no allowance for shoppers who bought something else or for fewer visitors; the order speed (§3) differs from the money speed (§21); "% of sales" is missed ÷ sold on the brand report and missed ÷ (sold + missed) on the period pages; "keep selling at 0" in Shopify is not read (one product, dropped as unsure).
+
+Sammsara, 24 Nov 2026, same data on both versions: all products ₹28.1 L → ₹32.2 L, best sellers 41 → 44, ₹13.9 L → ₹15.2 L; guesses ₹8.9 L → ₹7.0 L; restock or drop? ₹22.2 L → ₹24.8 L; last 30 days ₹4.85 L → ₹5.30 L.

@@ -22,7 +22,7 @@ const get = async (p) => (await fetch(`${base}${p}${p.includes('?') ? '&' : '?'}
 test('GET /api/brand on demo: rows held, 12 months, headline = sum of months, best sellers now and ads', async () => {
   const j = await get('/api/brand');
   assert.equal(j.ok, true); assert.equal(j.basis, 'rows');
-  assert.equal(j.months.length, 12);
+  assert.ok(j.months.length === 12 || j.months.length === 13, 'the months the last 365 days touch');
   assert.equal(j.headline.lost, j.months.reduce((s, m) => s + m.lost, 0));
   assert.equal(j.headline.sold, j.months.reduce((s, m) => s + m.sold, 0));
   assert.ok(j.products.some((p) => p.best));
@@ -45,7 +45,7 @@ test('GET /api/product/:id carries the variant’s year; POST /api/shopify/year 
   const d = await get(`/api/product/${id}`);
   assert.equal(d.profile.ok, true, JSON.stringify(d.profile).slice(0, 200));
   assert.ok(d.profile.calendar.length > 30 && d.profile.calendar.every(([k, f]) => /^\d{4}-\d\d-\d\d$/.test(k) && [0, 0.5, 1].includes(f)));
-  assert.equal(d.profile.months.length, 12);
+  assert.ok(d.profile.months.length >= 12 && d.profile.months.length <= 13);
   assert.ok(d.profile.rank && d.profile.rank.n >= 1 && d.profile.rank.of >= d.profile.rank.n);
   assert.ok(d.profile.details && Array.isArray(d.profile.details.tags));
   assert.ok(d.profile.ms < 1500, `fast: ${d.profile.ms} ms`);

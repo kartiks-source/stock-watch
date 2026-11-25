@@ -34,7 +34,8 @@ const QL_VERSION = '2025-10';   // the version ShopifyQL was checked on (Sammsar
 const CAP = 1000;               // ShopifyQL returns at most this many rows per query
 const WINDOW_DAYS = 7;          // first try: a week per query; a capped window is split in half
 /** Bumped when the rebuild's rules change: a store rebuilt under an older version is rebuilt again on its next pull. */
-const VERSION = 2;              // 1 = 1.1.0 (relative windows, lost 1 day in 7); 2 = 1.1.1 (dates, first-hour split, check)
+const OVERSELL = 2;
+const VERSION = 3;              // 1 = 1.1.0 (relative windows, lost 1 day in 7); 2 = 1.1.1 (dates, first-hour split, check); 3 = 1.4.6 (oversell floor)
 const BAD_SHARE = 0.01;         // order lines inside rebuilt stock-outs above this share of the span's lines → refused
 const HISTORY_Q = 'query History($q: String!) { shopifyqlQuery(query: $q) { tableData { columns { name } rows } parseErrors } }';
 
@@ -147,7 +148,7 @@ function rebuild(changes, nowLevels, firstSeenAt, { since = firstSeenAt - 60 * D
   const rows = [], dropped = []; let changed = 0, flat = 0;
   for (const [id, L0] of Object.entries(nowLevels)) {
     const cs = [...(by.get(id) || new Map())].filter(([, d]) => d).sort((a, b) => a[0] - b[0]);
-    let L = Number(L0); const steps = [], floor = Math.min(Number(L0), 0);
+    let L = Number(L0); const steps = [], floor = Math.min(Number(L0), 0) - OVERSELL;   // 1.4.6: an oversell to −1 or −2 is not a broken log (same as src/agency.js)
     for (let i = cs.length - 1; i >= 0; i--) { const [t, d] = cs[i]; steps.unshift({ t, before: L - d, now: L }); L -= d; }
     if (L < floor || steps.some((s) => s.before < floor)) { dropped.push(id); continue; }
     const r = meta[id] || {};

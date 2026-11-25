@@ -199,7 +199,7 @@ const notRestockedDays = (lead, safety) => Math.max(NOT_RESTOCKED_DAYS, (+lead |
 /** 1.3.0 (LOGIC.md §4c, G26): confidence from Shopify's weekly sales (ShopifyQL, src/weeks.js): the share of the last full
  *  weeks the variant was live in that had a sale. High ≥ 44% (4 of 9 weeks), medium ≥ 22% (2 of 9), else low. A variant live
  *  under WEEKS_MIN_LIVE full weeks, or a store without the weekly data, keeps the units rule. */
-const WEEKS_HIGH = 0.44, WEEKS_MEDIUM = 0.22, WEEKS_MIN_LIVE = 8, WEEK = 7 * DAY;
+const WEEKS_HIGH = 0.44, WEEKS_MEDIUM = 0.22, WEEKS_MIN_LIVE = 8, WEEKS_PROOF = 4, WEEKS_FLOOR = 12, WEEK = 7 * DAY;
 const confidenceOfWeeks = (sold, live) => (sold / live >= WEEKS_HIGH ? 'high' : sold / live >= WEEKS_MEDIUM ? 'medium' : 'low');
 /** Full weeks of the weekly data a variant was live in (created before the week ended); null when either is unknown. */
 function weeksLive(ws, createdAt) {
@@ -532,9 +532,13 @@ function report(stock, orders, settings = {}, opts = {}) {
     /* how sure ₹ lost is (LOGIC.md §4c). 1.3.0: the share of Shopify's last full weeks with a sale (G26) when the variant was
        live 8+ of them; else the units: those the rate rests on, or every unit held, whichever is more */
     const wsRow = ws ? own(ws.by, p.id) : undefined, live = weeksLive(ws, p.createdAt);
+    /* 1.4.6: only weeks it could be bought (not hidden, not empty all week), and only with proof: a sale in 4+ weeks, and never
+       out of fewer than 12 weeks, so a product that sold twice in a year can't turn "sure" */
+    const open = own(opts.weeksOpen, p.id), proof = wsRow && num(wsRow.s) >= WEEKS_PROOF;
+    const weeksOf = live != null && Number.isFinite(open) && proof ? Math.min(live, Math.max(WEEKS_FLOOR, open)) : live;
     const heldUnits = p.lines.reduce((s, o) => s + (o.t >= histFrom ? demandQty(o) : 0), 0);
     let confidence, weeksSold = null;
-    if (live != null && live >= WEEKS_MIN_LIVE) { weeksSold = Math.min(live, wsRow ? Math.max(0, num(wsRow.s)) : 0); confidence = confidenceOfWeeks(weeksSold, live); }
+    if (live != null && live >= WEEKS_MIN_LIVE) { weeksSold = Math.min(weeksOf, wsRow ? Math.max(0, num(wsRow.s)) : 0); confidence = confidenceOfWeeks(weeksSold, weeksOf); }
     else confidence = confidenceOf(Math.max(units, heldUnits));
     /* SW-040 (LOGIC.md §6c): the product's supplier; its lead time, when set, replaces the store's */
     const sup = own(opts.suppliers, p.id) || null, lead = sup && sup.leadDays != null ? sup.leadDays : S.leadDays;
@@ -605,7 +609,7 @@ function report(stock, orders, settings = {}, opts = {}) {
       rateBasis: rate.basis, rateFrom: rate.from,   // which sales the rate was measured on (LOGIC.md §3)
       ...(byMonth ? { lossPace: round(num(byMonth[TZ.dayKey(now, off).slice(0, 7)] ?? byMonth._), 2), lossPrice: Math.round(lossPrice) }   // 1.4.3: ₹ lost at §21's pace this month
         : lossPerHour !== perSellingHour && !seeded ? { lossPace: round(lossPerHour * 24, 2) } : {}),
-      rateUnits: units, confidence, heldUnits, weeksSold, weeksLive: live != null && live >= WEEKS_MIN_LIVE ? live : null, confBasis: live != null && live >= WEEKS_MIN_LIVE ? 'weeks' : 'units', nrDays,   // §4c: how sure ₹ lost is, on what
+      rateUnits: units, confidence, heldUnits, weeksSold, weeksLive: live != null && live >= WEEKS_MIN_LIVE ? weeksOf : null, confBasis: live != null && live >= WEEKS_MIN_LIVE ? 'weeks' : 'units', nrDays,   // §4c: how sure ₹ lost is, on what
       lost: Math.round(lost), unitsLost: round(unitsLost, 1), outs, smallTopUps, repeats,
       sold: Math.round(p.lines.filter((o) => o.t >= from).reduce((s, o) => s + num(o.qty) * num(o.price), 0)),
       unitsSold: p.lines.filter((o) => o.t >= from).reduce((s, o) => s + num(o.qty), 0),

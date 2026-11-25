@@ -116,7 +116,9 @@ test('best sellers = products making the top 80% of 12 months’ net sales (sett
   const r9 = A.build(y, c, { bestShare: 0.95 });
   assert.deepEqual(r9.products.filter((p) => p.best).map((p) => p.productId).sort(), ['p1', 'p2', 'p3', 'p4']);
   assert.equal(r.products.find((p) => p.productId === 'p4').variants, 2);
-  assert.equal(A.build(y, cat(['1'], { 1: { active: false } }), {}).products.length, 0, 'products not on sale now are left out');
+  const off = A.build(y, cat(['1', '2'], { 1: { active: false } }), {}).products;   // 1.4.6: kept for its past, never a best seller
+  assert.deepEqual(off.map((p) => [p.productId, !!p.inactive, p.best]).sort(), [['p1', true, false], ['p2', false, true]]);
+  assert.equal(A.build(y, cat(['9'], { 9: { active: false } }), {}).products.length, 0, 'not on sale and never sold: left out');
 });
 
 test('ranges: day keys → "4–11 Oct, 23 Oct"', () => {
