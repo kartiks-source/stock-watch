@@ -17,7 +17,7 @@ One rule makes every number on the screen. Nothing else may add, hide or change 
 
 ## Best sellers
 
-The variants making the first 80% of all Shopify net sales (drafts count too) in the (up to) 365 days before the quarter began. Real sales only; the one that crosses 80% is in. Gift lines (average price under ₹100 over the whole record) are left out of everything. Each month uses its own quarter's list; a quarter with under 60 days of record before it uses the next one's.
+The variants making the first 80% of all Shopify net sales (drafts count too) in the (up to) 365 days before the quarter began. Real sales only; the one that crosses 80% is in. Gift lines (average price under ₹100 over the whole record) are left out of the list, the like products and the money; their days are still shown. Each month uses its own quarter's list; a quarter with under 60 days of record before it uses the next one's; a store newer than that uses its first 90 days.
 
 ## Money missed and could have sold (estimates, every product)
 
@@ -30,14 +30,14 @@ The variants making the first 80% of all Shopify net sales (drafts count too) in
 - **Days empty**: 1 for an Empty day, ½ for a Half day. What it sold that day comes off: the smaller of (days × speed) and (speed − sold), never under 0. Another variant of the same product Full that day: 0.
 - **After 60 days empty** (from the gap's first day): shown, never added. Too few gaps that long ended to test it.
 - **No ₹** (days still shown): too little history, no recent sales, already empty when the record began, sells at 0, gift line.
-- **Range** (90%): how far the tests below were off, by product (2,000 resamples), best sellers and others apart, a random mix of replays and comebacks, with counting noise and ±5.5% for the choice of model. The low end is never above what real comebacks alone say. Under 5 entries: no range.
+- **Range** (90%): how far the tests below were off, by product (2,000 resamples), best sellers and others apart, a random mix of replays and comebacks, with counting noise (by product) and ±5.5% for the choice of model. The low end is never above what real comebacks alone say. Under 5 entries: no range.
 
-Why this model: 19 models (plain averages, weighted averages, intermittent-demand, Bayesian, Poisson regression, boosted trees, the 2.0 rule) × 3 ways to use other products, scored on months up to Sep 2026; the simplest of the ones that can't be told apart. Parameters 60, 14, 0.5, 2, 8 move the total under 3% either way.
+Why this model: 19 models (plain averages, weighted averages, intermittent-demand, Bayesian, Poisson regression, boosted trees, the 2.0 rule) × 3 ways to use other products, scored on windows that began by Sep 2026 (some run into October); the simplest of the ones that can't be told apart. The half-life anywhere from 30 to 180 days, and the 14, 0.5, 2 and 8, move the total under 3% either way (a half-life of 15: +5%).
 
 ## Proof (on the page, worked out again with new data)
 
-- **Comebacks**: days 4–30 after a real gap of 2+ empty days ended, against the guess from before the gap.
-- **Replays**: a pretend opening stock, real sales until it would be gone, then a gap length drawn from real gaps; the real sales of those days are the truth.
+- **Comebacks**: days 4–30 after a real gap of 2+ empty days ended, with 7+ Full days in them, against the guess from before the gap.
+- **Replays**: 40 per product with 45+ Full days: a pretend opening stock of 10–50 days' sales, real sales until it would be gone, then a gap length drawn from real gaps; the real sales of those days (half of them Full at least) are the truth.
 
 Each with its 95% interval (by product).
 
@@ -50,3 +50,5 @@ A month is locked 3 days after it ends: empty days, speed, like-for-like, price,
 - A missed sale can't be seen. The test proves how well the guess works on products that were in stock, not the missed sales themselves.
 - Someone may have bought another product instead. That isn't taken off.
 - Our record begins on the first day Shopify's two reports both hold; gaps in the first weeks carry no ₹.
+- Money on products that are not back yet can't be checked against a comeback; the page says how much that is.
+- The range held 86–88% of the time when the method was checked blind (one product: 83%), not the 90% it aims at.

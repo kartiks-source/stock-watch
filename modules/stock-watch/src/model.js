@@ -7,11 +7,11 @@
  *           day); small groups lean on everyone's.
  *   tests   replayed stock-outs (a pretend opening stock, real sales until it is gone, the real next days are the truth) and real
  *           comebacks (days 4–30 after a gap). The range comes from how far these were off, by product, never from a formula alone.
- * Chosen on months up to Sep 2026 among 19 models; Oct and Nov 2026 only used after the choice.
+ * Chosen among 19 models on windows that began by Sep 2026 (some run into October); Oct and Nov 2026 were looked at after the choice.
  */
 const HALF = 60, GUARD = 3, YEAR = 365, LAST = 60, MIN_DAYS = 30, SHARE = 0.8, WINDOW = 14, K_ALL = 2, K_TIER = 8, PHI = 0.5, CLIP = [0.25, 4], LONG = 60;
 const TIERS = [3, 8, 20, 60];          // pieces per 60 full-shelf days
-const NOISE = 0.22, MODEL_SD = 0.055, SIMS = 2000, REPLAYS = 6, SEED = 20261125;
+const NOISE = 0.22, MODEL_SD = 0.055, SIMS = 2000, REPLAYS = 40, SEED = 20261125;
 const DECAY = 0.5 ** (1 / HALF);
 
 /** A fixed random sequence: the same data always gives the same range. */
@@ -124,7 +124,9 @@ function ranger(groups) {
     const rnd = rng(SEED + 4), tot = new Float64Array(SIMS), cb = new Float64Array(SIMS), mix = Float64Array.from({ length: SIMS }, () => rnd());
     for (const k of ['best', 'other']) {
       const l = use.filter((p) => !!p.best === (k === 'best')); if (!l.length) continue;
-      const base = l.reduce((s, p) => s + p.lost, 0), sd = Math.sqrt(l.reduce((s, p) => s + (p.units + NOISE * p.units * p.units) * p.price * p.price, 0)), m = M[k]; if (!m || (!m.back && !m.replay)) return null;
+      const base = l.reduce((s, p) => s + p.lost, 0), by = new Map(), m = M[k]; if (!m || (!m.back && !m.replay)) return null;
+      for (const p of l) { const z = by.get(p.id) || [0, 0]; z[0] += p.units; z[1] += p.units * p.price; by.set(p.id, z); }   // a product's gaps share its luck
+      const sd = Math.sqrt([...by.values()].reduce((s, [u, v]) => (u > 0 ? s + (u + NOISE * u * u) * (v / u) ** 2 : s), 0));
       for (let i = 0; i < SIMS; i++) { const b = m.back ? m.back[i] : m.replay[i], q = m.replay ? m.replay[i] : m.back[i]; const e = sd * normal(rnd); tot[i] += base * (mix[i] * b + (1 - mix[i]) * q) + e; cb[i] += base * b + e; }
     }
     const of = (v) => [...v].map((x) => Math.max(0, x * Math.exp(MODEL_SD * normal(rnd)))).sort((x, y) => x - y), z = of(tot), c = of(cb), point = use.reduce((s, p) => s + p.lost, 0);

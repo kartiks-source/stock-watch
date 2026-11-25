@@ -53,7 +53,7 @@ function brand(t, { stockOf = null } = {}) {
     return { key: m.key, label: label(m.key), from: m.from, to: m.to, days: m.days, sold: m.sold, units: m.pieces, closed: m.closed, best, all, lost: best.lost, pct: best.pct, bestOut: best.out, daysOut: best.daysOut };
   });
   const y = t.year, ps = products(t);
-  const head = (k, o) => ({ lost: y[k].lost, low: y[k].low, high: y[k].high, later: y[k].later, could: y[k].could, noMoney: y[k].noMoney, daysOut: y[k].empty, late: 0, est: 0, nr: 0, apart: 0, total: y[k].lost, ...o, pct: pct(y[k].lost, o.sold) });
+  const head = (k, o) => ({ lost: y[k].lost, low: y[k].low, high: y[k].high, later: y[k].later, could: y[k].could, open: y[k].open, noMoney: y[k].noMoney, daysOut: y[k].empty, late: 0, est: 0, nr: 0, apart: 0, total: y[k].lost, ...o, pct: pct(y[k].lost, o.sold) });
   const headline = { from: t.span.from, through: t.span.to, sold: y.sold, lost: y.best.lost, daysOut: y.best.empty, bestsellers: y.bestN, bestRanOut: y.bestRan, unsure: 0, best: head('best', { products: y.bestN, ranOut: y.bestRan, sold: y.bestSold }), all: head('all', { products: ps.length, ranOut: y.allRan, sold: y.sold }) };
   const last = months[months.length - 1];
   const now = t.rows.map((x, i) => ({ x, p: ps[i] })).filter(({ x }) => x.active).map(({ x, p }) => {

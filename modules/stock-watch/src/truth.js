@@ -111,7 +111,7 @@ function report(y, catalog, opts = {}) {
   const gb = T.filter((t) => t.best), go = T.filter((t) => !t.best), range = M.ranger({ best: gb, other: go });
   const inM = new Set(monthKeys), first = F.at.get(`${monthKeys[0]}-01`), months = [], rowsM = new Map();   // rowsM: id → month → cell
   const cellOf = (id, m) => { if (!rowsM.has(id)) rowsM.set(id, {}); const x = rowsM.get(id); return x[m] || (x[m] = { empty: 0, lost: 0, later: 0, units: 0, best: false, parts: [] }); };
-  const pr = (p) => ({ lost: p.lost || 0, units: p.units || 0, price: p.price || 0, best: p.best });
+  const pr = (p) => ({ id: p.id, lost: p.lost || 0, units: p.units || 0, price: p.price || 0, best: p.best });
   const rgOf = (parts) => { const u = parts.filter((p) => p.lost > 0); const z = u.length >= MIN_RANGE ? range(u.map(pr)) : null; return { n: u.length, low: z ? Math.round(z.low) : null, high: z ? Math.round(z.high) : null }; };
   for (const m of monthKeys) {
     const a = F.at.get(`${m}-01`), b = Math.min(F.n - 1, F.at.get(lastDay(m)) ?? F.n - 1), over = F.keys[F.n - 1] >= keyPlus(lastDay(m), GRACE), list = listOf(`${m}-01`);
@@ -148,13 +148,15 @@ function report(y, catalog, opts = {}) {
       strip: [...r.st.subarray(first)].map((v) => (v === -1 ? '-' : v === 2 ? '2' : String(v))).join('') });
   }
   rows.sort((a, b) => (b.best - a.best) || (a.rank || 1e9) - (b.rank || 1e9) || b.sold - a.sold);
-  const yr = (k) => { const l = months.flatMap((m) => (k === 'best' ? m.parts.filter((p) => p.best) : m.parts)); return { lost: Math.round(sum(l.map((p) => p.lost || 0))), later: Math.round(sum(l.map((p) => p.laterLost || 0))), empty: sum(l.map((p) => p.empty)), noMoney: sum(l.filter((p) => p.no).map((p) => p.empty)), ran: new Set(l.map((p) => p.id)).size, ...rgOf(l) }; };
+  const openGap = new Set(); for (const r of F.rows) for (const g of r.gaps) if (g.ended !== 'back') openGap.add(`${r.id}|${F.keys[g.a]}`);   // not back yet, or off the website: no comeback to check against
+  const onLists = new Set(months.flatMap((m) => [...listOf(m.from).map.keys()]));
+  const yr = (k) => { const l = months.flatMap((m) => (k === 'best' ? m.parts.filter((p) => p.best) : m.parts)); return { lost: Math.round(sum(l.map((p) => p.lost || 0))), later: Math.round(sum(l.map((p) => p.laterLost || 0))), empty: sum(l.map((p) => p.empty)), noMoney: sum(l.filter((p) => p.no).map((p) => p.empty)), ran: new Set(l.map((p) => p.id)).size, open: Math.round(sum(l.filter((p) => openGap.has(`${p.id}|${p.start}`)).map((p) => p.lost || 0))), ...rgOf(l) }; };
   const yb = yr('best'), ya = yr('all'), outRows = rows.filter((r) => r.out), sold = Math.round(sum(months.map((m) => m.sold))), bestSold = Math.round(sum(months.map((m) => m.bestSold)));
   for (const m of months) { m.sold = Math.round(m.sold); m.bestSold = Math.round(m.bestSold); for (const k of ['best', 'all']) for (const f of ['lost', 'later']) m[k][f] = Math.round(m[k][f]); delete m.parts; }
   const set = (k, l) => ({ back: biasOut(M.bias(l.filter((t) => t.kind === 'back'))), replay: biasOut(M.bias(l.filter((t) => t.kind === 'replay'))) });
   return {
     ok: true, rule: RULE, span: { from: months[0].from, to: F.keys[F.n - 1], held: F.keys[0] }, months,
-    year: { sold, pieces: sum(months.map((m) => m.pieces)), bestSold, best: { ...yb, could: bestSold + yb.lost }, all: { ...ya, could: sold + ya.lost }, bestN: best.size, bestRan: rows.filter((r) => r.best && r.empty > 0).length, allRan: rows.filter((r) => r.empty > 0).length },
+    year: { sold, pieces: sum(months.map((m) => m.pieces)), bestSold, best: { ...yb, could: bestSold + yb.lost }, all: { ...ya, could: sold + ya.lost }, bestN: onLists.size, bestRan: yb.ran, bestNow: best.size, allRan: rows.filter((r) => r.empty > 0).length },
     now: { out: outRows.length, best: outRows.filter((r) => r.best).length, bestN: rows.filter((r) => r.best && r.active).length, onSale: F.rows.filter((r) => r.active).length },
     best: { quarter: q, from: cur.from, to: cur.to, n: best.size }, rows,
     proof: { all: set('all', T), best: set('best', gb), other: set('other', go), tests: T.length },
