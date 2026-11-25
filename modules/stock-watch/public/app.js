@@ -612,8 +612,8 @@
       ${window.SW_MONEY && !ordered && SW_MONEY.bySupplier() ? SW_MONEY.poView(rows) : table('reorder', cols.filter((c) => showCol('reorder', c)), rows, ordered ? 'Nothing on order. Marked orders show here until they land.' : 'Nothing to order in this view.', (p) => (ordered ? `
         <header><h3>${nameCell(p, false)}</h3><div class="mq"><b>${inr.format(p.onOrder.remaining)} pcs</b><small>on order</small></div></header>
         <div class="mfacts">${landsCell(p)}${bestTag(p)}</div>` : `
-        <header>${canPick(p) ? `<label class="mpick"><input type="checkbox" class="pick" data-pick="${esc(p.id)}" aria-label="Tick ${esc(p.name)}" ${state.pick.has(p.id) ? 'checked' : ''}></label>` : ''}<h3>${nameCell(p, false)}</h3>${mspark(p)}<div class="mq"><b>${inr.format(p.orderQty)} pcs</b><small class="mv">${money(p.orderValue)}</small></div></header>
-        <div class="mfacts">${f === 'all' ? status(p) : poTag(p).trim()}${whyCell(p)}${bestTag(p)}</div>`))}`;
+        <header>${canPick(p) ? `<label class="mpick"><input type="checkbox" class="pick" data-pick="${esc(p.id)}" aria-label="Tick ${esc(p.name)}" ${state.pick.has(p.id) ? 'checked' : ''}></label>` : ''}<h3>${nameCell(p)}</h3>${mspark(p)}<div class="mq"><b>${inr.format(p.orderQty)} pcs</b><small class="mv">${money(p.orderValue)}</small></div></header>
+        <div class="mfacts">${f === 'all' ? status(p) : poTag(p).trim()}${p.why ? `<span class="why${p.stock != null && p.stock <= 0 ? ' out' : ''}" title="${esc(p.why)}">${esc(p.why.split(' · ')[0].replace(/: restock or drop\?$/, ''))}</span>` : ''}</div>`))}`;
   }
 
   /* stock-outs, one row per product (the individual stock-outs are in the product drawer) */
@@ -663,7 +663,7 @@
         <input class="search" id="q-stockouts" placeholder="Search…" title="Search product or SKU" value="${esc(state.q.stockouts)}"></div>
       ${table('stockouts', cols, rows, 'No stock-outs in this view.', (a) => `
         <header><h3>${nameCell(a, false)}</h3><div class="mq">${a.lostCounted > 0 ? `<b class="lostv">${money(a.lostCounted)}</b>` : '<b class="muted">–</b>'}<small>sales lost</small>${lostMark(a)}</div></header>
-        <div class="mfacts">${a.open ? '<span class="st g-today">Still out</span>' : ''}<span><b>${a.times}</b>× out</span>${outSince(a) ? `<span>out <b>${esc(outSince(a))}</b></span>` : `<span><b>${n1(a.days)}</b> days out</span>`}${a.small ? '<span class="st small">Refilled too little</span>' : ''}${a.repeat ? '<span class="st again">Ran out again</span>' : ''}</div>`)}`;
+        <div class="mfacts">${a.open ? '<span class="st g-today">Still out</span>' : ''}${a.times > 1 || !a.open ? `<span><b>${a.times}</b>× out</span>` : ''}${outSince(a) ? `<span>out <b>${esc(outSince(a))}</b></span>` : `<span><b>${n1(a.days)}</b> days out</span>`}${a.small ? '<span class="st small">Refilled too little</span>' : ''}${a.repeat ? '<span class="st again">Ran out again</span>' : ''}</div>`)}`;
   }
 
   /* Products */
@@ -775,8 +775,8 @@
         ${mktBar(rows, f)}${colPicker('products', cols)}${dlMenu('products', null, (f === 'pause' || f === 'push') && rows.length ? `<button class="linkbtn" id="csv-mkt">Download this list (CSV)</button>` : '')}</div>
       ${window.SW_LISTS ? SW_LISTS.bar(state.q.products, r.products) : ''}
       ${table('products', cols.filter((c) => showCol('products', c)), rows, 'No products match.', (p) => `
-        <header><h3>${nameCell(p, false)}</h3>${mspark(p)}${f === 'pause' ? `<span class="st g-week bk">${esc(p.backIn || '–')}</span>` : lossSort ? `<div class="mq"><b class="${p.lostCounted ? 'lostv' : 'muted'}">${p.lostCounted ? money(p.lostCounted) : '–'}</b><small>sales lost</small>${lostMark(p)}</div>` : status(p)}</header>
-        <div class="mfacts">${lossSort ? status(p) : ''}<span class="${p.stock != null && p.stock <= 0 ? 'bad' : ''}"><b>${p.stock == null ? '–' : pcs(p)}</b> in stock</span><span><b>${p.daysLeft == null ? '–' : n1(p.daysLeft)}</b> days left</span><span><b>${money(p.sold)}</b> sold</span>${p.lost && !lossSort ? `${p.lostCounted ? `<span class="lostv">${money(p.lostCounted)} lost</span>` : ''}${lostMark(p)}` : ''}${p.orderQty ? `<span>order <b>${inr.format(p.orderQty)}</b></span>` : ''}${p.returnPct >= HIGH_RETURN ? `<span class="amberv">${n1(p.returnPct)}% cancelled/refunded</span>` : ''}${bestTag(p)}</div>${f === 'slow' ? `<div class="mfacts">${decideCell(p)}${decideBtns(p)}</div>` : ''}`)}
+        <header><h3>${nameCell(p)}</h3>${mspark(p)}${f === 'pause' ? `<span class="st g-week bk">${esc(p.backIn || '–')}</span>` : lossSort ? `<div class="mq"><b class="${p.lostCounted ? 'lostv' : 'muted'}">${p.lostCounted ? money(p.lostCounted) : '–'}</b><small>sales lost</small>${lostMark(p)}</div>` : status(p)}</header>
+        <div class="mfacts">${lossSort ? status(p) : ''}<span class="${p.stock != null && p.stock <= 0 ? 'bad' : ''}"><b>${p.stock == null ? '–' : pcs(p)}</b> in stock</span>${p.stock != null && p.stock <= 0 ? '' : `<span><b>${p.daysLeft == null ? '–' : n1(p.daysLeft)}</b> days left</span>`}<span><b>${money(p.sold)}</b> sold</span>${p.lost && !lossSort ? `${p.lostCounted ? `<span class="lostv">${money(p.lostCounted)} lost</span>` : ''}${lostMark(p)}` : ''}${p.orderQty ? `<span>order <b>${inr.format(p.orderQty)}</b></span>` : ''}${p.returnPct >= HIGH_RETURN ? `<span class="amberv">${n1(p.returnPct)}% cancelled/refunded</span>` : ''}</div>${f === 'slow' ? `<div class="mfacts">${decideCell(p)}${decideBtns(p)}</div>` : ''}`)}
       ${f === 'slow' ? decidedNote() : ''}`;
   }
   /* SW-032: decided items are hidden until their sales change by more than half; listed here so a decision can be undone */

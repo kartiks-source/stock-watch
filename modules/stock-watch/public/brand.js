@@ -233,7 +233,7 @@
         ${scopeLine(inScopeOf(m, 'all').lost, inScopeOf(m, 'best').lost, span(m.from, m.to), { sw: false })}
         <p class="muted small">Best sellers = the products that make ${bestShare()}% of the last 12 months’ sales. Tap one to mark it ordered.</p></section>
       ${A.table('best', cols, rows, 'No best sellers yet.', (p) => `<header><h3>${bestCell(p)}</h3><div class="mq">${p.lostMonth ? `<b class="lostv">${money(p.lostMonth)}</b><small>missed in ${mShort(m.key)}</small>` : '<b class="muted">–</b>'}</div></header>
-        <div class="mfacts">${nowCell(p)}${p.daysOutMonth ? `<span><b>${esc(nDays(p.daysOutMonth))}</b> out in ${mShort(m.key)}</span>` : ''}${refill(p)}</div>`)}`;
+        <div class="mfacts">${nowCell(p)}${p.daysOutMonth ? `<span><b>${esc(nDays(p.daysOutMonth))}</b> in ${mShort(m.key)}</span>` : ''}${refill(p)}</div>`)}`;
   }
 
   /* ---------- Ads: push / pause ---------- */
