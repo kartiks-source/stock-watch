@@ -13,11 +13,27 @@ const sum = (a) => a.reduce((s, x) => s + x, 0);
 const nameOf = (x) => x.variant ? `${x.name} · ${x.variant}` : x.name;
 const pct = (a, b) => (b > 0 ? r2(a / b * 100) : 0);
 
+/** The report's day keys, once per report. */
+const KEYS = new WeakMap(), DAILY = new WeakMap();
+function keysOf(t) {
+  let k = KEYS.get(t); if (!k) { k = { list: [], at: new Map() }; for (let d = t.span.from; d <= t.span.to; d = agency.keyPlus(d, 1)) { k.at.set(d, k.list.length); k.list.push(d); } KEYS.set(t, k); }
+  return k;
+}
 /** Day keys a row was empty (half days too) in from..to. */
 function emptyDays(t, x, from, to) {
-  const out = []; let k = t.span.from;
-  for (const c of x.strip || '') { if (k >= from && k <= to && (c === '0' || c === '1')) out.push([k, c === '0' ? 1 : 0.5]); k = agency.keyPlus(k, 1); }
+  const { list, at } = keysOf(t), out = [], s = x.strip || '', a = at.has(from) ? at.get(from) : from < t.span.from ? 0 : list.length, b = Math.min(s.length, at.has(to) ? at.get(to) + 1 : to > t.span.to ? list.length : 0);
+  for (let i = a; i < b; i++) if (s[i] === '0' || s[i] === '1') out.push([list[i], s[i] === '0' ? 1 : 0.5]);
   return out;
+}
+/** [money, pieces] missed per day of a row: each part spread over its empty days up to the 60th. Once per report and row. */
+function dailyOf(t, x) {
+  let m = DAILY.get(x); if (m) return m; m = new Map();
+  for (const mo of t.months) for (const p of (x.months[mo.key] || { parts: [] }).parts) {
+    if (!(p.lost > 0)) continue;
+    const limit = Date.parse(p.start) + 60 * DAY, ds = emptyDays(t, x, p.from, p.to).filter((z) => Date.parse(z[0]) < limit), all = sum(ds.map((z) => z[1])); if (!(all > 0)) continue;
+    for (const [k, w] of ds) { const z = m.get(k) || [0, 0]; m.set(k, [z[0] + p.lost * w / all, z[1] + p.units * w / all]); }
+  }
+  DAILY.set(x, m); return m;
 }
 const WHY = { unsure: 'Shopify’s stock record doesn’t add up, or it sells at 0', gift: 'a gift line', 'started-empty': 'already empty when our record begins', 'few-days': 'under 30 shelf days before, or nothing sold on the last 60' };
 /** ₹ a day a row that is out now keeps missing (0 when it carries no ₹, or it has been out over 60 days). */
@@ -79,17 +95,8 @@ function ads(now) {
 
 /** ₹ and days missed by one row on the full days from..to (both in), day by day, so a period and a month can't disagree. */
 function between(t, x, from, to) {
-  let lost = 0, units = 0; const days = emptyDays(t, x, from, to);
-  for (const m of t.months) {
-    if (m.to < from || m.from > to) continue;
-    for (const p of (x.months[m.key] || { parts: [] }).parts) {
-      if (!(p.lost > 0)) continue;
-      const a = p.from > from ? p.from : from, b = p.to < to ? p.to : to; if (b < a) continue;
-      const part = (f, g) => sum(emptyDays(t, x, f, g).map((z) => (Date.parse(z[0]) - Date.parse(p.start) < 60 * DAY ? z[1] : 0))), all = part(p.from, p.to) || 1, here = part(a, b);
-      lost += p.lost * here / all; units += p.units * here / all;
-    }
-  }
-  return { lost, units, empty: sum(days.map((z) => z[1])) };
+  let lost = 0, units = 0; for (const [k, [a, b]] of dailyOf(t, x)) if (k >= from && k <= to) { lost += a; units += b; }
+  return { lost, units, empty: sum(emptyDays(t, x, from, to).map((z) => z[1])) };
 }
 /** The period report with its money from the one rule. Mutates and returns rep. */
 function period(rep, t, { from, to, y = null, only = false }) {
@@ -112,9 +119,10 @@ function period(rep, t, { from, to, y = null, only = false }) {
   const T = rep.totals || {}; Object.assign(T, { lost: L, lostAll: L, lostEstimate: 0, lostNotRestocked: 0, lostAllocation: 0, lostEstimateProducts: 0, lostNotRestockedProducts: 0, lostAllocationProducts: 0, lostProducts: N, lostPct: T.sold + L > 0 ? r2(L / (T.sold + L) * 100) : 0, stillOutPerDay: sum((rep.products || []).map((p) => p.costPerDay || 0)), stillOutPerDayApart: 0, ...(T.lostProfit != null ? { lostProfit: 0 } : {}) });
   if (sl) { const [u, v] = only ? [sum(rep.products.map((p) => p.unitsSold || 0)), sum(rep.products.map((p) => p.sold || 0))] : soldOf(sl.all); Object.assign(T, { sold: Math.round(v), unitsSold: u }); }
   if (T.sold + L > 0) T.lostPct = r2(L / (T.sold + L) * 100);
-  for (const d of rep.daily || []) { let v = 0; for (const x of t.rows) if (!only || x.best) v += between(t, x, d.day, d.day).lost; d.lost = Math.round(v); if (sl) { const [u, w] = [Number((sl.all[d.day] || [])[0]) || 0, Number((sl.all[d.day] || [])[1]) || 0]; if (d.day <= to) { d.sold = Math.round(w); d.units = u; } } }
+  const perDay = new Map(); for (const x of t.rows) if (!only || x.best) for (const [k, z] of dailyOf(t, x)) perDay.set(k, (perDay.get(k) || 0) + z[0]);
+  for (const d of rep.daily || []) { const v = perDay.get(d.day) || 0; d.lost = Math.round(v); if (sl) { const [u, w] = [Number((sl.all[d.day] || [])[0]) || 0, Number((sl.all[d.day] || [])[1]) || 0]; if (d.day <= to) { d.sold = Math.round(w); d.units = u; } } }
   for (const s of rep.stockouts || []) { s.lost = 0; s.lostCounted = 0; }
-  if (rep.yesterday) rep.yesterday.lost = Math.round(sum(t.rows.filter((x) => !only || x.best).map((x) => between(t, x, rep.yesterday.day, rep.yesterday.day).lost)));
+  if (rep.yesterday) rep.yesterday.lost = Math.round(perDay.get(rep.yesterday.day) || 0);
   if (rep.yesterday && sl && sl.all[rep.yesterday.day]) rep.yesterday.sold = Math.round(sl.all[rep.yesterday.day][1]);
   rep.rule = t.rule; rep.moneyThrough = to;
   return rep;
