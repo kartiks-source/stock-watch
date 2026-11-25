@@ -136,7 +136,7 @@
   function whyBlock(prof, p) {
     const w = prof.work; if (!w) return '';
     const x2 = (n) => (Math.round(n * 100) / 100).toLocaleString('en-IN'), ex = (n) => `₹${inr.format(Math.round(n))}`, mon = (k) => `${mShort(k)} ${k.slice(0, 4)}`;
-    if (!w.months.length) return `<section class="panel" id="why"><h2>Why this number</h2><p>It was never empty in these 12 months, so nothing was missed.</p></section>`;
+    if (!w.months.length) return `<details class="panel fold" id="why"><summary><b>Why this number</b></summary><p>It was never empty in these 12 months, so nothing was missed.</p></details>`;
     const m = w.months[w.months.length - 1], s = w.speed, se = w.season || {}, pr = w.price, o = w.outs[w.outs.length - 1];
     const step = (n, h, t) => `<li><b>${h}</b><span>${t}</span></li>`;
     const slow = s.perDay > 0 ? `${x2(s.perDay)} a day` : 'nothing';
@@ -153,14 +153,14 @@
     const rows = w.months.map((z) => `<tr><td>${mon(z.key)}</td><td>${esc(z.range)}</td><td class="r">${x2(z.days)}</td><td class="r">${x2(z.perDay)}</td><td class="r">${x2(z.units)}</td><td class="r">${ex(z.price)}</td><td class="r"><b class="${z.kind === 'counted' ? 'lostv' : 'muted'}">${ex(z.missed)}</b>${z.kind !== 'counted' ? `<small class="muted"> ${kind[z.kind]}</small>` : ''}</td></tr>`).join('');
     const days = s.months.map((z) => `<tr><td>${mon(z.key)}</td><td class="r">${inr.format(z.units)}</td><td class="r">${x2(z.days)}</td><td class="r">${z.days > 0 ? x2(z.units / z.days) : '–'}</td></tr>`).join('');
     const adm = p && p.adminUrl ? ` <a href="${esc(p.adminUrl)}" target="_blank" rel="noopener noreferrer">Open it in Shopify</a>` : '';
-    return `<section class="panel" id="why"><div class="panel-head"><h2>Why this number: ${esc(mon(m.key))}, ${ex(m.missed)}</h2></div><ol class="why-steps">${steps}</ol>
+    return `<details class="panel fold" id="why"><summary><b>Why this number</b> <span class="muted">${esc(mon(m.key))}, ${ex(m.missed)}</span></summary><ol class="why-steps">${steps}</ol>
       <details class="fold"><summary><b>Every month</b> <span class="muted">${w.months.length} month${w.months.length === 1 ? '' : 's'}, ${ex(w.total)} in all${w.total - w.counted > 1 ? `, ${ex(w.counted)} counted` : ''}</span></summary><div class="why-tbl"><table class="mtable"><thead><tr><th>Month</th><th>Empty</th><th class="r">Days</th><th class="r">A day</th><th class="r">Pieces</th><th class="r">Price</th><th class="r">Missed</th></tr></thead><tbody>${rows}</tbody></table></div></details>
       <details class="fold"><summary><b>The shelf days behind the speed</b></summary><div class="why-tbl"><table class="mtable"><thead><tr><th>Month</th><th class="r">Sold</th><th class="r">Days on the shelf</th><th class="r">A day</th></tr></thead><tbody>${days}</tbody></table></div></details>
-      <details class="fold"><summary><b>Check it yourself in Shopify</b></summary><ul class="why-check"><li><b>Empty days:</b> the product → Inventory → Adjustment history. Look at “Available”, not “On hand”.${adm}</li><li><b>Pieces and price:</b> Analytics → Reports → Sales by product variant, same dates. Net sales ÷ net items sold.</li><li><b>Money missed:</b> Shopify has no such number. It is steps 1 to 3 multiplied.</li></ul></details></section>`;
+      <details class="fold"><summary><b>Check it yourself in Shopify</b></summary><ul class="why-check"><li><b>Empty days:</b> the product → Inventory → Adjustment history. Look at “Available”, not “On hand”.${adm}</li><li><b>Pieces and price:</b> Analytics → Reports → Sales by product variant, same dates. Net sales ÷ net items sold.</li><li><b>Money missed:</b> Shopify has no such number. It is steps 1 to 3 multiplied.</li></ul></details></details>`;
   }
   function body(prof, p, order = '') {
     if (!prof || !prof.ok) return order + (prof && prof.reason === 'unsure' ? '<p class="note">Shopify’s stock log doesn’t add up for this product, so its 12 months aren’t shown.</p>' : '<p class="muted small">The 12-month profile appears once Shopify’s reports are read (after the next pull).</p>');
-    return `${story(prof)}${whyBlock(prof, p)}${grid(prof, p)}${order}
+    return `${story(prof)}${grid(prof, p)}${order}
       <section class="panel"><div class="panel-head"><h2>12 months: sold and missed</h2><span class="muted small">${esc(span(prof.span.from, prof.span.through))}</span></div>
         <div class="chartbox"><div class="lazy-chart" data-chart="months" style="height:210px"></div></div>
         <p class="muted small"><i class="sw sold"></i> sold <i class="sw ghost"></i> would have sold while out <i class="sw out"></i> days out (under the month) <i class="sw line"></i> busy-month line (×1 = normal)</p></section>
@@ -265,5 +265,5 @@
     els.forEach((el) => io.observe(el));
   }
 
-  window.SW_PROFILE = { top, body, charts, skeleton, showTip, hideTip, monthsChart, priceChart, stockChart, story };
+  window.SW_PROFILE = { why: (prof, p) => (prof && prof.ok ? whyBlock(prof, p) : ''), top, body, charts, skeleton, showTip, hideTip, monthsChart, priceChart, stockChart, story };
 })();

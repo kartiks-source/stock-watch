@@ -368,8 +368,10 @@ test('1440 and 390: "Why this number": five steps, every month, where to check; 
   for (const [w, h] of [[1440, 900], [390, 844]]) {
     const pg = await open(w, h, '/?store=sammsara-demo#best', w > 760 ? 'table[data-table="best"] tbody tr' : '.mcard h3');
     assert.match(await pg.innerText('#view'), /[\d.,]+ days × [\d.]+ a day × ₹[\d,]+/);
-    await pg.click(w > 760 ? 'table[data-table="best"] tbody tr' : '.mcard h3'); await pg.waitForSelector('#why .why-steps');
-    const t = await pg.innerText('#why'); assert.match(t, /^Why this number: \w{3} \d{4}, ₹[\d,]+/); assert.equal((await pg.$$('#why .why-steps li')).length, 5);
+    await pg.click(w > 760 ? 'table[data-table="best"] tbody tr' : '.mcard h3'); await pg.waitForSelector('#why', { state: 'attached' });
+    assert.equal(await pg.$eval('#why', (d) => d.open), false, 'closed until asked'); assert.ok(await pg.evaluate(() => document.querySelector('#drawer-body').lastElementChild.id === 'why'), 'at the bottom of the panel');
+    await pg.click('#why > summary'); await pg.waitForSelector('#why .why-steps');
+    const t = await pg.innerText('#why'); assert.match(t, /^Why this number\s+\w{3} \d{4}, ₹[\d,]+/); assert.equal((await pg.$$('#why .why-steps li')).length, 5);
     for (const k of ['How long was it empty?', 'How fast does it sell?', 'What did people pay?', 'Multiply', 'Do we count it?', 'Every month', 'Check it yourself in Shopify']) assert.ok(t.includes(k), k);
     const m = t.match(/([\d.,]+) × ₹([\d,]+) = ₹([\d,]+)\./), n = (x) => +x.replace(/,/g, ''); assert.ok(Math.abs(n(m[1]) * n(m[2]) - n(m[3])) <= n(m[2]) * 0.01 + 2, m[0]);
     assert.equal(await sideways(pg), 0); assert.deepEqual(pg.errors, []);
