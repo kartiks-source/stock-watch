@@ -244,3 +244,7 @@ Outside `DATA_DIR`, in the app folder: `BUILD_SHA` (optional, SW-056): one line,
 - `anchor.levels` = the catalog's stock at the read (`at` = the pull's time), `anchor.day` = that store day; stock at the end of an earlier day = level − the changes after it.
 - `perDay` = rows per day of the last read (sizes the next read). `calls.runs` keeps 30.
 - A different `v`, time zone or span is read again from scratch. Clear all data empties it.
+
+## ledger.json (2.0.0)
+
+What is locked under a rule (RULE.md "Lock"), only ever added to, in backups: `{ v, rule, lists: { 'YYYY-MM-DD': { from, to, rows: [[variantId, rank, sold]] } }, months: { 'YYYY-MM': { at, list, score, low, high, n, parts } }, old: { rule: { lists, months } } }`.

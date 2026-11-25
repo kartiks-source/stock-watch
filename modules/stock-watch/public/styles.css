@@ -1183,3 +1183,8 @@ html.agency .rail a[data-view="reorder"], html.agency .owner { display: none !im
 #why .fold { margin-top: 6px; } #why .fold > summary { min-height: 32px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 @media (max-width: 759.98px) { #why .fold > summary { min-height: 44px; } }
 #why .mtable th { position: static; }
+
+/* 2.0.0: the range under the amount (RULE.md) */
+.mtable .band { display: block; font-size: 11px; line-height: 1.2; white-space: nowrap; }
+.mtable td .band { margin-top: 1px; }
+.headline h1 .hsub { white-space: nowrap; }

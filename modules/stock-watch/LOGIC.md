@@ -1,5 +1,7 @@
 # Stock-out Watch: how every number is worked out, and why
 
+> **2.0.0: for a store read from Shopify, RULE.md is the only rule for best sellers, empty days, speed, ₹ missed and ads.** Sections 4c, 7a, 20–24 and 26–30 below are the old rules; they only run for demo, Flow, Sheet and CSV data and for the owner's pages (`?owner=1`).
+
 This is the reference for anyone who questions a number on the page. Each section gives:
 - the rule, in plain words and as a formula
 - why we chose it

@@ -3,6 +3,10 @@
 Newest first. Date · module · what changed and why · anything open.
 Shared copy for the team: https://claude.ai/artifact/27Q6x8r3rpZHYaNzhjW2Zq
 
+## 2026-11-25 · stock-watch 2.0.0
+
+One simple rule for every number (RULE.md, src/truth.js, src/screen.js, src/ledger.js): speed in stock × days empty × price; sold + missed = could have earned. Screens keep their layout. Checked against Shopify and rebuilt by a second, separate engine. Open: December is the first month the rule hasn't seen; deck rebuild.
+
 <!-- devlog archive links (scripts/rotate-devlog.js) -->
 Older entries: [2026-11](devlog/2026-11.md)
 
