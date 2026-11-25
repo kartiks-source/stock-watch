@@ -2,6 +2,10 @@
 
 User-facing changes, newest first. Semver: minor when a number's rule changes or a feature lands, patch for fixes. The version in `package.json` matches the top heading. Versions before 0.9.0 were reconstructed from `docs/DEVLOG.md` on 20 Nov 2026 (no tags existed); dates are the DEVLOG dates. Per DEVLOG, nothing from 0.6.0 on has been deployed yet. Since 1.0.0-rc.1, `/health`, `/status` and the page footer show the version and the build's commit (SW-056); `test/docs.test.js` checks the top heading matches `package.json`.
 
+## 1.5.1 · 2026-11-25 · why this number
+
+- **Every product's side panel says why:** how long it was empty, how fast it sells (and from which shelf days), what people paid (list, discounts, returns), the sum, and why it is counted or not; every month in a table, and where to check each step in Shopify. The Out now rows and the month list carry the sum: "20.5 days × 0.56 a day × ₹4,887".
+
 ## 1.5.0 · 2026-11-25 · the agency's dashboard
 
 - **Brand-owner tools are off the screens:** no restock list, order quantities, suppliers, purchase orders, budget, overstock, slow-seller decisions, profit or planning rules. What is left: what ran out, since when, how often, what it cost, and what to do with the ads.

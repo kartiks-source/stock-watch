@@ -132,9 +132,35 @@
       ${row('Tags', d.tags && d.tags.length ? `<span class="ptags">${d.tags.slice(0, 24).map((t) => `<i>${esc(t)}</i>`).join('')}</span>` : '')}
     </div></section>`;
   }
+  /** 1.5.1: the working behind the money missed, in steps anyone can redo, and where to check each one in Shopify */
+  function whyBlock(prof, p) {
+    const w = prof.work; if (!w) return '';
+    const x2 = (n) => (Math.round(n * 100) / 100).toLocaleString('en-IN'), ex = (n) => `₹${inr.format(Math.round(n))}`, mon = (k) => `${mShort(k)} ${k.slice(0, 4)}`;
+    if (!w.months.length) return `<section class="panel" id="why"><h2>Why this number</h2><p>It was never empty in these 12 months, so nothing was missed.</p></section>`;
+    const m = w.months[w.months.length - 1], s = w.speed, se = w.season || {}, pr = w.price, o = w.outs[w.outs.length - 1];
+    const step = (n, h, t) => `<li><b>${h}</b><span>${t}</span></li>`;
+    const slow = s.perDay > 0 ? `${x2(s.perDay)} a day` : 'nothing';
+    const seasonText = se.own != null ? `Its own sales around ${mShort(m.key)} (${se.near.filter((z) => z[2] > 0).map((z) => `${MON[+z[0] - 1]}: ${inr.format(z[1])} in ${x2(z[2])} days`).join(', ')}) run at ×${x2(se.own)} of its normal; the whole store runs at ×${x2(se.shop)}. Mixed: ×${x2(se.index)}.` : `It sells too little to have its own busy months, so we use the store’s: ×${x2(se.index)}.`;
+    const kind = { counted: 'counted', guess: 'a guess, not counted', gap: 'short gap, not counted' };
+    const sure = p && p.weeksLive ? `It sold in ${p.weeksSold} of the ${p.weeksLive} weeks people could buy it (${Math.round((p.weeksSold / p.weeksLive) * 100)}%). 22% or more is counted, under 22% is a guess.` : p && p.confidence ? `Judged on the pieces it sold: ${p.confidence === 'low' ? '4 or fewer is a guess' : '5 or more is counted'}.` : '';
+    const steps = [
+      step(1, `How long was it empty? ${x2(m.days)} days in ${mon(m.key)}`, `${esc(m.range)}.${o ? ` It ran out on ${esc(dayY(o.from))}: ${inr.format(Math.max(0, o.before))} left the evening before, ${inr.format(o.after)} at the day’s end${o.sold > 0 ? `, ${inr.format(o.sold)} sold that day` : ''}.` : ''} The day it runs out or comes back counts as half.`),
+      step(2, `How fast does it sell? ${x2(m.perDay)} a day in ${mShort(m.key)} (about ${esc(pace(m.perDay))})`, `From ${esc(dayY(s.from))} it was on the shelf ${x2(s.days)} days and sold ${inr.format(s.units)}: ${inr.format(s.units)} ÷ ${x2(s.days)} = ${slow}. Empty days are left out, or a product that ran out would look slow. ${seasonText} The months it was watched in were ${s.level < 0.97 ? 'quieter' : s.level > 1.03 ? 'busier' : 'normal'} ones (×${x2(s.level)}), so ${x2(s.perDay)} × ${x2(se.index ?? 1)} ÷ ${x2(s.level || 1)} = ${x2(s.level > 0 ? (s.perDay * (se.index ?? 1)) / s.level : s.perDay)}.${m.closed ? ' This month is closed: it keeps the speed it closed with.' : ''}`),
+      step(3, `What did people pay? ${ex(m.price)}`, `${pr.near.length ? `${pr.near.map((z) => `${mShort(z.key)}: ${inr.format(z.pieces)} for ${ex(z.net)}`).join(', ')}. ` : 'None sold around that month, so the 12-month average. '}After discounts and returns, without GST. 12 months: ${ex(pr.gross)} at list − ${ex(pr.off)} discounts and returns = ${ex(pr.net)} ÷ ${inr.format(pr.pieces)} pieces${pr.avg ? ` = ${ex(pr.avg)}` : ''}.`),
+      step(4, `Multiply`, `${x2(m.days)} days × ${x2(m.perDay)} a day = ${x2(m.units)} pieces. ${x2(m.units)} × ${ex(m.price)} = <b>${ex(m.missed)}</b>.`),
+      step(5, `Do we count it? ${m.kind === 'counted' ? 'Yes' : 'No: ' + kind[m.kind]}`, `${esc(sure)}${m.kind === 'gap' ? ' It is refilled a few pieces at a time, so its short gaps are kept out.' : ''}`),
+    ].join('');
+    const rows = w.months.map((z) => `<tr><td>${mon(z.key)}</td><td>${esc(z.range)}</td><td class="r">${x2(z.days)}</td><td class="r">${x2(z.perDay)}</td><td class="r">${x2(z.units)}</td><td class="r">${ex(z.price)}</td><td class="r"><b class="${z.kind === 'counted' ? 'lostv' : 'muted'}">${ex(z.missed)}</b>${z.kind !== 'counted' ? `<small class="muted"> ${kind[z.kind]}</small>` : ''}</td></tr>`).join('');
+    const days = s.months.map((z) => `<tr><td>${mon(z.key)}</td><td class="r">${inr.format(z.units)}</td><td class="r">${x2(z.days)}</td><td class="r">${z.days > 0 ? x2(z.units / z.days) : '–'}</td></tr>`).join('');
+    const adm = p && p.adminUrl ? ` <a href="${esc(p.adminUrl)}" target="_blank" rel="noopener noreferrer">Open it in Shopify</a>` : '';
+    return `<section class="panel" id="why"><div class="panel-head"><h2>Why this number: ${esc(mon(m.key))}, ${ex(m.missed)}</h2></div><ol class="why-steps">${steps}</ol>
+      <details class="fold"><summary><b>Every month</b> <span class="muted">${w.months.length} month${w.months.length === 1 ? '' : 's'}, ${ex(w.total)} in all${w.total - w.counted > 1 ? `, ${ex(w.counted)} counted` : ''}</span></summary><div class="why-tbl"><table class="mtable"><thead><tr><th>Month</th><th>Empty</th><th class="r">Days</th><th class="r">A day</th><th class="r">Pieces</th><th class="r">Price</th><th class="r">Missed</th></tr></thead><tbody>${rows}</tbody></table></div></details>
+      <details class="fold"><summary><b>The shelf days behind the speed</b></summary><div class="why-tbl"><table class="mtable"><thead><tr><th>Month</th><th class="r">Sold</th><th class="r">Days on the shelf</th><th class="r">A day</th></tr></thead><tbody>${days}</tbody></table></div></details>
+      <details class="fold"><summary><b>Check it yourself in Shopify</b></summary><ul class="why-check"><li><b>Empty days:</b> the product → Inventory → Adjustment history. Look at “Available”, not “On hand”.${adm}</li><li><b>Pieces and price:</b> Analytics → Reports → Sales by product variant, same dates. Net sales ÷ net items sold.</li><li><b>Money missed:</b> Shopify has no such number. It is steps 1 to 3 multiplied.</li></ul></details></section>`;
+  }
   function body(prof, p, order = '') {
     if (!prof || !prof.ok) return order + (prof && prof.reason === 'unsure' ? '<p class="note">Shopify’s stock log doesn’t add up for this product, so its 12 months aren’t shown.</p>' : '<p class="muted small">The 12-month profile appears once Shopify’s reports are read (after the next pull).</p>');
-    return `${story(prof)}${grid(prof, p)}${order}
+    return `${story(prof)}${whyBlock(prof, p)}${grid(prof, p)}${order}
       <section class="panel"><div class="panel-head"><h2>12 months: sold and missed</h2><span class="muted small">${esc(span(prof.span.from, prof.span.through))}</span></div>
         <div class="chartbox"><div class="lazy-chart" data-chart="months" style="height:210px"></div></div>
         <p class="muted small"><i class="sw sold"></i> sold <i class="sw ghost"></i> would have sold while out <i class="sw out"></i> days out (under the month) <i class="sw line"></i> busy-month line (×1 = normal)</p></section>

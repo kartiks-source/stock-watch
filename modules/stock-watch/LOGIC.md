@@ -1210,3 +1210,7 @@ Sammsara, same data on 1.4.6 → 1.4.7: all products ₹32.2 L → ₹28.7 L, be
 - **Screens** (`public/agency.js`): Brand report, Out now, Ads, All products, Data. The brand owner's tools (Restock list, quantities, purchase orders, suppliers, budget, overstock, slow-seller decisions, planning rules, Overview, Stock-outs page, digest panel) are off; their code and APIs stay, and `?owner=1` shows them for one browser tab.
 
 Sammsara, 24 Nov 2026, same data on 1.4.9 → 1.5.0: best sellers ₹14.8 L → ₹19.0 L (₹4.2 L of it after the first month empty), all products ₹28.7 L → ₹44.9 L (₹16.2 L), guesses ₹4.9 L → ₹19.5 L (apart), last 30 days ₹5.5 L → ₹10.9 L (best sellers ₹1.8 L → ₹3.4 L).
+
+## 30. 1.5.1: "Why this number" (`src/agency.js` workOf, `public/profile.js` whyBlock)
+
+`profile.work` = the working of one variant: `months[]` (days × perDay = units; units × price = missed; kind counted / guess / gap; closed), `speed` (units ÷ shelf days of the pace window, month by month, and `level`, the average season of those days), `season` of the last month out (own sales of the month and its neighbours, the store's index, how they are mixed), `price` (12 months: gross − discounts and returns = net ÷ pieces; the months used for the price), `outs[]` (stock before and after). perDay = speed.perDay × season.index ÷ speed.level. The months add up to the product's total on every page (checked on 224 Sammsara products, 25 Nov 2026: differences only in rounding, under ₹61).
