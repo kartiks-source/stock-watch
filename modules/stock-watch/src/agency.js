@@ -374,7 +374,7 @@ function build(y, catalog = {}, { paceMonths = 6, bestShare = 0.8, links = () =>
     bestsellers: best.length, bestRanOut: best.filter((p) => p.daysOut > 0 && !p.allApart).length, pct: 0, unsure: dropped.length,
     lostApart: sum('lostApart'), apart: best.filter((p) => p.allocation).length };
   headline.pct = headline.sold > 0 ? r2((headline.lost / headline.sold) * 100) : 0;
-  headline.best = scopeHead('best', best); headline.all = scopeHead('all', out); headline.all.products = out.filter((p) => !p.inactive).length;
+  headline.best = scopeHead('best', best); headline.all = scopeHead('all', out); headline.all.inactive = out.filter((p) => p.inactive).length;   // of products: no longer on sale
   for (const k of ['best', 'all']) headline[k].pct = headline.sold > 0 ? r2((headline[k].lost / headline.sold) * 100) : 0;
   const dv = detail && detail !== true ? variants.find((v) => v.id === String(detail)) : null;
   const det = (v) => ({ id: v.id, list: v.dayMap, pace: v.pace, perMonth: v.perMonth, price: v.price, sold: v.sold, units: v.units, isApart: v.isApart, unsure: !!v.ds.unsure, monthKeys, nowM });

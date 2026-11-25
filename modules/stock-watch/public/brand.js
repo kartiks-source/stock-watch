@@ -104,7 +104,7 @@
         <rect class="sold" x="${x}" y="${y(m.sold)}" width="${w2}" height="${Math.max(0, y(0) - y(m.sold))}" rx="2"/>
         ${m.lost > 0 ? `<rect class="lost" x="${x}" y="${y(m.sold + m.lost)}" width="${w2}" height="${Math.max(1.5, y(m.sold) - y(m.sold + m.lost))}" rx="2"/>` : ''}
         ${m.lost > 0 && bw > 30 ? `<text class="lv" x="${x + w2 / 2}" y="${y(m.sold + m.lost) - 5}" text-anchor="middle">${rs(m.lost)}</text>` : ''}
-        <text x="${x + w2 / 2}" y="${H - 8}" text-anchor="middle">${shortLabel(m.key, keys)}${m.days && m.days < 28 ? '*' : ''}</text></g>`;
+        <text x="${x + w2 / 2}" y="${H - 8}" text-anchor="middle">${narrow() ? mShort(m.key) : shortLabel(m.key, keys)}${m.days && m.days < 28 ? '*' : ''}</text></g>`;
     }).join('');
     return `<svg class="bchart" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Sold and money missed each month">${ticks.join('')}${bars}</svg>`;
   }
