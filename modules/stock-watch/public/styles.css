@@ -1085,3 +1085,4 @@ body.no-period .top .range, body.no-period .top .rlabel, body.no-period .top .rd
 .life-row { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; margin: 6px 0; font-size: 13px; }
 .life-row b { min-width: 76px; } .life-row.on b { color: #1b7a4b; }
 .life-row small { flex-basis: 100%; }
+@media (max-width: 759.98px) { .pl2 { flex-wrap: wrap; } .pl2 .life { flex-basis: 100%; } }
