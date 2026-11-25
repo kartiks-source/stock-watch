@@ -2,6 +2,10 @@
 
 User-facing changes, newest first. Semver: minor when a number's rule changes or a feature lands, patch for fixes. The version in `package.json` matches the top heading. Versions before 0.9.0 were reconstructed from `docs/DEVLOG.md` on 20 Nov 2026 (no tags existed); dates are the DEVLOG dates. Per DEVLOG, nothing from 0.6.0 on has been deployed yet. Since 1.0.0-rc.1, `/health`, `/status` and the page footer show the version and the build's commit (SW-056); `test/docs.test.js` checks the top heading matches `package.json`.
 
+## 2.0.1 · 2026-11-25 · the sum can be redone
+
+- "Why this number" shows every step with enough decimals, and what a sale on an empty day takes off, so anyone can redo it.
+
 ## 2.0.0 · 2026-11-25 · one rule for every number
 
 - **One engine** (`src/truth.js`, RULE.md) behind every page of a Shopify store: brand report, out now, ads, all products, the product panel. The screens look the same.
