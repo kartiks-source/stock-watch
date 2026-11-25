@@ -229,10 +229,10 @@ test('history: the first read’s own hour counts only orders before the read', 
   assert.deepEqual(none.rows.map((r) => r.now), [7]);
 });
 
-test('history: an oversold variant (stock −1 now) is kept down to −1; lower is dropped', () => {
+test('history: an oversold variant (stock −1 now) is kept down to 2 below; lower is dropped (1.4.6)', () => {
   const first = Date.parse('2026-11-20T12:40:00Z'), since = first - 10 * DAY;
-  const out = H.rebuild([{ t: first - 2 * DAY, variantId: '1', delta: -2 }, { t: first - 3 * DAY, variantId: '2', delta: 1 }], { 1: -1, 2: -1 }, first, { since, orders: [], zone: ZONE });
-  assert.deepEqual(out.dropped, ['2']);   // 2 would have been at −2 before
+  const out = H.rebuild([{ t: first - 2 * DAY, variantId: '1', delta: -2 }, { t: first - 3 * DAY, variantId: '2', delta: 3 }], { 1: -1, 2: -1 }, first, { since, orders: [], zone: ZONE });
+  assert.deepEqual(out.dropped, ['2']);   // 2 would have been at −4 before
   assert.deepEqual(out.rows.map((r) => [r.variantId, r.now]), [['1', 1], ['1', -1]]);
 });
 

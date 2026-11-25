@@ -106,6 +106,7 @@ function why(p, S, now, outSince = null, outLost = null) {
  */
 function mktList(p, S) {
   if (p.status === 'Inactive' || p.stock == null) return null;
+  if (p.allocation && p.stock > 0) return null;   // 1.4.6: refilled a few pieces at a time: days left says nothing, don't pause the ads
   if (p.stock <= 0 || (p.daysLeft != null && p.daysLeft < (+(p.leadDays ?? S.leadDays) || 0))) return 'pause';
   if (p.overstock) return 'push';
   return null;

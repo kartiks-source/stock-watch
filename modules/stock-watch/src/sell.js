@@ -47,7 +47,7 @@ function bestNow(brand, rows, month) {
 function ads(brand, rows, S = {}) {
   const pm = paceMap(brand);
   const need = Math.max(COVER_MIN, (+S.leadDays || 0) + (+S.safetyDays || 0));
-  const push = [], pause = [];
+  const push = [], pause = [], keep = [];
   for (const r of rows || []) {
     if (!live(r)) continue;
     const b = pm.get(String(r.id)), pace = b && b.pace > 0 ? b.pace : +r.perDay || 0;   // the 12-month pace; the 28-day rate when it has none
@@ -55,6 +55,7 @@ function ads(brand, rows, S = {}) {
     const outFromDay = b && r.stock <= 0 ? (b.product.outFrom || {})[String(r.id)] || null : null;
     const row = { outFromDay, id: r.id, name: r.name, sku: r.sku, image: r.image, adminUrl: r.adminUrl, webUrl: r.webUrl, stock: r.stock, pace: Math.round(pace * 100) / 100, price: Math.round(price), perDayValue: Math.round(pace * price), best: !!(b && b.best), status: r.status, why: r.why || '', backIn: r.backIn || null, outSince: r.outSince || null, daysLeft: r.daysLeft ?? null };
     if (r.mkt === 'pause' && pace > 0) { pause.push(row); continue; }
+    if (r.allocation && r.stock > 0) { if (pace > 0) keep.push({ ...row, allocation: true }); continue; }   // 1.4.6: topped up from the warehouse: keep the ads on, check the warehouse
     if (r.stock > 0 && pace > 0) {
       const cover = r.stock / pace, needR = Math.max(COVER_MIN, (+(r.leadDays ?? S.leadDays) || 0) + (+S.safetyDays || 0));   // the supplier's lead time when set (§6c)
       if (cover >= needR) push.push({ ...row, coverDays: Math.round(cover), coverWeeks: Math.round(cover / 7) });
@@ -62,7 +63,8 @@ function ads(brand, rows, S = {}) {
   }
   push.sort((a, b) => b.perDayValue - a.perDayValue);
   pause.sort((a, b) => (b.best - a.best) || ((a.stock <= 0 ? 0 : 1) - (b.stock <= 0 ? 0 : 1)) || b.perDayValue - a.perDayValue);
-  return { push, pause, coverDays: need };
+  keep.sort((a, b) => b.perDayValue - a.perDayValue);
+  return { push, pause, keep, coverDays: need };
 }
 
 module.exports = { bestNow, ads, paceMap, COVER_MIN };
