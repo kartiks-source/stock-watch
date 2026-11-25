@@ -2,6 +2,13 @@
 
 User-facing changes, newest first. Semver: minor when a number's rule changes or a feature lands, patch for fixes. The version in `package.json` matches the top heading. Versions before 0.9.0 were reconstructed from `docs/DEVLOG.md` on 20 Nov 2026 (no tags existed); dates are the DEVLOG dates. Per DEVLOG, nothing from 0.6.0 on has been deployed yet. Since 1.0.0-rc.1, `/health`, `/status` and the page footer show the version and the build's commit (SW-056); `test/docs.test.js` checks the top heading matches `package.json`.
 
+## 1.4.9 · 2026-11-25 · the switch drives every page; denser phone rows
+
+- **One switch, Best sellers | All products, in the same place on every page** (top bar; its own bar on phones). Every number, chart bar, list, chip, badge, group, tick and CSV follows it: the server builds the whole report for the chosen products. Before, Restock's "Tick all", CSV and supplier POs could include products that were not on the list.
+- **Brand report:** the sold bars, the Sold column and "% of sales" are the best sellers' own in Best sellers.
+- **"Best sellers now" is now "Out now"** and follows the switch. Switching keeps the month you picked.
+- **Phones:** rows with a colour edge (red = out, amber = order, green = fine), no gaps, the facts as one line, the tick box on the picture. Picked from 20 measured designs.
+
 ## 1.4.8 · 2026-11-25 · phone layout
 
 - **Phones:** one header row (the period row only where it is used), whole product names, code and status on one line, the Shopify and website links in the corner of each card, readable chart labels, and a much shorter Report (the biggest 8 products and 10 month rows first, then Show all).

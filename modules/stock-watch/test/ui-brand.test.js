@@ -41,7 +41,7 @@ const sideways = (pg) => pg.evaluate(() => document.documentElement.scrollWidth 
 test('1440: the Brand report is home: headline sentence with dates, chart, month table, grid, month list, CSV', opts, async () => {
   const pg = await open(1440, 900, '/?store=sammsara-demo', '#view .brand-h h1');
   assert.equal(await pg.getAttribute('#tabs a.on', 'data-view'), 'brand');
-  assert.deepEqual(await pg.$$eval('#tabs a .rl', (a) => a.map((x) => x.textContent)), ['Brand report', 'Best sellers now', 'Ads: push / pause', 'Restock list', 'All products']);
+  assert.deepEqual(await pg.$$eval('#tabs a .rl', (a) => a.map((x) => x.textContent)), ['Brand report', 'Out now', 'Ads: push / pause', 'Restock list', 'All products']);
   assert.match(await pg.textContent('.brand-h h1'), /^[\d,]+ (products?|of [\d,]+ best sellers) ran out (in the last 12 months|since \d+ \w{3} \d{4})\. We missed about ₹[\d.,]+( lakh| Cr|k)?\.$/);
   assert.match(await pg.textContent('.brand-h .lead'), /^Missed on (all products|best sellers): about ₹[\d.,]+( lakh| Cr|k)?\. That is [\d.]+% of what the brand sold \(₹.+\), \d+ \w{3}( \d{4})? – \d+ \w{3} \d{4}\.$/);
   assert.match(await pg.textContent('.brand-h .small'), /Sales up to \d+ \w{3} \d{4}; stock read/);
@@ -66,7 +66,7 @@ test('1440: the Brand report is home: headline sentence with dates, chart, month
   assert.ok(await pg.$('.heat .hrow .hc'), 'best seller × month grid');
   const [dl] = await Promise.all([pg.waitForEvent('download'), pg.click('#csv-months')]);
   const csv = fs.readFileSync(await dl.path(), 'utf8');
-  assert.match(csv, /^\ufeff?"Month","From","To","Sold ₹ \(net, ex GST\)","Missed ₹ \((all products|best sellers), counted\)"/);
+  assert.match(csv, /^\ufeff?"Month","From","To","Sold ₹ \((all products|best sellers), net, ex GST\)","Missed ₹ \((all products|best sellers), counted\)"/);
   const [dl2] = await Promise.all([pg.waitForEvent('download'), pg.click('#csv-month')]);
   assert.match(fs.readFileSync(await dl2.path(), 'utf8'), /"Out-of-stock dates".*"Shopify admin link","Website link"/);
   for (const w of [1280, 1920]) { await pg.setViewportSize({ width: w, height: 900 }); await pg.waitForTimeout(150); assert.equal(await sideways(pg), 0, `${w}: no sideways scroll`); }
@@ -77,7 +77,7 @@ test('1440: the Brand report is home: headline sentence with dates, chart, month
 
 test('1440: Best sellers now, Ads push / pause, drawer with 12 months on the shelf', opts, async () => {
   const pg = await open(1440, 900, '/?store=sammsara-demo#best', '#view table[data-table="best"] tbody tr');
-  assert.match(await pg.textContent('#view .headline h1'), /^(\d+ of \d+ best sellers are out right now\.|All \d+ best sellers are in stock\.)$/);
+  assert.match(await pg.textContent('#view .headline h1'), /^(\d+ of \d+ products are out right now\.|All \d+ products are in stock\.)$/);
   assert.match(await pg.textContent('#view .headline p'), /This month so far \(\d+ \w{3} – \d+ \w{3} \d{4}\)|Nothing missed this month so far/);
   const first = await pg.textContent('#view table[data-table="best"] tbody tr td:nth-child(2)');
   assert.match(first, /^(Out( since \d+ \w{3})?|In stock · [\d,]+)/);
@@ -115,7 +115,7 @@ test('product cell: picture left (lazy, alt = name), code, Open in Shopify / Vie
 
 test('390: Brand report, Best sellers now and Ads usable on a phone, no sideways scroll; short rail names; 44 px links', opts, async () => {
   const pg = await open(390, 844, '/?store=sammsara-demo#brand', '#view .brand-h h1');
-  assert.deepEqual(await pg.$$eval('#tabs a .rs', (a) => a.filter((x) => getComputedStyle(x).display !== 'none').map((x) => x.textContent)), ['Report', 'Best sellers', 'Ads', 'Restock', 'Products']);
+  assert.deepEqual(await pg.$$eval('#tabs a .rs', (a) => a.filter((x) => getComputedStyle(x).display !== 'none').map((x) => x.textContent)), ['Report', 'Out now', 'Ads', 'Restock', 'Products']);
   assert.equal(await sideways(pg), 0, 'brand');
   const m = await pg.$$eval('.mtable tbody tr', (r) => r.map((x) => x.dataset.month));
   await pg.click(`.mtable tbody tr[data-month="${m[0]}"]`);
@@ -198,25 +198,27 @@ test('1440 + 390: drawer opens at once, fold open by default and remembered, det
 test('1440: the switch: All products by default, every part follows, remembered; ?view=best; pages show the same ₹ for the scope', opts, async () => {
   const pg = await open(1440, 900, '/?store=sammsara-demo#brand', '.brand-h h1');
   const j = await (await fetch(`${base}/api/brand?store=sammsara-demo`)).json();
-  assert.equal(await pg.getAttribute('.brand-h .scope button.on', 'data-scope'), 'all', 'All products by default');
+  assert.equal(await pg.getAttribute('.scope button.on', 'data-scope'), 'all', 'All products by default');
   assert.match(await pg.textContent('.brand-h h1'), /^[\d,]+ products? ran out/);
   const money = (x) => { const v = Math.round(x), a = Math.abs(v); const one = (n) => (n >= 10 ? Math.round(n) : Math.round(n * 10) / 10).toLocaleString('en-IN'); return a >= 1e7 ? `₹${one(a / 1e7)} Cr` : a >= 1e5 ? `₹${one(a / 1e5)} lakh` : a >= 1e3 ? `₹${one(a / 1e3)}k` : `₹${a}`; };
   assert.ok((await pg.textContent('.brand-h .lead')).includes(money(j.headline.all.lost)), 'headline = all products');
   assert.match(await pg.textContent('.mtable thead'), /Missed, all products/);
-  await pg.click('.brand-h .scope button[data-scope="best"]');
-  await pg.waitForSelector('.brand-h .scope button.on[data-scope="best"]');
+  await pg.click('.scope button[data-scope="best"]');
+  await pg.waitForSelector('.scope button.on[data-scope="best"]');
   assert.match(await pg.textContent('.brand-h h1'), /^[\d,]+ of [\d,]+ best sellers ran out/);
   assert.ok((await pg.textContent('.brand-h .lead')).includes(money(j.headline.best.lost)), 'headline = best sellers');
   assert.match(await pg.textContent('#month-detail .muted.small'), /^best sellers ·/);
   assert.equal(await pg.evaluate(() => localStorage.getItem('sw-brand-scope')), 'best');
   await pg.reload(); await pg.waitForSelector('.brand-h h1');
-  assert.equal(await pg.getAttribute('.brand-h .scope button.on', 'data-scope'), 'best', 'remembered');
+  assert.equal(await pg.getAttribute('.scope button.on', 'data-scope'), 'best', 'remembered');
   /* the pages' line: the same scope, the period's dates */
   await pg.goto(`${base}/?store=sammsara-demo#products`); await pg.waitForSelector('#scope-line');
   const r = await (await fetch(`${base}/api/report?days=30&store=sammsara-demo`)).json();
   const bestCounted = r.products.reduce((s, p) => s + (p.abc === 'A' ? p.lostCounted || 0 : 0), 0);
   const line = await pg.textContent('#scope-line');
-  assert.ok(line.includes(`${money(bestCounted)} · best sellers`) && line.includes(`${money(r.totals.lost)} missed · all products`), line);
+  const rb = await (await fetch(`${base}/api/report?days=30&best=1&store=sammsara-demo`)).json();
+  assert.ok(Math.abs(rb.totals.lost - bestCounted) <= rb.products.length, `best=1 total ${rb.totals.lost} = its rows ${bestCounted}`);
+  assert.ok(line.includes(`${money(rb.totals.lost)} missed · best sellers`), line);
   assert.match(line, /\d+ \w{3} – \d+ \w{3}$/);
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } }), p2 = await ctx.newPage();
   await p2.goto(`${base}/?store=sammsara-demo&view=best#brand`); await p2.waitForSelector('.brand-h h1');
@@ -232,7 +234,7 @@ test('1440: the chart follows the switch (hover too); grid and "Cost the most" s
   const j = await (await fetch(`${base}/api/brand?store=sammsara-demo`)).json();
   const exact = (x) => `₹${new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(Math.round(x))}`;
   for (const sc of ['all', 'best']) {
-    await pg.click(`.brand-h .scope button[data-scope="${sc}"]`); await pg.waitForSelector(`.brand-h .scope button.on[data-scope="${sc}"]`);
+    await pg.click(`.scope button[data-scope="${sc}"]`); await pg.waitForSelector(`.scope button.on[data-scope="${sc}"]`);
     for (const m of j.months.filter((x) => x.days)) {
       const tip = await pg.textContent(`#brand-chart .mb[data-month="${m.key}"] title`);
       assert.ok(tip.includes(`about ${exact(m[sc].lost)} missed`), `${sc} ${m.key}: ${tip}`);
@@ -261,19 +263,47 @@ test('1440: a failed /api/brand shows an error and Try again on Ads, never "ever
   assert.deepEqual(pg.errors, []);
 });
 
-test('1440: the switch filters rows on Restock list and All products; Best sellers now has the line without the switch', opts, async () => {
-  const pg = await open(1440, 900, '/?store=sammsara-demo#products', '#scope-line');
-  const r = await (await fetch(`${base}/api/report?days=30&store=sammsara-demo`)).json();
-  const best = r.products.filter((p) => p.abc === 'A').length;
-  const all = () => pg.textContent('[data-filter-products="all"] .c');
-  assert.equal(await all(), String(r.products.length));
-  await pg.click('#scope-line [data-scope="best"]'); await pg.waitForSelector('#scope-line button.on[data-scope="best"]');
-  assert.equal(await all(), String(best)); assert.equal(await pg.textContent('#view .headline h1'), 'Best sellers');
-  await pg.goto(`${base}/?store=sammsara-demo#reorder`); await pg.waitForSelector('[data-filter-reorder="all"]');
-  assert.equal(await pg.textContent('[data-filter-reorder="all"] .c'), String(r.reorder.filter((p) => p.abc === 'A').length));
-  await pg.goto(`${base}/?store=sammsara-demo#best`); await pg.waitForSelector('#scope-line');
-  assert.equal(await pg.$('#scope-line [data-scope]'), null);
-  assert.deepEqual(pg.errors, []);
+/* 1.4.9 (switch critic): one switch, the same place on every page, and everything follows it */
+test('1440 and 390: the switch is on every page and every list, number, chart, tick, group and CSV follows it', opts, async () => {
+  for (const [w, h] of [[1440, 900], [390, 844]]) {
+    const pg = await open(w, h, '/?store=sammsara-demo#brand', '.brand-h h1');
+    const get = async (u) => (await fetch(base + u + (u.includes('?') ? '&' : '?') + 'store=sammsara-demo')).json();
+    const R = { all: await get('/api/report?days=30'), best: await get('/api/report?days=30&best=1') }, j = await get('/api/brand');
+    assert.ok(R.best.products.length > 0 && R.best.products.length < R.all.products.length, 'fixture: some best sellers');
+    assert.ok(R.best.products.every((x) => x.abc === 'A') && R.best.reorder.every((x) => x.abc === 'A') && R.best.stockouts.every((s) => R.best.products.some((x) => x.id === s.id)));
+    const near = (a, b, t) => assert.ok(Math.abs(a - b) <= 2, `${t}: ${a} vs ${b}`);
+    near(R.best.daily.reduce((s, d) => s + d.sold, 0), R.best.products.reduce((s, x) => s + x.sold, 0), 'daily chart = its rows');
+    near(j.headline.best.sold, j.products.filter((x) => x.best).reduce((s, x) => s + x.sold, 0), 'best sellers sold = their rows');
+    const sw = async (sc) => { await pg.click(`.scope [data-scope="${sc}"]`); await pg.waitForSelector(`.scope button.on[data-scope="${sc}"]`); await pg.waitForFunction((n) => true); await pg.waitForTimeout(700); };
+    const seen = {};
+    for (const [hash, sel] of [['brand', '.brand-h h1'], ['best', '#view h1'], ['ads', '#view h1'], ['reorder', '#view h1'], ['products', '#view h1'], ['stockouts', '#view h1'], ['overview', '#view h1']]) {
+      await pg.goto(`${base}/?store=sammsara-demo&w=${w}${hash}#${hash}`); await pg.waitForSelector(sel); await pg.waitForTimeout(400);
+      assert.equal((await pg.$$('.scope')).length, 1, `${w} ${hash}: one switch`);
+      seen[hash] = {};
+      for (const sc of ['all', 'best']) { await sw(sc); seen[hash][sc] = await pg.innerText('#view'); assert.equal(await sideways(pg), 0, `${w} ${hash} ${sc}`); }
+      assert.notEqual(seen[hash].all, seen[hash].best, `${w} ${hash}: nothing changed`);
+      await sw('all');
+    }
+    assert.match(seen.reorder.best, new RegExp(`${R.best.totals.orderToday} best sellers`)); assert.match(seen.products.best, /^Best sellers/);
+    /* the bars themselves move */
+    await pg.goto(`${base}/?store=sammsara-demo&c=${w}#brand`); await pg.waitForSelector('#brand-chart .sold');
+    const bars = () => pg.$$eval('#brand-chart .sold', (e) => e.map((x) => x.getAttribute('height')).join());
+    await sw('all'); const a = await bars(); await sw('best'); assert.notEqual(await bars(), a, 'the sold bars follow'); await sw('all');
+    /* ticks: nothing hidden can be marked */
+    await pg.goto(`${base}/?store=sammsara-demo&t=${w}#reorder`); await pg.waitForSelector(w > 760 ? '.tbl.desk' : '.mcard');
+    if (w > 760) {
+      await pg.$eval('#pick-all', (b) => b.click()); await pg.waitForSelector('.bulk'); await sw('best'); assert.equal(await pg.$('.bulk'), null, 'ticks made in All are dropped');
+      await pg.$eval('#pick-all', (b) => b.click()); await pg.waitForSelector('.bulk');
+      assert.match(await pg.textContent('#pick-mark'), new RegExp(`Mark ${R.best.reorder.filter((x) => !x.onOrder && x.orderQty > 0).length} ordered`));
+      assert.equal(await pg.textContent('#n-reorder'), String(R.best.totals.orderToday || ''), 'the badge');
+      await pg.click('#pick-clear'); await sw('all');
+    }
+    const lines = async (q) => (await (await fetch(`${base}/api/export/reorder.csv?days=30&filter=all${q}&store=sammsara-demo`)).text()).trim().split('\n').length;
+    assert.equal(await lines('&best=1') - 1, R.best.reorder.length + 0 * 1, 'reorder CSV'); assert.ok(await lines('') > await lines('&best=1'));
+    const G = { all: await get('/api/groups?lens=type&days=30'), best: await get('/api/groups?lens=type&days=30&best=1') };
+    assert.equal(G.best.groups.reduce((s, g) => s + g.n, 0), R.best.products.length, 'groups'); assert.ok(G.all.groups.length >= G.best.groups.length);
+    assert.deepEqual(pg.errors, []);
+  }
 });
 
 test('13 months, refilled-a-few-at-a-time and no-longer-on-sale rows, counted + not counted in the drawer (server 1.4.6 shape)', opts, async () => {

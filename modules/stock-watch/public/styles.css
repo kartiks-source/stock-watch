@@ -1154,3 +1154,12 @@ body.no-period .top .range, body.no-period .top .rlabel, body.no-period .top .rd
   .kgrid { gap: 6px; } .kv { padding: 7px 9px; gap: 0; border-radius: 8px; } .kv b { font-size: 16px; } .kv small { font-size: 11.5px; }
   .hrow .pl2 .plinks { display: none; }   /* the grid is a heat map: the links are in the panel one tap away */
 }
+
+/* 1.4.9: one switch on every page */
+.scope-top:empty, .scopebar:empty { display: none; }
+.scopebar { display: none; }
+@media (max-width: 759.98px) {
+  .scopebar:not(:empty) { display: block; margin: 6px 10px 0; }
+  .scopebar .scope { display: flex; } .scopebar .scope button { flex: 1; min-height: 44px; }
+  .wrap { padding-top: 8px; }
+}

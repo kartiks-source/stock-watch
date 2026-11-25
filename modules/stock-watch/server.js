@@ -619,7 +619,8 @@ async function storeApi(req, res, url, role, id) {
   const sups = supplierOf(d);   // SW-040: each variant's supplier and terms (lead time, MOQ, case pack)
   const shopLinks = () => ({ ...(d.shopify.shopInfo || {}), handle: keys.status(id).store || null });   // 1.4.0 (LOGIC §19)
   const lossPace = () => lossPaceOf(scope.dir(), d);   // 1.4.0 (LOGIC §21): seasonal pace for long stock-outs' ₹ lost
-  const reportOpts = (extra = {}) => ({ ...span, catalog: d.catalog, onOrder: onorder.all(), suppliers: sups, reversals: d.reversals, weekSales: weeks.forReport(d.shopify), syncMinutes: SYNC_MIN, ...lossOpts(lossPace()), bestIds: bestIdsOf(d), ...extra });   // span: { days } or { from } (SW-027)
+  const onlyBest = url.searchParams.get('best') === '1' && ['/api/report', '/api/groups', '/api/export/reorder.csv'].includes(p);   // 1.4.9: the Best sellers switch: the same report, best sellers only
+  const reportOpts = (extra = {}) => ({ ...span, catalog: d.catalog, onOrder: onorder.all(), suppliers: sups, reversals: d.reversals, weekSales: weeks.forReport(d.shopify), syncMinutes: SYNC_MIN, ...lossOpts(lossPace()), bestIds: bestIdsOf(d), ...(onlyBest ? { only: bestIdsOf(d) } : {}), ...extra });   // span: { days } or { from } (SW-027)
   const savedRates = () => new Map(engine.report(d.stock, d.orders, d.settings, { days: 30, catalog: d.catalog, onOrder: onorder.all() }).products.map((x) => [String(x.id), x.perDay]));
   const dc = await decide.handle(req, p, readBody, (id) => savedRates().get(id));
   if (dc) return send(res, dc.code, dc.body);
@@ -645,7 +646,7 @@ async function storeApi(req, res, url, role, id) {
   const brandData = () => brandInputs(d);
   const brandOpts = () => brandOptsOf(d, { links: (c) => links.of(c, shopLinks()) });
   /* 1.4.3: the report for a period and trial settings, cached per store version for a minute (open stock-outs accrue) */
-  const reportKey = (S) => JSON.stringify([span, Object.keys(LIMITS).map((k) => S[k]), S.timeZone]);
+  const reportKey = (S) => JSON.stringify([onlyBest, span, Object.keys(LIMITS).map((k) => S[k]), S.timeZone]);
   const cachedReport = (S, trial) => cache.memo('report', reportKey(S), 60e3, () => {
     const r = helpers.enrich(engine.report(d.stock, d.orders, S, reportOpts()), { decisions: decide.all(), rates: trial ? savedRates() : null });
     r.period = periodKind; r.yesterday = period.yesterdayFor(d.stock, d.orders, S, r, reportOpts());   // SW-027
@@ -677,10 +678,10 @@ async function storeApi(req, res, url, role, id) {
     status.annotate(rep.products, d.catalog);
     const { b, r } = brandFull(rep);
     const month = r.ok ? r.months[r.months.length - 1].key : null;
-    const now = r.ok ? sell.bestNow(r, rep.products, month) : [];
+    const now = r.ok ? sell.bestNow(r, rep.products, month) : [], nowAll = r.ok ? sell.bestNow(r, rep.products, month, { all: true }).filter((x) => !x.best).map((x) => { const { season: _s, monthPace: _mp, variantPrice: _vp, noPace: _np, outFrom: _o, ...q } = x; return q; }) : [];   // 1.4.9: the other products, for All products
     const adl = sell.ads(r.ok ? r : null, rep.products, { ...engine.DEFAULT_SETTINGS, ...d.settings });
     const slim = (x) => { const { months: _m, season: _s, variantPace: _v, outFrom: _o, monthPace: _mp, variantPrice: _vp, noPace: _np, ...rest } = x; return url.searchParams.get('full') === '1' ? x : { ...rest, months: x.best || x.lost > 0 ? x.months : undefined }; };   // 1.4.4: months for every product with money missed (All products view)
-    return { ok: true, ...r, products: (r.products || []).map(slim), now, ads: adl, basis: b.basis, year: year.summary(year.load()), store: here, generatedAt: Date.now(), app: version.current() };
+    return { ok: true, ...r, products: (r.products || []).map(slim), now, nowAll, ads: adl, basis: b.basis, year: year.summary(year.load()), store: here, generatedAt: Date.now(), app: version.current() };
   }
   if (p === '/api/shopify/year' && req.method === 'POST') {   // 1.4.0: admin only; queued like a pull
     if (role !== access.ADMIN) return fail(res, 403, access.READ_ONLY);

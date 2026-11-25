@@ -22,10 +22,10 @@ function paceMap(brand) {
 }
 const live = (r) => r && r.status !== 'Inactive' && r.stock != null;
 
-function bestNow(brand, rows, month) {
+function bestNow(brand, rows, month, { all = false } = {}) {   // all: every product on sale (1.4.9: the switch)
   const rs = byId(rows), out = [];
   for (const p of (brand && brand.products) || []) {
-    if (!p.best) continue;
+    if (!p.best && !(all && !p.inactive)) continue;
     const vs = (p.ids || [p.variantId]).map((id) => rs.get(String(id))).filter(live);
     if (!vs.length) continue;
     const selling = vs.filter((r) => (p.variantPace?.[r.id] || r.perDay || 0) > 0);

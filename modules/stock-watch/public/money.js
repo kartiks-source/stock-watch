@@ -90,7 +90,7 @@
   const termsText = (s) => (s ? [s.leadDays != null ? `${s.leadDays} d lead` : '', s.moq != null ? `MOQ ${A.inr.format(s.moq)}` : '', s.pack != null ? `case ${A.inr.format(s.pack)}` : ''].filter(Boolean).join(' · ') : '');
   function csvHref(g) {
     const S = A.state;
-    return A.storeUrl(`/api/export/reorder.csv?days=${S.days}${Object.entries(S.what).map(([k, v]) => `&${k}=${encodeURIComponent(v)}`).join('')}&filter=${S.filter.reorder}&q=${encodeURIComponent(S.q.reorder)}&supplier=${encodeURIComponent(g.name)}${qs()}`);
+    return A.storeUrl(`/api/export/reorder.csv?days=${S.days}${Object.entries(S.what).map(([k, v]) => `&${k}=${encodeURIComponent(v)}`).join('')}&filter=${S.filter.reorder}&q=${encodeURIComponent(S.q.reorder)}&supplier=${encodeURIComponent(g.name)}${window.SW_BRAND && SW_BRAND.scope() === 'best' ? '&best=1' : ''}${qs()}`);
   }
   function poView(list) {
     loadTerms();

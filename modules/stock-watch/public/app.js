@@ -20,8 +20,7 @@
      (All products by default) with the other scope beside it; both the headline's counted part (LOGIC §4c) */
   function scopeLine() {
     const r = state.report; if (!r || !window.SW_BRAND) return '';
-    const all = r.totals.lost, best = r.products.reduce((s, p) => s + (p.abc === 'A' ? p.lostCounted || 0 : 0), 0);
-    return SW_BRAND.scopeLine(all, best, periodDates(r));
+    return SW_BRAND.scopeLine(r.totals.lost, periodDates(r));
   }
   /* 1.4.6: the switch filters the rows of Restock list and All products */
   const bestOnly = () => !!window.SW_BRAND && SW_BRAND.scope() === 'best';
@@ -38,7 +37,7 @@
     ['bestShare', 'Best sellers: products making this % of sales', '', 5, 'Best sellers = the top products that together make this share of the last 12 months’ sales (LOGIC §22)'],
     ['allocationCheck', 'Spot website allocations (1 on, 0 off)', '', 1, 'Stock topped back up to the same few pieces 3+ times in 14 days is a website allocation refilled from a warehouse: no reorder is sized from it (LOGIC §6)'],
   ];
-  const whatQs = () => Object.entries(state.what).map(([k, v]) => `&${k}=${encodeURIComponent(v)}`).join('');
+  const whatQs = () => Object.entries(state.what).map(([k, v]) => `&${k}=${encodeURIComponent(v)}`).join('') + (bestOnly() ? '&best=1' : '');   // 1.4.9: the switch: every report, group and CSV request
 
   /* ---------- formatting ---------- */
   const inr = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
@@ -90,10 +89,11 @@
     clearTimeout(toast._t); toast._t = setTimeout(() => { t.hidden = true; toast._do = null; }, action ? 6000 : 2600);
   }
 
-  async function reloadReport() {
-    window.SW_BRAND?.reset();   // 1.4.0: best sellers now / ads carry today's report (Mark ordered changes them)
-    state.report = await api(`/api/report?days=${state.days}${whatQs()}`);
-    header(); render();
+  async function reloadReport({ keepBrand = false } = {}) {
+    if (!keepBrand) window.SW_BRAND?.reset();   // 1.4.0: best sellers now / ads carry today's report (Mark ordered changes them)
+    const want = whatQs(), days = state.days, rep = await api(`/api/report?days=${days}${want}`);
+    if (want !== whatQs() || days !== state.days) return;   // switched again meanwhile
+    state.report = rep; header(); render();
   }
   async function load() {
     if (window.SW_STORES) await SW_STORES.ready;
@@ -458,7 +458,7 @@
     const r = state.report, t = r.totals;
     const prods = new Set(r.stockouts.filter((s) => !s.notSelling).map((s) => s.id)).size;   // same count as the Stock-outs page (UI-2)
     return t.stockouts
-      ? `${inPeriod(r).replace(/^./, (c) => c.toUpperCase())}, ${prods} products ran out of stock ${t.stockouts} times. That cost about ${moneyFull(t.lost)} in sales (${t.lostPct}% of demand)${t.hasCost ? ` and ${moneyFull(t.lostProfit)} in profit` : ''}${lostApart(t) ? `, plus ${lostApart(t)}` : ''}. ${t.orderToday} products need ordering today (${moneyFull(t.orderValueNow)} ${atCost()})${t.excessValue ? `, and ${moneyFull(t.excessValue)} sits in overstock` : ''}.`
+      ? `${inPeriod(r).replace(/^./, (c) => c.toUpperCase())}, ${prods} ${bestOnly() ? 'best sellers' : 'products'} ran out of stock ${t.stockouts} times. That cost about ${moneyFull(t.lost)} in sales (${t.lostPct}% of demand)${t.hasCost ? ` and ${moneyFull(t.lostProfit)} in profit` : ''}${lostApart(t) ? `, plus ${lostApart(t)}` : ''}. ${t.orderToday} ${bestOnly() ? 'best sellers' : 'products'} need ordering today (${moneyFull(t.orderValueNow)} ${atCost()})${t.excessValue ? `, and ${moneyFull(t.excessValue)} sits in overstock` : ''}.`
       : `No product ran out of stock ${inPeriod(r)}.`;
   }
 
@@ -538,7 +538,7 @@
         <div class="panel-head"><h2>Sold vs lost, per day</h2><div class="legend"><span title="${esc(soldTip())}"><i style="background:#0978BE"></i>Sold${(state.shopify || {}).priceBasis === 'exTax' ? ' ex GST' : ''} ${money(t.sold)}</span><span><i style="background:#C8344F"></i>Lost ${money(t.lost)}</span></div></div>
         ${dailyChart(r.daily)}
       </section>
-      ${window.SW_WEEKLY ? SW_WEEKLY.panel() : ''}`;
+      ${window.SW_WEEKLY ? `${bestOnly() ? '<p class="muted small">The weekly review below covers all products.</p>' : ''}${SW_WEEKLY.panel()}` : ''}`;
   }
 
   /* Overview "Moving" (SW-021): top 3 up and down by ₹ effect = change in daily rate × avg price × 30 (LOGIC.md §7d) */
@@ -603,7 +603,7 @@
         <p class="exp">Each order covers lead time (${r.settings.leadDays} d, assumed until set per supplier) + days the stock should last + buffer, at the product’s in-stock sales rate. Biggest sales a day first.${t.hasCost ? '' : ' <span id="nocost-reorder">No unit costs in Shopify: ₹ are at selling price.</span>'}</p>
         ${t.allocation ? `<p class="exp" id="alloc-note"><a href="#products" data-go="products" data-filter="warehouse">${inr.format(t.allocation)} ${t.allocation === 1 ? 'product is' : 'products are'} a website allocation refilled from the warehouse</a>: not on this list, because warehouse stock isn’t in Shopify. Check the warehouse.</p>` : ''}`;
     return `
-      <section class="headline">${head}${narrow() && !bestOnly() ? '' : scopeLine()}</section>
+      <section class="headline">${head}${scopeLine()}</section>
       ${planBar()}
       <div class="toolbar"><div class="chips">${groups.map(([k, l, c]) => `<button class="chip ${f === k ? 'on' : ''}" data-filter-reorder="${k}">${l}<span class="c">${c}</span></button>`).join('')}</div>
         <input class="search" id="q-reorder" placeholder="Search…" title="Search product or SKU" value="${esc(state.q.reorder)}">${colPicker('reorder', cols)}${window.SW_MONEY && !ordered ? SW_MONEY.toggle() : ''}${dlMenu('reorder', storeUrl(`/api/export/reorder.csv?days=${state.days}${whatQs()}&filter=${f}&q=${encodeURIComponent(state.q.reorder)}${window.SW_MONEY && !ordered ? SW_MONEY.qs() : ''}`), pickable.length ? `<button class="linkbtn" id="pick-all">Tick all ${pickable.length} in view</button>` : '')}</div>
@@ -656,7 +656,7 @@
     ];
     return `
       <section class="headline">${stillOut && t.stillOutPerDay
-        ? `<h1>${stillOut} still out, costing <span class="lost">${money(t.stillOutPerDay)}/day</span></h1><p>${t.stillOutPerDayApart > 0 ? `<span class="muted" id="still-apart" title="Out-of-stock items the headline doesn’t count: estimates from few sales, items empty longer, website allocations (LOGIC §15a)">+${money(t.stillOutPerDayApart)}/day not counted</span> · ` : ''}${all.length} products ran out ${times} times · <span class="lostv">${money(t.lost)}</span> sales lost${t.hasCost ? ` · <span class="nw">${money(t.lostProfit)} profit lost</span>` : ''}</p>`   // M10 + final r2 SIMP-B: the action leads, phone and desktop; L3 (1.3.0): counted part, the rest apart
+        ? `<h1>${stillOut} still out, costing <span class="lost">${money(t.stillOutPerDay)}/day</span></h1><p>${t.stillOutPerDayApart > 0 ? `<span class="muted" id="still-apart" title="Out-of-stock items the headline doesn’t count: estimates from few sales, items empty longer, website allocations (LOGIC §15a)">+${money(t.stillOutPerDayApart)}/day not counted</span> · ` : ''}${all.length} ${bestOnly() ? 'best sellers' : 'products'} ran out ${times} times · <span class="lostv">${money(t.lost)}</span> sales lost${t.hasCost ? ` · <span class="nw">${money(t.lostProfit)} profit lost</span>` : ''}</p>`   // M10 + final r2 SIMP-B: the action leads, phone and desktop; L3 (1.3.0): counted part, the rest apart
         : `<h1>${all.length} products ran out ${times} times · <span class="lost">${money(t.lost)}</span> sales lost${t.hasCost ? ` · ${money(t.lostProfit)} profit lost` : ''}</h1>`}${BUCKET[f] ? bucketLine(f, rows) : lostSub(t, 'stockouts')}${extra}
         <details class="how exp"><summary>How we estimate this</summary><p>Hours out of stock, weighted by when this store usually sells, × the product’s normal sales per hour × the average price paid. Open a product for each stock-out. The headline counts products that sold in at least 22% of Shopify’s last 25 weeks (or, without that, 5 or more units); the rest is an estimate. A stock-out open ${nrDays()}+ days with nothing marked ordered counts only its first ${nrDays()} days, and website allocations’ refill gaps are apart. All are on the small line under the headline.</p></details></section>
       <div class="toolbar"><div class="chips">${groups.map(([k, l, c]) => `<button class="chip ${f === k ? 'on' : ''}" data-filter-stockouts="${k}">${l}<span class="c">${c}</span></button>`).join('')}</div>
@@ -774,7 +774,7 @@
         <select class="chip sel ${moreOn ? 'on' : ''}" id="f-more" aria-label="More filters"><option value="">More…</option>${productMore(f).map(([k, l]) => `<option value="${k}" ${f === k ? 'selected' : ''}>${l} (${countIn(inType, k)})</option>`).join('')}</select></div>
         ${mktBar(rows, f)}${colPicker('products', cols)}${dlMenu('products', null, (f === 'pause' || f === 'push') && rows.length ? `<button class="linkbtn" id="csv-mkt">Download this list (CSV)</button>` : '')}</div>
       ${window.SW_LISTS ? SW_LISTS.bar(state.q.products, r.products) : ''}
-      ${table('products', cols.filter((c) => showCol('products', c)), rows, 'No products match.', (p) => `
+      ${table('products', cols.filter((c) => showCol('products', c)), rows, bestOnly() ? 'No best seller matches. Switch to All products to search everything.' : 'No products match.', (p) => `
         <header><h3>${nameCell(p)}</h3>${mspark(p)}${f === 'pause' ? `<span class="st g-week bk">${esc(p.backIn || '–')}</span>` : lossSort ? `<div class="mq"><b class="${p.lostCounted ? 'lostv' : 'muted'}">${p.lostCounted ? money(p.lostCounted) : '–'}</b><small>sales lost</small>${lostMark(p)}</div>` : status(p)}</header>
         <div class="mfacts">${lossSort ? status(p) : ''}<span class="${p.stock != null && p.stock <= 0 ? 'bad' : ''}"><b>${p.stock == null ? '–' : pcs(p)}</b> in stock</span>${p.stock != null && p.stock <= 0 ? '' : `<span><b>${p.daysLeft == null ? '–' : n1(p.daysLeft)}</b> days left</span>`}<span><b>${money(p.sold)}</b> sold</span>${p.lost && !lossSort ? `${p.lostCounted ? `<span class="lostv">${money(p.lostCounted)} lost</span>` : ''}${lostMark(p)}` : ''}${p.orderQty ? `<span>order <b>${inr.format(p.orderQty)}</b></span>` : ''}${p.returnPct >= HIGH_RETURN ? `<span class="amberv">${n1(p.returnPct)}% cancelled/refunded</span>` : ''}</div>${f === 'slow' ? `<div class="mfacts">${decideCell(p)}${decideBtns(p)}</div>` : ''}`)}
       ${f === 'slow' ? decidedNote() : ''}`;
@@ -826,7 +826,7 @@
   ];
   function groupView() {
     const lens = state.lens, d = groupData();
-    const head = (sub) => `<section class="headline"><h1>Products by ${LENS_ONE[lens].toLowerCase()}</h1><p>${sub}</p><span class="hfind">${viewSelect()}</span></section>`;
+    const head = (sub) => `<section class="headline"><h1>${bestOnly() ? 'Best sellers' : 'Products'} by ${LENS_ONE[lens].toLowerCase()}</h1><p>${sub}</p><span class="hfind">${viewSelect()}</span></section>`;
     if (!d) return `${head('Loading…')}<div class="tbl"><div class="empty">Grouping…</div></div>`;
     const t = d.overlap ? d.store : d.total, rows = d.groups.map((g) => ({ ...g, id: g.key }));
     const ci = d.catalog || {};
@@ -1052,6 +1052,7 @@
     document.body.classList.toggle('no-period', NO_PERIOD.has(state.view));
     $$('#tabs a').forEach((a) => a.classList.toggle('on', a.dataset.view === state.view));
     $('#view').classList.toggle('calm', !render._animate); render._animate = false;   // bars animate when a page opens, not on every filter or keystroke
+    if (window.SW_BRAND) SW_BRAND.paintScope(state.view === 'data');
     $('#view').innerHTML = (VIEWS[state.view] || overview)() + (viewOnly() ? '<form class="phone-only" method="post" action="/logout"><button class="btn ghost" type="submit">Sign out</button></form>' : '');
     if (narrow()) {   // M3: phones scroll the chips row sideways; keep the active chip in view (pure DOM: the page doesn't move)
       const on = $('.wrap > .toolbar .chips .on');
@@ -1299,7 +1300,7 @@
   }
 
   state.view = (location.hash || `#${HOME}`).slice(1);
-  window.SW_BRAND?.init({ state, api, esc, inr, table, nameCell, saveCsv, copy, toast, render, status, dateShort, dt, viewOnly, rate });   // 1.4.0 (brand.js)
+  window.SW_BRAND?.init({ state, api, esc, inr, table, nameCell, saveCsv, copy, toast, render, reload: () => reloadReport({ keepBrand: true }).catch((e) => toast(e.message)), status, dateShort, dt, viewOnly, rate });   // 1.4.0 (brand.js)
   window.SW_MONEY?.init({ state, api, toast, money, esc, inr, storeUrl, copy, viewOnly, dateShort, render, reload: reloadReport });   // Sprint 3 A-money (money.js)
   window.SW_ROLES?.start(state);   // land on the chosen role's home page (SW-020)
   load().catch((e) => { $('#view').innerHTML = `<p class="pad">Couldn’t load: ${esc(e.message)}</p>`; });
