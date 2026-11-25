@@ -119,7 +119,7 @@ test('Products filters: no duplicate lists; overstock tile opens Overstock (crit
   const chips = await pg.$$eval('[data-filter-products]', (b) => b.map((x) => x.dataset.filterProducts));
   const more = await pg.$$eval('#f-more option', (o) => o.map((x) => x.value).filter(Boolean));
   assert.equal(chips.length, 7);   // + High returns (SW-064); 1.2.0 Estimates / Not restocked are in More… (LOGIC §4c)
-  assert.ok(more.includes('estimate') && more.includes('notrestocked'), `More… has the §4c filters: ${more}`); assert.equal(more.length, more.includes('warehouse') ? 9 : 8, `More… options ${more}`);   // 1.3.0: + Top-up from warehouse when a product is an allocation
+  assert.ok(more.includes('estimate') && !more.includes('notrestocked'), `More… ${more}`); assert.equal(more.length, more.includes('warehouse') ? 8 : 7, `More… options ${more}`);   // 1.5.0: nothing is "not restocked"
   assert.ok(!more.includes('over') && !more.includes('decide'), 'Overstock = Push these; Slow sellers = Slow sellers to decide');
   await pg.selectOption('#f-more', 'slow'); await pg.waitForSelector('.tbl.desk');
   assert.ok((await heads(pg)).includes('Decide'), 'Slow sellers carries the Decide column');

@@ -317,7 +317,7 @@ test('13 months, refilled-a-few-at-a-time and no-longer-on-sale rows, counted + 
     assert.equal(await sideways(pg), 0);
     if (w < 760) { await pg.click('#brand-chart .mb[data-month="2026-08"]', { force: true }); await pg.waitForTimeout(400); assert.match(await pg.textContent('#month-line'), /^August 2026: sold/); assert.ok(await pg.evaluate(() => scrollY < 1500), 'no jump'); }
     await pg.goto(`${base}/?store=sammsara-demo&a=1#best`); await pg.waitForSelector('#scope-line');
-    assert.match(await pg.textContent('#view'), /Topped Up Table[\s\S]*?Check the warehouse · 2 days left/);
+    assert.match(await pg.textContent('#view'), /Topped Up Table[\s\S]*?website top-up/); assert.ok(!/Check the warehouse|Enough stock/.test(await pg.textContent('#view')));
     await pg.goto(`${base}/?store=sammsara-demo&a=2#ads`); await pg.waitForSelector('#ads-keep .arow');
     assert.match(await pg.textContent('#ads-keep'), /Keep ads on: refilled a few at a time[\s\S]*Kept Table[\s\S]*check the warehouse/);
     assert.equal(await sideways(pg), 0);
