@@ -2,6 +2,10 @@
 
 User-facing changes, newest first. Semver: minor when a number's rule changes or a feature lands, patch for fixes. The version in `package.json` matches the top heading. Versions before 0.9.0 were reconstructed from `docs/DEVLOG.md` on 20 Nov 2026 (no tags existed); dates are the DEVLOG dates. Per DEVLOG, nothing from 0.6.0 on has been deployed yet. Since 1.0.0-rc.1, `/health`, `/status` and the page footer show the version and the build's commit (SW-056); `test/docs.test.js` checks the top heading matches `package.json`.
 
+## 1.4.8 · 2026-11-25 · phone layout
+
+- **Phones:** one header row (the period row only where it is used), whole product names, code and status on one line, the Shopify and website links in the corner of each card, readable chart labels, and a much shorter Report (the biggest 8 products and 10 month rows first, then Show all).
+
 ## 1.4.7 · 2026-11-25 · status history, unlimited stock, price of the time, one 30-day rule
 
 - **Every product shows Active, Draft or Archived** and since when; the side panel lists every period Shopify can tell us about.
