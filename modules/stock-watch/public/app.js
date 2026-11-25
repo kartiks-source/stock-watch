@@ -398,7 +398,7 @@
   const GROUP_LABEL = { today: 'Order today', week: 'This week', ordered: 'Ordered', ok: 'OK', slow: 'Slow seller', warehouse: ALLOC, none: 'No stock data' };
   const dateShort = (t) => { const d = local(t); return `${d.getUTCDate()} ${MON[d.getUTCMonth()]}`; };
   /* 1.1.5: the period's store-calendar dates, "22 Oct – 20 Nov" (one date when it is today only) */
-  const periodDates = (r) => { const a = dateShort(r.from), b = dateShort(r.generatedAt); return a === b ? a : `${a} – ${b}`; };
+  const periodDates = (r) => { const a = dateShort(r.from), b = r.moneyThrough ? dayLabel(r.moneyThrough) : dateShort(r.generatedAt); return a === b ? a : `${a} – ${b}`; };
   /* on order (LOGIC.md §6b): "Ordered · lands 25 Nov"; late or not enough → a small tag next to the status */
   const poTag = (p) => {
     const o = p.onOrder; if (!o || p.status === 'Ordered') return '';
@@ -684,7 +684,7 @@
   const productTabs = (f) => (state.report.totals.highReturns || f === 'returns' ? [...PRODUCT_TABS, ['returns', 'High cancels/refunds']] : PRODUCT_TABS);
   /* §4c: "Estimates (few sales)" and "Not restocked 30+ d" in More… (the chip row stays one line at 1440 px), only when some
      product has that part or it is the open filter; the line under the headline opens them in one click */
-  const productMore = (f) => { const t = state.report.totals; return [...PRODUCT_MORE, ...(t.lostEstimateProducts || f === 'estimate' ? [['estimate', 'Estimates (few sales)']] : []), ...(t.lostNotRestockedProducts || f === 'notrestocked' ? [['notrestocked', 'Not restocked 30+ d']] : []), ...(t.allocation || f === 'warehouse' ? [['warehouse', ALLOC]] : [])]; };   // §6 (1.3.0)
+  const productMore = (f) => { const t = state.report.totals; return [...(state.report.rule ? [] : PRODUCT_MORE), ...(t.lostEstimateProducts || f === 'estimate' ? [['estimate', 'Estimates (few sales)']] : []), ...(t.lostNotRestockedProducts || f === 'notrestocked' ? [['notrestocked', 'Not restocked 30+ d']] : []), ...(t.allocation || f === 'warehouse' ? [['warehouse', ALLOC]] : [])]; };   // §6 (1.3.0)
   const RETURNS_TIP = 'Units cancelled or refunded on the days in the period (whenever the order was placed) ÷ units ordered in the period, as Shopify’s reports count them (quantity returned ÷ quantity ordered). Not only physical returns. – under 5 units ordered; ₹ ex GST';
   const returnsCell = (p) => (p.returnPct == null ? '–' : `<span class="${p.returnPct >= HIGH_RETURN ? 'amberv' : ''}" title="${inr.format(p.unitsReturned)} units cancelled or refunded in the period, ${inr.format(p.unitsOrdered)} ordered${p.unitsCancelled ? ` (${inr.format(p.unitsCancelled)} cancelled)` : ''} · ${esc(money(p.refundValue))} cancelled/refunded">${n1(p.returnPct)}%</span>`);
   const PRODUCT_MORE = AGENCY ? [['rising', 'Selling faster'], ['falling', 'Selling slower']] : [['best', 'Best sellers'], ['week', 'Order this week'], ['ok', 'OK'], ['slow', 'Slow sellers to decide'], ['rising', 'Selling faster'], ['falling', 'Selling slower']];
@@ -737,7 +737,7 @@
     { k: 'stock', label: 'In stock', r: 1, f: (p) => (p.stock == null ? '–' : pcs(p)) },
     { k: 'daysLeft', label: 'Days left', f: daysCell, val: (p) => p.daysLeft ?? -1, csv: (p) => p.daysLeft ?? '' },
     { k: 'sold', label: 'Sold', r: 1, tip: `₹ sold ${inPeriod()}. ${soldTip()}`, f: (p) => money(p.sold) },
-    { k: 'lost', label: AGENCY ? 'Money missed' : 'Sales lost', r: 1, tip: `Money missed while it was out of stock ${inPeriod()}. Red = in the headline. Grey = not: “est.” few sales behind the rate; “not restocked” after day ${nrDays()} with nothing ordered; “refill gaps” website allocations`, f: lostCell, val: lostSort, csv: (p) => p.lost },
+    { k: 'lost', label: AGENCY ? 'Money missed' : 'Sales lost', r: 1, tip: state.report.rule ? `Best sellers only, full days ${inPeriod()}. Open the product for the sum` : `Money missed while it was out of stock ${inPeriod()}. Red = in the headline. Grey = not: “est.” few sales behind the rate; “not restocked” after day ${nrDays()} with nothing ordered; “refill gaps” website allocations`, f: lostCell, val: lostSort, csv: (p) => p.lost },
     { k: 'lostCounted', label: 'Sales lost in headline', hide: 1 },
     { k: 'orderQty', label: 'Order', r: 1, tip: 'Units to order (only when an order is due)', f: (p) => (p.orderQty ? `<b>${inr.format(p.orderQty)}</b>` : '–') },
     { k: 'type', label: 'Category', opt: 1, f: (p) => `<span class="muted cat" title="${esc(p.type)}">${esc(p.type || '–')}</span>` },
@@ -768,7 +768,7 @@
       lostNotRestockedProducts: a.lostNotRestockedProducts + (p.lostNotRestocked > 0 ? 1 : 0), lostAllocationProducts: a.lostAllocationProducts + (p.lostAllocation > 0 ? 1 : 0), stock: a.stock + (p.stock > 0 ? p.stock : 0) }),
     { sold: 0, lost: 0, lostEstimate: 0, lostNotRestocked: 0, lostAllocation: 0, lostNotRestockedProducts: 0, lostAllocationProducts: 0, stock: 0 });
     tot.notRestockedDays = nrDays();
-    let cols = PRODUCT_COLS().filter((c) => !c.hide && !(AGENCY && OWNER_COLS.has(c.k)));
+    let cols = PRODUCT_COLS().filter((c) => !c.hide && !(r.rule && ['trendPct', 'confidence'].includes(c.k)) && !(AGENCY && OWNER_COLS.has(c.k)));
     /* Pause: "Back in stock" in place of Order; Push: Overstock ₹ in place of Order; Decide: the decision in place of Status and Order */
     if (f === 'pause' && !AGENCY) cols = cols.map((c) => (c.k === 'orderQty' ? { k: 'backIn', label: 'Back in stock', nw: 1, tip: 'The marked order’s date, or the earliest an order placed today could land', f: (p) => `<span class="muted">${esc(p.backIn || '–')}</span>` } : c));
     if (f === 'push') cols = cols.map((c) => (c.k === 'orderQty' ? { ...PRODUCT_COLS().find((x) => x.k === 'excessValue'), opt: 0 } : c)).filter((c, i, a) => c.k !== 'excessValue' || a.findIndex((x) => x.k === 'excessValue') === i);
@@ -1019,8 +1019,8 @@
         ${window.SW_PROFILE ? SW_PROFILE.body(prof, p, !AGENCY && p && (viewOnly() ? p.onOrder : p.orderQty > 0 || p.onOrder) ? orderForm(p) : '') : ''}
         <details class="panel fold" id="hour-fold" ${hourFoldOpen() ? 'open' : ''}><summary><b>Last ${state.report.days || 30} days, to the hour</b> <span class="muted">${esc(periodDates(state.report))}</span></summary>
         ${p?.why ? `<p class="dwhy">${whyCell(p)}</p>` : ''}
-        <p class="small">Money missed in these days: <b class="lostv">${money(p?.lostCounted ?? p?.lost)}</b>${p && p.lostCounted != null && p.lost > p.lostCounted + 1 ? ` +${money(p.lost - p.lostCounted)} not counted` : ''}${p && p.lost ? ` · how sure: ${esc((CONF_LABEL[p.confidence] || '–').toLowerCase())}${weeksText(p) ? ` (${esc(weeksText(p))})` : ''}` : ''}. ${p && p.lossPace != null ? `Valued at ${esc(rate(p.lossPace))} (its usual pace for this month, as in the 12 months above). ` : ''}Sells ${esc(rate(p?.perDay))} on days in stock lately (last 28 days: sets the order).</p>${p && p.lost ? lostSplitLine(p) : ''}
-        <div><h3 class="small">Every stock-out</h3>${d.stockouts.length ? `<div>${d.stockouts.map((s) => `<div class="ep"><span>${dt(s.start)} → ${s.open ? '<span class="st open">still out</span>' : dt(s.end)}</span><span class="muted">${dur(s.hours)}</span><b style="color:#E0506E">${money(s.lost)}</b>${s.topUp != null ? `<span>refilled ${s.topUp} pcs</span>` : ''}${s.small ? '<span class="st small">Small top-up</span>' : ''}${s.repeat ? '<span class="st again">Out again</span>' : ''}</div>`).join('')}</div>` : '<p class="muted">None in these days.</p>'}</div></details>
+        ${state.report.rule ? `<p class="small">Money missed in these days, up to ${esc(dayLabel(state.report.moneyThrough))}: <b class="lostv">${p?.lost ? money(p.lost) : '–'}</b>. The sum is under Why this number.</p>` : ''}<p class="small"${state.report.rule ? ' hidden' : ''}>Money missed in these days: <b class="lostv">${money(p?.lostCounted ?? p?.lost)}</b>${p && p.lostCounted != null && p.lost > p.lostCounted + 1 ? ` +${money(p.lost - p.lostCounted)} not counted` : ''}${p && p.lost ? ` · how sure: ${esc((CONF_LABEL[p.confidence] || '–').toLowerCase())}${weeksText(p) ? ` (${esc(weeksText(p))})` : ''}` : ''}. ${p && p.lossPace != null ? `Valued at ${esc(rate(p.lossPace))} (its usual pace for this month, as in the 12 months above). ` : ''}Sells ${esc(rate(p?.perDay))} on days in stock lately (last 28 days: sets the order).</p>${p && p.lost ? lostSplitLine(p) : ''}
+        <div><h3 class="small">Every stock-out</h3>${d.stockouts.length ? `<div>${d.stockouts.map((s) => `<div class="ep"><span>${dt(s.start)} → ${s.open ? '<span class="st open">still out</span>' : dt(s.end)}</span><span class="muted">${dur(s.hours)}</span>${state.report.rule ? '' : `<b style="color:#E0506E">${money(s.lost)}</b>`}${s.topUp != null ? `<span>refilled ${s.topUp} pcs</span>` : ''}${s.small ? '<span class="st small">Small top-up</span>' : ''}${s.repeat ? '<span class="st again">Out again</span>' : ''}</div>`).join('')}</div>` : '<p class="muted">None in these days.</p>'}</div></details>
         ${window.SW_PROFILE && SW_PROFILE.why ? SW_PROFILE.why(prof, p) : ''}`;
       $('#hour-fold')?.addEventListener('toggle', (e) => { try { if (e.target.open) localStorage.removeItem(HOUR_FOLD); else localStorage.setItem(HOUR_FOLD, 'closed'); } catch { /* private window */ } });
       if (window.SW_PROFILE) SW_PROFILE.charts(body, prof);

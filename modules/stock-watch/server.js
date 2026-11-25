@@ -61,6 +61,7 @@ const zlib = require('node:zlib');
 const links = require('./src/links');       // 1.4.0: product image, Shopify admin and website links (LOGIC §19)
 const year = require('./src/year');         // 1.4.0: 12 months of daily sales + stock from ShopifyQL (LOGIC §20)
 const sell = require('./src/sell');         // 1.4.0: best sellers now, push / pause ads (LOGIC §23)
+const truth = require('./src/truth'), screen = require('./src/screen'), ledger = require('./src/ledger');   // 2.0.0: RULE.md
 const closed = require('./src/closed');     // 1.4.6: closed months keep the ₹ they closed with
 const status = require('./src/status');     // 1.4.7: active / draft / archived, and when
 const agency = require('./src/agency');     // 1.4.0: the brand report: best sellers out of stock, month by month (LOGIC §20–§22)
@@ -304,8 +305,30 @@ function yearBuild(d) {
     return { b, r: agency.build(b.y, b.cat, brandOptsOf(d, { detail: true })) };
   });
 }
+/* 2.0.0 (RULE.md): the one engine behind every number on the agency's screens. Months that are over are locked in ledger.json by the
+   first report that can: only on Shopify's full record, never on demo or rows. on = this store is read from Shopify. */
+function truthOf(d, shop = null) {
+  const t = cache.memo('truth', '', 5 * 60e3, () => {
+    const b = brandInputs(d), o = brandOptsOf(d), keep = b.basis === 'shopify' && !!(b.y && b.y.done);
+    if (b.basis !== 'shopify') return { ok: false, on: false, basis: b.basis };
+    const r = truth.report(b.y, b.cat, { dayOf: o.dayOf, firstSeenDay: o.firstSeenDay, offOf: o.offOf, knownEnd: o.knownEnd, now: Date.now(), ledger: keep ? ledger.get(truth.RULE) : null });
+    if (r.ok && keep && r.lock && !readOnly()) { const n = ledger.add(truth.RULE, r.lock); if (n) console.log(`ledger: locked ${[...n.lists.map((k) => `list ${k}`), ...n.months].join(', ')} (rule ${truth.RULE})`); }
+    delete r.lock;
+    if (r.ok) status.annotate(r.rows, b.cat);
+    return { ...r, basis: b.basis, on: true };
+  });
+  if (t.ok && shop && !t.linked) { links.annotate(t.rows, d.catalog, shop); t.linked = true; }
+  return t;
+}
+/** A period report with its money from the one rule (Shopify stores only). */
+function oneMoney(d, r, only = false) {
+  const t = truthOf(d); if (!t.on || !r) return r;
+  const dayOf = (x) => TZ.dayKey(x, TZ.zoneOf(d.settings));
+  return screen.period(r, t, { y: brandInputs(d).y, only, from: dayOf(r.from), to: t.ok ? t.span.to : dayOf(Date.now()) });
+}
 /** 1.4.4 (LOGIC §7a, §22): the one best-seller set: variant IDs of the brand report's best sellers (12 months, top 80%). */
 function bestIdsOf(d) {
+  const t = truthOf(d); if (t.on) return new Set(t.ok ? t.rows.filter((x) => x.best).map((x) => x.id) : []);   // 2.0.0: the quarter's list
   return cache.memo('bestIds', '', 10 * 60e3, () => { const r = yearBuild(d).r; const set = new Set(); if (r && r.ok) for (const p of r.products) if (p.best) for (const id of p.ids || [p.variantId]) set.add(String(id)); return set; });
 }
 function lossPaceOf(dir, d) {   // dir: kept for the callers; the cache is per store (src/cache.js)
@@ -320,7 +343,7 @@ function lossMap(r) {
   for (const p of r.products || []) {
     const none = new Set(p.noPace || []);   // 1.4.6
     for (const [v, x] of Object.entries(p.monthPace || {})) if (!none.has(v)) pace[v] = x;
-    for (const [v, x] of Object.entries(p.variantPrice || {})) if (x > 0 && !none.has(v)) price[v] = x;
+    for (const [v, x] of Object.entries(p.variantPrice || {})) if (x && x._ > 0 && !none.has(v)) price[v] = x;   // 2.0.0: { 'YYYY-MM': price, _: price }
   }
   return { pace, price };
 }
@@ -646,7 +669,7 @@ async function storeApi(req, res, url, role, id) {
   const v1 = apiv1.handle(req, url, () => {   // SW-050: /api/v1/summary, /api/v1/rows; the same report as /api/report
     const S = settingsFor(url, d.settings), trial = Object.keys(LIMITS).some((k) => S[k] !== d.settings[k]);
     const r = helpers.enrich(engine.report(d.stock, d.orders, S, reportOpts()), { decisions: decide.all(), rates: trial ? savedRates() : null });
-    r.period = periodKind; r.yesterday = period.yesterdayFor(d.stock, d.orders, S, r, reportOpts()); return r;
+    r.period = periodKind; r.yesterday = period.yesterdayFor(d.stock, d.orders, S, r, reportOpts()); return oneMoney(d, r);
   }, { store: here, freshness, source: d.source });
   if (v1) return send(res, v1.code, v1.body);
   const sp = await suppliers.handle(req, url, readBody, {   // SW-040: Data → Suppliers (writes: admin only, gated above)
@@ -671,11 +694,16 @@ async function storeApi(req, res, url, role, id) {
     r.period = periodKind; r.yesterday = period.yesterdayFor(d.stock, d.orders, S, r, reportOpts());   // SW-027
     links.annotateReport(r, d.catalog, shopLinks());   // 1.4.0: image + links on every product row
     status.annotate(r.products, d.catalog);
+    oneMoney(d, r, onlyBest);   // 2.0.0: money from the one rule, full days only
     r.rev = cache.rev();
     return r;
   });
+  const truthData = () => truthOf(d, shopLinks());
   if (p === '/api/brand' && req.method === 'GET') {
-    const body = cache.memo('brand', url.searchParams.get('full') === '1' ? 'full' : '', 60e3, () => brandBody());
+    const body = cache.memo('brand', url.searchParams.get('full') === '1' ? 'full' : '', 60e3, () => {
+      const t = truthData(); if (!t.on) return brandBody();   // demo, Flow, Sheet, CSV
+      return { ...(t.ok ? screen.brand(t, { stockOf: (v) => { const q = d.shopify && d.shopify.lastQty && d.shopify.lastQty[v]; return Number.isFinite(q) ? q : null; } }) : { ok: true, ready: false, reason: t.reason }), basis: t.basis, year: year.summary(year.load()), store: here, generatedAt: Date.now(), app: version.current() };
+    });
     return send(res, 200, { ...body, rev: cache.rev() });
   }
   /** 1.4.6: the brand report's build (the parts of §4c, closed months as they closed) with every variant's days, shared by the
@@ -685,7 +713,7 @@ async function storeApi(req, res, url, role, id) {
       const rep = given || engine.report(d.stock, d.orders, d.settings, reportOpts({ days: 30, from: undefined }));
       const b = brandData(), o = { ...brandOpts(), rowInfo: rowInfoOf(rep.products), detail: true }, keep = b.basis === 'shopify' && b.y && b.y.done;
       const fk = closed.keyOf(o), r = agency.build(b.y, b.cat, { ...o, frozen: keep ? closed.get(fk) : null });
-      if (keep && !readOnly()) closed.close(fk, r, b.y);
+      if (keep && !readOnly() && !truthOf(d).on) closed.close(fk, r, b.y);   // 2.0.0: months are locked in ledger.json instead
       for (const x of r.products || []) { x.name = x.name || x.sku; if (b.cat[x.variantId] && b.cat[x.variantId].variant && x.variants === 1) x.name = `${x.name} · ${b.cat[x.variantId].variant}`; }
       status.annotate(r.products, b.cat);
       return { b, r };
@@ -724,7 +752,9 @@ async function storeApi(req, res, url, role, id) {
     /* 1.4.1 (LOGIC §24): the product profile from the 12 months (whole catalog, so rank, share and season are the store's) */
     try {
       const yb = brandFull(), b = yb.b, vid = String(id);
-      det.profile = agency.profile(yb.r, b.y, b.cat, vid);
+      const tr = truthData(), own = tr.on && tr.ok ? { ...yb.r, window: { from: tr.span.from, through: tr.span.to }, months: tr.months.map((m) => ({ key: m.key, label: agency.monthLabel(m.key), from: m.from, to: m.to, days: m.days, sold: m.sold })) } : yb.r;
+      det.profile = agency.profile(own === yb.r ? yb.r : Object.defineProperty(own, 'details', { value: yb.r.details, enumerable: false }), b.y, b.cat, vid);
+      if (tr.on) screen.profile(det.profile, tr, vid);
       if (det.profile.ok && det.product && det.product.allocation) det.profile.allocation = true;
       det.profile.basis = b.basis;
       const c = b.cat[vid] || {}, gc = catalog.current(d.source, d.catalog);
@@ -741,7 +771,7 @@ async function storeApi(req, res, url, role, id) {
     if (!lens) return send(res, 200, { ok: true, lenses: groups.lensesFor(cat), catalog: catalog.info(cat) });
     if (!groups.LENSES.includes(lens)) return fail(res, 400, 'Unknown group');
     const r = engine.report(d.stock, d.orders, settingsFor(url, d.settings), reportOpts());
-    return send(res, 200, { ok: true, ...groups.build(r.products, cat, lens, { showAll: url.searchParams.get('all') === '1' }), catalog: catalog.info(cat) });
+    return send(res, 200, { ok: true, ...groups.build(oneMoney(d, r, onlyBest).products, cat, lens, { showAll: url.searchParams.get('all') === '1' }), catalog: catalog.info(cat) });
   }
   if (p === '/api/settings' && req.method === 'GET') return send(res, 200, { ok: true, store: here, settings: publicSettings(d.settings, role), role, changes: role === access.ADMIN ? audit.recent(d, 50) : [], lastPlanChange: audit.lastOf(d, PLAN_KEYS), runs: runs.list(d), source: d.source, lastSync: d.lastSync, lastSyncError: d.lastSyncError, shopify: shopifyStatus(), ops: opsState(d) });
   if (p === '/api/shopify/sync' && req.method === 'POST') {
@@ -803,7 +833,7 @@ async function storeApi(req, res, url, role, id) {
     const g = loadDemo();
     return send(res, 200, { ok: true, stock: g.stock.length, orders: g.orders.length });
   }
-  if (p === '/api/clear' && req.method === 'POST') { if (pulls.has(id)) return fail(res, 409, PULL_RUNNING); store.replaceAll([], [], 'empty'); onorder.clear(); decide.clear(); weekly.clear(); year.clear(); closed.clear(); status.clear(); return send(res, 200, { ok: true }); }
+  if (p === '/api/clear' && req.method === 'POST') { if (pulls.has(id)) return fail(res, 409, PULL_RUNNING); store.replaceAll([], [], 'empty'); onorder.clear(); decide.clear(); weekly.clear(); year.clear(); closed.clear(); ledger.clear(); status.clear(); return send(res, 200, { ok: true }); }
   if (p === '/api/export/reorder.csv' && req.method === 'GET') {
     /* SW-025: usable as a PO: the tab filter and search on the page, vendor, unit cost, variant ID (LOGIC.md §15b) */
     const r = links.annotateReport(helpers.enrich(engine.report(d.stock, d.orders, settingsFor(url, d.settings), reportOpts())), d.catalog, shopLinks());

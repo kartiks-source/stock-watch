@@ -2,6 +2,14 @@
 
 User-facing changes, newest first. Semver: minor when a number's rule changes or a feature lands, patch for fixes. The version in `package.json` matches the top heading. Versions before 0.9.0 were reconstructed from `docs/DEVLOG.md` on 20 Nov 2026 (no tags existed); dates are the DEVLOG dates. Per DEVLOG, nothing from 0.6.0 on has been deployed yet. Since 1.0.0-rc.1, `/health`, `/status` and the page footer show the version and the build's commit (SW-056); `test/docs.test.js` checks the top heading matches `package.json`.
 
+## 2.0.0 · 2026-11-25 · one rule for every number
+
+- **One engine** (`src/truth.js`, RULE.md) behind every page of a Shopify store: brand report, out now, ads, all products, the product panel. The screens look the same.
+- **Simple rule:** speed when in stock (12 months, or lately if slower, adjusted for the month) × days empty × price = missed; sold + missed = could have earned. Best sellers only, up to 60 empty days; other products show speed and days.
+- **Proof on the page:** hidden sales of in-stock best sellers guessed with the same rule, month by month; a month whose guess is over 25% too high (under that it is cut by as much), or with under 5 stock-outs, shows no ₹. Comebacks after real stock-outs.
+- **Ranges** beside the money (5+ estimates). **Locked:** a month is saved 3 days after it ends (`ledger.json`, in backups) and never changes.
+- **Fixed:** the launch day counted as "ran out"; the price on the 7 to 60 day pages; the ₹12 gift bending the store's season; returns half counted; run-out day in the speed; three different "out now" counts; ads pushing products that sell under one a week; old months changing when a rule changed.
+
 ## 1.5.2 · 2026-11-25 · "Why this number" at the bottom, closed
 
 - The working sits at the bottom of the product panel as a closed dropdown.
