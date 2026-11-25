@@ -154,19 +154,19 @@ function paceOf(list, paceFrom, shop) {
   const cal = new Map();   // 'MM' → { u, d }
   for (const [m, p] of per) { const c = cal.get(m.slice(5)) || { u: 0, d: 0 }; c.u += p.u; c.d += p.d; cal.set(m.slice(5), c); }
   const mm = (k, n) => String(((+k - 1 + n + 12) % 12) + 1).padStart(2, '0');
-  const season = {}, own = {};
+  const season = {}, own = {}, seasonWhy = {};
   for (const m of Object.keys(shop)) {
     const k = m.slice(5), a = cal.get(mm(k, -1)) || { u: 0, d: 0 }, c = cal.get(k) || { u: 0, d: 0 }, b = cal.get(mm(k, 1)) || { u: 0, d: 0 };
     const U = a.u + 2 * c.u + b.u, Dd = a.d + 2 * c.d + b.d;
-    if (Dd < 2 * SEASON_MIN || !(year > 0) || all.u < SEASON_UNITS) { season[m] = shop[m]; continue; }
+    if (Dd < 2 * SEASON_MIN || !(year > 0) || all.u < SEASON_UNITS) { season[m] = shop[m]; seasonWhy[m] = { shop: shop[m], own: null }; continue; }
     const raw = U / Dd / year, w = Dd / (Dd + 2 * SEASON_K);
-    season[m] = r2(clamp(w * raw + (1 - w) * shop[m], SEASON_CAP)); own[m] = true;
+    season[m] = r2(clamp(w * raw + (1 - w) * shop[m], SEASON_CAP)); own[m] = true; seasonWhy[m] = { shop: shop[m], own: r2(raw), w: r2(w), near: [[mm(k, -1), a.u, r2(a.d)], [k, c.u, r2(c.d)], [mm(k, 1), b.u, r2(b.d)]] };
   }
   /* the average index of the days the pace was measured on */
   let wi = 0, wd = 0;
   for (const x of list) if ((basis === 'year' || x.k >= paceFrom) && x.inF > 0) { wi += x.inF * (season[monthOf(x.k)] ?? 1); wd += x.inF; }
   const level = wd > 0 ? wi / wd : 1;
-  return { perDay, units: use.u, inDays: r2(use.d), basis, few, season, own, level: r2(level), yearUnits: all.u, yearInDays: r2(all.d) };
+  return { perDay, units: use.u, inDays: r2(use.d), basis, few, season, own, seasonWhy, year, level: r2(level), yearUnits: all.u, yearInDays: r2(all.d) };
 }
 
 /** The first day of the stock-out still running at the end of the span, else null. 1.4.6: the last day must END empty, and
@@ -389,7 +389,7 @@ function build(y, catalog = {}, { paceMonths = 6, bestShare = 0.8, links = () =>
   headline.best = scopeHead('best', best); headline.all = scopeHead('all', out); headline.all.inactive = out.filter((p) => p.inactive).length;   // of products: no longer on sale
   for (const k of ['best', 'all']) { headline[k].sold = mlist.reduce((s, m) => s + m[k].sold, 0); headline[k].pct = headline[k].sold > 0 ? r2((headline[k].lost / headline[k].sold) * 100) : 0; }
   const dv = detail && detail !== true ? variants.find((v) => v.id === String(detail)) : null;
-  const det = (v) => ({ id: v.id, list: v.dayMap, pace: v.pace, perMonth: v.perMonth, price: v.price, sold: v.sold, units: v.units, isApart: v.isApart, unsure: !!v.ds.unsure, monthKeys, nowM });
+  const det = (v) => ({ id: v.id, list: v.dayMap, pace: v.pace, perMonth: v.perMonth, price: v.price, sold: v.sold, units: v.units, isApart: v.isApart, unsure: !!v.ds.unsure, monthKeys, nowM, paceFrom, monthPrice: v.monthPrice, frozen: frozen ? Object.keys(frozen).filter((m) => frozen[m] && frozen[m][v.id]) : [] });
   const res = {
     ...(dv ? { detail: det(dv) } : {}),
     ok: true, span: { from: sp.from, through: sp.through, days: keys.length }, window: { from: winFrom, through: sp.through }, asOf: { readAt: y.at || null, stockAt: y.anchor.at || null, through: sp.through },
@@ -483,9 +483,43 @@ function profile(r, y, catalog, id) {
     lastRestock, price, months,
     calendar: list.map((x) => [x.k, x.inF]),
     stock: list.map((x) => [x.k, x.end, x.u, +(mv[x.k] || 0)]), restocks: Object.entries(mv).filter(([k, q]) => k >= first && k <= through && +q > 0).map(([k, q]) => [k, +q]).sort(),
-    season,
+    season, work: workOf(r, d, sl, partsOf, { tot, first, through }),
   };
   return out;
+}
+
+/**
+ * 1.5.1 (LOGIC §30): "Why this number": the working behind a product's money missed, step by step, so anyone can redo it.
+ *   months[]  each month it was out: days × units a day × price = units × price = missed, and which part it is
+ *             (a closed month shows what it closed with; the sum of `missed` is the product's total on every page)
+ *   speed     the pace window: units on shelf days ÷ shelf days, month by month; season of the last month out and why
+ *   price     gross → discounts and returns → net ÷ pieces over the 12 months
+ *   outs[]    each stock-out: from, to, days, the stock at the end of the day before and of its first day
+ */
+function workOf(r, d, sl, partsOf, { tot, first, through }) {
+  const list = d.list.filter((x) => x.k >= first && x.k <= through), months = [];
+  for (const m of r.months) {
+    const pm = d.perMonth[m.key]; if (!pm || !(pm.out > 0) || !(pm.lost > 0 || pm.units > 0)) continue;
+    const q = partsOf(pm);
+    months.push({ key: m.key, days: r2(pm.out), range: ranges(pm.outDays), perDay: r4(pm.units / pm.out), units: r2(pm.units), price: pm.units > 0 ? Math.round(pm.lost / pm.units) : 0,
+      missed: Math.round(pm.lost), counted: q.counted, kind: q.counted > 0 ? 'counted' : pm.apart > 0 ? 'gap' : 'guess', season: d.pace.season[m.key] ?? 1, closed: d.frozen.includes(m.key) });
+  }
+  const by = new Map(), from = d.pace.basis === 'window' ? d.paceFrom : d.list.length ? d.list[0].k : first;
+  for (const x of d.list) { if (x.k < from || x.k > through) continue; const m = monthOf(x.k), z = by.get(m) || { u: 0, d: 0 }; if (x.inF > 0) z.u += x.u - x.over; z.d += x.inF; by.set(m, z); }
+  const lastM = months.length ? months[months.length - 1].key : null;
+  const outs = []; let run = null, prev = null;
+  for (const x of list) {
+    const joins = run && prev && keyPlus(prev.k, 1) === x.k && !(prev.end > 0);
+    if (x.inF < 1) { if (!joins) { run = { from: x.k, to: x.k, days: 0, before: x.start, after: x.end, sold: x.u }; outs.push(run); } run.to = x.k; run.days = r2(run.days + 1 - x.inF); } else run = null;
+    prev = x;
+  }
+  return {
+    months, outs: outs.slice(-12), total: months.reduce((s, m) => s + m.missed, 0), counted: months.reduce((s, m) => s + m.counted, 0),
+    speed: { from, to: through, units: d.pace.units, days: d.pace.inDays, perDay: r4(d.pace.perDay), level: d.pace.level, basis: d.pace.basis, months: [...by].map(([key, z]) => ({ key, units: z.u, days: r2(z.d) })) },
+    season: lastM ? { month: lastM, index: d.pace.season[lastM] ?? 1, ...(d.pace.seasonWhy[lastM] || {}), year: r4(d.pace.year) } : null,
+    price: { pieces: tot.u, gross: Math.round(tot.g), off: Math.round(tot.g - tot.n), net: Math.round(tot.n), tax: Math.round(tot.t), avg: tot.u > 0 ? Math.round(tot.n / tot.u) : null,
+      near: lastM ? [monthOf(keyPlus(`${lastM}-01`, -1)), lastM, monthOf(keyPlus(`${lastM}-28`, 4))].map((m) => { let u = 0, n = 0; for (const [k, x] of Object.entries(sl)) if (monthOf(k) === m && k <= through) { u += Number(x[0]) || 0; n += Number(x[1]) || 0; } return { key: m, pieces: u, net: Math.round(n) }; }).filter((x) => x.pieces) : [] },
+  };
 }
 
 /** One variant's 12 months for the drawer: day calendar (1 = in stock, 0 = out, ½), pace, season, ₹ missed per month. */

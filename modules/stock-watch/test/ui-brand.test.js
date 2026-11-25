@@ -362,3 +362,16 @@ test('1440 and 390: no brand-owner words or pages on any screen, the drawer incl
     await p2.goto(`${base}/?store=sammsara-demo&owner=1#reorder`); await p2.waitForSelector('[data-filter-reorder="all"]'); await ctx.close();
   }
 });
+
+/* 1.5.1: the working behind every number */
+test('1440 and 390: "Why this number": five steps, every month, where to check; the sum is on the Out now rows; adds up', opts, async () => {
+  for (const [w, h] of [[1440, 900], [390, 844]]) {
+    const pg = await open(w, h, '/?store=sammsara-demo#best', w > 760 ? 'table[data-table="best"] tbody tr' : '.mcard h3');
+    assert.match(await pg.innerText('#view'), /[\d.,]+ days × [\d.]+ a day × ₹[\d,]+/);
+    await pg.click(w > 760 ? 'table[data-table="best"] tbody tr' : '.mcard h3'); await pg.waitForSelector('#why .why-steps');
+    const t = await pg.innerText('#why'); assert.match(t, /^Why this number: \w{3} \d{4}, ₹[\d,]+/); assert.equal((await pg.$$('#why .why-steps li')).length, 5);
+    for (const k of ['How long was it empty?', 'How fast does it sell?', 'What did people pay?', 'Multiply', 'Do we count it?', 'Every month', 'Check it yourself in Shopify']) assert.ok(t.includes(k), k);
+    const m = t.match(/([\d.,]+) × ₹([\d,]+) = ₹([\d,]+)\./), n = (x) => +x.replace(/,/g, ''); assert.ok(Math.abs(n(m[1]) * n(m[2]) - n(m[3])) <= n(m[2]) * 0.01 + 2, m[0]);
+    assert.equal(await sideways(pg), 0); assert.deepEqual(pg.errors, []);
+  }
+});

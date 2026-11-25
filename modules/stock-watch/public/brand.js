@@ -123,6 +123,8 @@
   /** #rank by 12 months' sales among products on sale: a big loss on #24 is read differently from one on #1 */
   const rankOf = (p) => { const bb = B(); if (!bb || !bb.products) return null; if (!bb._rank) bb._rank = new Map(bb.products.filter((x) => !x.inactive).sort((x, y) => y.sold - x.sold).map((x, i) => [x.productId, i + 1])); return bb._rank.get(p.productId) || null; };
   const rk = (p) => { const n = rankOf(p); return n ? `<span class="rk" title="Rank by the last 12 months’ sales">#${n} by sales</span>` : ''; };
+  /** 1.5.1: the sum on the row: days × pieces a day × price */
+  const sum = (days, u, lost) => (days > 0 && u > 0 && lost > 0 ? `<small class="why-sum" title="Days empty × pieces a day × price paid. Open the product for every step.">${(Math.round(days * 2) / 2).toLocaleString('en-IN')} days × ${(Math.round((u / days) * 100) / 100).toLocaleString('en-IN')} a day × ₹${inr.format(Math.round(lost / u))}</small>` : '');
   const topUp = (p) => (p.allocation ? '<span class="best tu" title="Shopify shows a few pieces topped up from the warehouse: these gaps are refill waits, not counted in the totals (LOGIC §6)">website top-up</span>' : '');
   const offSale = (p) => (p.inactive ? '<span class="best tu off" title="Now draft or archived in Shopify. What it missed while on sale stays in the report.">No longer on sale</span>' : '');
   const heat = (d) => (d <= 0 ? 0 : d < 3 ? 1 : d < 8 ? 2 : d < 15 ? 3 : 4);
@@ -194,7 +196,7 @@
       { k: 'range', label: 'Ran out on', f: (p) => `<span class="rng" title="${esc(p.x.range)}">${esc(p.x.range)}</span>`, val: (p) => p.x.dates[0] || '' },
       { k: 'daysOut', label: 'Days out', r: 1, f: (p) => inr.format(Math.round(p.x.daysOut * 2) / 2), val: (p) => p.x.daysOut },
       { k: 'units', label: 'Would have sold', r: 1, tip: 'How fast it sells on days it is in stock, for this month', f: (p) => `<span title="${(Math.round(countedUnits(p.x) * 10) / 10).toLocaleString('en-IN')} at ${pace(p.pace.perDay)}">${p.x.counted > 0 ? about(countedUnits(p.x)) : '–'}</span>`, val: (p) => countedUnits(p.x) },
-      { k: 'lost', label: 'Money missed', r: 1, f: (p) => `<b class="lostv">${money(p.x.counted)}</b>${notCounted(p.x)}`, val: (p) => p.x.counted },
+      { k: 'lost', label: 'Money missed', r: 1, f: (p) => `<b class="lostv">${money(p.x.counted)}</b>${notCounted(p.x)}${sum(p.x.daysOut, p.x.units, p.x.lost)}`, val: (p) => p.x.counted },
     ];
     return `<section class="panel" id="month-detail"><div class="panel-head"><h2>${esc(lead)}</h2>
         <span class="tb"><button class="btn ghost xs" id="csv-month">Download CSV</button></span></div>
@@ -231,7 +233,7 @@
       { k: 'name', label: sa ? 'Product' : 'Best seller', f: (p) => bestCell(p) },
       { k: 'out', label: 'Now', f: nowCell, val: (p) => (p.out ? 1 : 0) },
       { k: 'daysOutMonth', label: `Days out in ${mShort(m.key)}`, r: 1, f: (p) => (p.daysOutMonth ? `<span title="${esc(p.rangeMonth)}">${inr.format(Math.round(p.daysOutMonth * 2) / 2)}</span>` : '–') },
-      { k: 'lostMonth', label: `Missed in ${mShort(m.key)}`, r: 1, f: (p) => (p.lostMonth ? `<b class="lostv">${money(p.lostMonth)}</b>` : '–') },
+      { k: 'lostMonth', label: `Missed in ${mShort(m.key)}`, r: 1, f: (p) => (p.lostMonth ? `<b class="lostv">${money(p.lostMonth)}</b>${sum(p.daysOutMonth, p.unitsMonth, p.missedMonthAll)}` : '–') },
       { k: 'pace', label: 'Sells', r: 1, tip: 'How fast it sells on days it is in stock (last 6 months)', f: (p) => esc(pace(p.pace.perDay)), val: (p) => p.pace.perDay },
       { k: 'times', label: 'Times out, 12 months', r: 1, tip: 'Separate times it ran out in the last 12 months, and in how many months', f: (p) => (p.times ? `${inr.format(p.times)}× <span class="muted">in ${p.monthsOut} month${p.monthsOut === 1 ? '' : 's'}</span>` : '–') },
       { k: 'counted', label: 'Missed, 12 months', r: 1, f: (p) => (p.counted ? `<b class="lostv">${money(p.counted)}</b>` : '–') },
@@ -242,7 +244,7 @@
         ${scopeLine(inScopeOf(m, scope()).lost, span(m.from, m.to))}
         <p class="muted small m-hide">${sa ? 'Every product on sale.' : `Best sellers = the products that make ${bestShare()}% of the last 12 months’ sales.`} Tap one to see its 12 months.</p></section>
       ${A.table('best', cols, rows, `No ${noun} yet.`, (p) => `<header><h3>${bestCell(p)}</h3><div class="mq">${p.lostMonth ? `<b class="lostv">${money(p.lostMonth)}</b><small>missed in ${mShort(m.key)}</small>` : '<b class="muted">–</b>'}</div></header>
-        <div class="mfacts">${nowCell(p)}${p.daysOutMonth ? `<span><b>${esc(nDays(p.daysOutMonth))}</b> in ${mShort(m.key)}</span>` : ''}${cost(p)}${p.times > 1 ? `<span title="${times(p)}">${p.times}× this year</span>` : ''}</div>`)}`;
+        <div class="mfacts">${nowCell(p)}${p.daysOutMonth ? `<span><b>${esc(nDays(p.daysOutMonth))}</b> in ${mShort(m.key)}</span>` : ''}${cost(p)}${p.times > 1 ? `<span title="${times(p)}">${p.times}× this year</span>` : ''}${p.lostMonth ? `<span class="why-m">${sum(p.daysOutMonth, p.unitsMonth, p.missedMonthAll).replace(/<\/?small[^>]*>/g, '')}</span>` : ''}</div>`)}`;
   }
 
   /* ---------- Ads: push / pause ---------- */

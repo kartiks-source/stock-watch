@@ -1174,3 +1174,12 @@ body.no-period .top .range, body.no-period .top .rlabel, body.no-period .top .rd
 /* 1.5.0: the agency's screens (public/agency.js) */
 html.agency .rail a[data-view="reorder"], html.agency .owner { display: none !important; }
 .rk { font-size: 11.5px; color: var(--soft); font-weight: 500; white-space: nowrap; }
+
+/* 1.5.1: why this number */
+.why-steps { margin: 8px 0 4px; padding-left: 22px; display: flex; flex-direction: column; gap: 9px; }
+.why-steps li { font-size: 13.5px; line-height: 1.45; } .why-steps li b { display: block; color: var(--ink); } .why-steps li span { color: var(--ink-2); } .why-steps li span b { display: inline; color: var(--lost); }
+.why-tbl { overflow-x: auto; } .why-check { margin: 8px 0; padding-left: 20px; font-size: 13px; line-height: 1.5; display: flex; flex-direction: column; gap: 6px; }
+.why-sum { display: block; font-size: 11.5px; color: var(--soft); font-weight: 400; white-space: nowrap; }
+#why .fold { margin-top: 6px; } #why .fold > summary { min-height: 32px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+@media (max-width: 759.98px) { #why .fold > summary { min-height: 44px; } }
+#why .mtable th { position: static; }

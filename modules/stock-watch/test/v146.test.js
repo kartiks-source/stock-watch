@@ -183,3 +183,17 @@ test('1.5.0: the walk is anchored on our own reading at the end of the last day:
   assert.deepEqual(A.days(y, '1', keys, null, { known: { day: '2026-11-24', level: 50 } }), right, 'agreeing changes nothing');
   assert.deepEqual(A.days(y, '1', keys, null, { known: { day: '2026-11-24', level: 500 } }).list.map((x) => x.end), right.list.map((x) => x.end), 'a huge gap is not "a piece sold between two reads"');
 });
+
+test('1.5.1: the working adds up: days × a day × price = missed, every month; the months are the product’s total; speed and price can be redone', () => {
+  const y = year('2025-10-21', '2026-11-25', [['2026-03-01', '2026-03-12'], ['2026-10-20', '2026-11-24']]);
+  for (const x of Object.values(y.sales.by[1])) { x[2] = x[1] * 0.18; x[3] = x[1] * 1.1; }
+  const r = A.build(y, cat(), { dayOf, rowInfo: info(), detail: true }), p = A.profile(r, y, cat(), '1'), w = p.work;
+  assert.deepEqual(w.months.map((m) => m.key), ['2026-02', '2026-03', '2026-10', '2026-11']);
+  for (const m of w.months) { assert.ok(Math.abs(m.days * m.perDay - m.units) < 0.02); assert.ok(Math.abs(m.units * m.price - m.missed) <= m.price * 0.006 + m.units + 1, `${m.key}`); assert.equal(m.kind, 'counted'); }
+  assert.ok(Math.abs(w.total - one(r).lost) <= 2); assert.equal(w.counted, p.missed.value);
+  assert.ok(Math.abs(w.speed.units / w.speed.days - w.speed.perDay) < 0.001); assert.equal(w.speed.months.reduce((s, m) => s + m.units, 0), w.speed.units);
+  const nov = w.months[3]; assert.ok(Math.abs((w.speed.perDay * w.season.index) / w.speed.level - nov.perDay) < 0.01, 'speed × season ÷ level');
+  assert.equal(w.price.net + w.price.off, w.price.gross); assert.equal(w.price.avg, Math.round(w.price.net / w.price.pieces));
+  assert.deepEqual(w.outs.map((o) => o.from), ['2026-02-28', '2026-10-19']); assert.equal(w.outs[1].after, 0); assert.ok(w.outs[1].before > 0);
+  const g = A.profile(A.build(y, cat(), { dayOf, rowInfo: info({ confidence: 'low' }), detail: true }), y, cat(), '1').work; assert.ok(g.months.every((m) => m.kind === 'guess')); assert.equal(g.counted, 0);
+});

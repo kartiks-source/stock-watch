@@ -39,7 +39,7 @@ function bestNow(brand, rows, month, { all = false } = {}) {   // all: every pro
       out: outRows.length > 0, outVariants: outRows.length, variantsLive: vs.length, outSince: outRows.length ? (main.outSince || null) : null,
       outFromDay: outRows.length ? (p.outFrom || {})[String(main.id)] || null : null,   // 12 months: the day this stock-out began (store day), else null
       stock: vs.reduce((s, r) => s + Math.max(0, r.stock), 0), status: main.status, orderQty: main.orderQty || 0, orderValue: main.orderValue || 0, onOrder: main.onOrder || null,
-      daysLeft: main.daysLeft ?? null, costPerDay: outRows.reduce((s, r) => s + (sureOf(r) ? +r.costPerDay || 0 : 0), 0), why: main.why || '', daysOutMonth: m ? m.daysOut : 0, lostMonth: m ? (m.counted != null ? m.counted : m.lost) : 0, apartMonth: m ? (m.lost - (m.counted != null ? m.counted : m.lost)) || 0 : 0, rangeMonth: m ? m.range : '',
+      daysLeft: main.daysLeft ?? null, costPerDay: outRows.reduce((s, r) => s + (sureOf(r) ? +r.costPerDay || 0 : 0), 0), why: main.why || '', daysOutMonth: m ? m.daysOut : 0, lostMonth: m ? (m.counted != null ? m.counted : m.lost) : 0, apartMonth: m ? (m.lost - (m.counted != null ? m.counted : m.lost)) || 0 : 0, rangeMonth: m ? m.range : '', unitsMonth: m ? m.units : 0, missedMonthAll: m ? m.lost : 0,
     });
   }
   return out.sort((a, b) => (b.out - a.out) || (b.lostMonth - a.lostMonth) || (b.sold - a.sold));
