@@ -184,7 +184,7 @@ async function run(browser, base, vp, own) {
 (async () => {
   const { chromium } = loadPlaywright();
   const app = await startApp();
-  const browser = await launch(chromium);
+  const browser = await launch(chromium); { const nc = browser.newContext.bind(browser); browser.newContext = async (o) => { const c = await nc(o); await c.addInitScript(() => { try { sessionStorage.setItem('sw-owner', '1'); } catch { /* */ } }); return c; }; }   // 1.5.0: these pages are the brand owner's (public/agency.js)
   try { for (const vp of VIEWPORTS) await run(browser, app.base, vp, app.own); }
   finally { await browser.close(); await app.stop(); }
   if (!results.length) { console.error('No checks ran.'); process.exit(1); }

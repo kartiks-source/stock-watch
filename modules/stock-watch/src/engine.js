@@ -576,7 +576,7 @@ function report(stock, orders, settings = {}, opts = {}) {
          marked ordered → "not restocked". A floor-rate product (seeded) is "not restocked" from the start */
       const cut = Math.max(a, Math.min(e.end, e.start + nrDays * DAY));
       const h1 = sellingHours(a, cut, profile, off), h2 = sellingHours(cut, e.end, profile, off);
-      const nr = !(e.open && oo), nrAll = seeded && e.open && !oo;   // 1.4.7: the same for a stock-out that ended
+      const nr = false, nrAll = false;   // 1.5.0 (meeting, 24 Nov): every empty day is missed money; whether the brand should refill or drop it is not the agency's call. Was: after day 30 apart (1.4.7)   // 1.4.7: the same for a stock-out that ended
       const u1 = unitsIn(h1), u2 = unitsIn(h2), uLost = u1 + u2;
       const vLost = valueIn(h1) + valueIn(h2), vOver = nrAll ? vLost : valueIn(h2);
       if (nr && e.open && vOver > 0) nrOpen = true;

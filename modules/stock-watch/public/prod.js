@@ -34,7 +34,7 @@
     return `<span class="life ${on ? 'on' : 'offl'}" title="${esc(tip)}">${s}${on && recent(l.since) ? ` since ${day(l.since).replace(/ \d{4}$/, '')}` : ''}${l.unlimited ? ' · sells at 0' : ''}</span>`;
   }
   /** One product cell: picture | name (+ extra html after it) / code + links. */
-  const cell = (p, { extra = '', before = '', size = 40 } = {}) => `<span class="prod">${thumb(p, size)}<span class="pt"><span class="pl1">${before}<span class="pname" title="${esc(p.name)}">${esc(p.name)}</span>${extra}</span><span class="pl2">${p.sku ? `<span class="psku" title="Product code (SKU)">${esc(p.sku)}</span>` : ''}${links(p)}${life(p)}</span></span></span>`;
+  const cell = (p, { extra = '', before = '', size = 40, sub = '' } = {}) => `<span class="prod">${thumb(p, size)}<span class="pt"><span class="pl1">${before}<span class="pname" title="${esc(p.name)}">${esc(p.name)}</span>${extra}</span><span class="pl2">${p.sku ? `<span class="psku" title="Product code (SKU)">${esc(p.sku)}</span>` : ''}${links(p)}${life(p)}${sub}</span></span></span>`;
   /** The drawer's top: big picture, name, code, both links as labelled buttons. */
   const hero = (p, extra = '') => `<div class="phero">${thumb(p, 120)}<div class="pht"><h2 id="drawer-title">${esc(p.name)}</h2>${p.sku ? `<div class="psku">Code ${esc(p.sku)}</div>` : ''}${extra}${links(p, true)}</div></div>`;
   /** CSV columns for a row. */

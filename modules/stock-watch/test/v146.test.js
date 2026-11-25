@@ -89,26 +89,28 @@ test('new or unsure variants are named, so ₹ lost keeps its own rate instead o
   assert.deepEqual(one(A.build(y, cat(), { dayOf })).noPace, []);
 });
 
-test('a closed month keeps its money when the product is marked ordered or repriced later; the open month still moves', () => {
+test('a closed month keeps its money when the evidence changes later; the open month still moves', () => {
   const scope = require('../src/scope'), closed = require('../src/closed');
   scope.run('demo', () => {
     const y = year('2025-10-21', '2026-11-25', [['2026-09-01', '2026-11-24']]), o = { dayOf, paceMonths: 6, detail: true }, k = closed.keyOf(o);
     const a = A.build(y, cat(), { ...o, rowInfo: info() });
     const saved = closed.close(k, a, y);
     assert.ok(saved.includes('2026-10') && !saved.includes('2026-11') && !saved.includes('2025-11'), 'full, finished months only');
-    const free = A.build(y, cat(), { ...o, rowInfo: info({ ordered: true }) }), kept = A.build(y, cat(), { ...o, rowInfo: info({ ordered: true }), frozen: closed.get(k) });
-    assert.ok(one(free).months['2026-10'].counted > 20000, 'without: one click moves October');
+    const free = A.build(y, cat(), { ...o, rowInfo: info({ confidence: 'low' }) }), kept = A.build(y, cat(), { ...o, rowInfo: info({ confidence: 'low' }), frozen: closed.get(k) });
+    assert.equal(one(free).months['2026-10'].counted, 0, 'without: a later change of evidence empties October');
     assert.equal(one(kept).months['2026-10'].counted, one(a).months['2026-10'].counted);
     assert.equal(one(kept).months['2026-11'].counted, one(free).months['2026-11'].counted);
     assert.deepEqual(closed.close(k, kept, y), [], 'closed once');
   });
 });
 
-test('the drawer says the counted money, with the rest apart; both add up to the month', () => {
+test('the drawer says the counted money, with guesses apart; both add up to the month', () => {
   const y = year('2025-10-21', '2026-11-25', [['2026-10-01', '2026-11-24']]);
-  const r = A.build(y, cat(), { dayOf, rowInfo: info(), detail: true }), p = A.profile(r, y, cat(), '1');
-  assert.equal(p.missed.value, one(r).counted); assert.equal(p.missed.value + p.missed.apart, one(r).lost); assert.ok(p.missed.apart > 0);
-  const nov = p.months.find((m) => m.key === '2026-11'); assert.equal(nov.missed, one(r).months['2026-11'].counted); assert.equal(nov.apart, one(r).months['2026-11'].nr);
+  for (const [c, apart] of [['high', false], ['low', true]]) {
+    const r = A.build(y, cat(), { dayOf, rowInfo: info({ confidence: c }), detail: true }), p = A.profile(r, y, cat(), '1');
+    assert.equal(p.missed.value, one(r).counted); assert.equal(p.missed.value + p.missed.apart, one(r).lost); assert.equal(p.missed.apart > 0, apart);
+    const nov = p.months.find((m) => m.key === '2026-11'); assert.equal(nov.missed, one(r).months['2026-11'].counted);
+  }
 });
 
 test('sure or guess: only weeks it could be bought, never under 8', () => {
@@ -118,11 +120,11 @@ test('sure or guess: only weeks it could be bought, never under 8', () => {
   assert.equal(E.confidenceOfWeeks(4, 25), 'low'); assert.equal(E.confidenceOfWeeks(4, 13), 'medium');
 });
 
-test('1.4.7: one rule: the first 30 days of a stock-out are sure, the days after are apart, ended or not', () => {
-  const y = year('2025-10-21', '2026-11-25', [['2026-03-01', '2026-05-29']]);   // 90 days, refilled
-  const p = one(A.build(y, cat(), { dayOf, rowInfo: info() }));
-  assert.ok(p.counted < p.lost * 0.5 && p.counted > p.lost * 0.2); assert.equal(p.months['2026-05'].counted, 0);
-  const t = one(A.build(year('2025-10-21', '2026-11-25', [['2026-03-01', '2026-03-20']]), cat(), { dayOf, rowInfo: info() })); assert.equal(t.counted, t.lost, '20 days: all sure');
+test('1.5.0: every empty day counts; the part after the first 30 days is named, inside the total; how often it ran out', () => {
+  const y = year('2025-10-21', '2026-11-25', [['2026-03-01', '2026-05-29'], ['2026-08-01', '2026-08-10']]);   // 90 days, then 10
+  const p = one(A.build(y, cat(), { dayOf, rowInfo: info() })), late = Object.values(p.months).reduce((s, m) => s + (m.late || 0), 0);
+  assert.equal(p.counted, p.lost); assert.ok(late > p.lost * 0.4 && late < p.lost * 0.7, `${late} of ${p.lost}`); assert.equal(p.months['2026-08'].late, undefined);
+  assert.equal(p.times, 2); const h = A.build(y, cat(), { dayOf, rowInfo: info() }).headline; assert.ok(Math.abs(h.all.late - late) <= 6);
 });
 
 test('1.4.7: money missed uses the price of the time', () => {
@@ -169,4 +171,15 @@ test('refilled a few at a time and in stock: never paused, listed as keep; out o
   assert.equal(H.mktList({ ...row, allocation: undefined }, { leadDays: 7 }), 'pause');
   const a = sell.ads(null, [row, { ...row, id: '2', stock: 0, mkt: 'pause' }], {});
   assert.deepEqual([a.keep.map((x) => x.id), a.pause.map((x) => x.id), a.push.length], [['1'], ['2'], 0]);
+});
+
+test('1.5.0: the walk is anchored on our own reading at the end of the last day: a piece sold between two reads shifts nothing', () => {
+  const y = year('2025-10-21', '2026-11-25', [['2026-06-01', '2026-06-10']]), keys = A.dayKeys('2025-10-21', '2026-11-24');
+  const right = A.days(y, '1', keys), off = structuredClone(y); off.anchor.levels[1] -= 1; off.moves.by[1]['2026-11-25'] = 0;   // sold after the log was read
+  const wrong = A.days(off, '1', keys), fixed = A.days(off, '1', keys, null, { known: { day: '2026-11-24', level: 50 } }), older = A.days(off, '1', keys, null, { known: { day: '2026-11-20', level: 50 } });
+  assert.deepEqual(older.list.map((x) => x.end), right.list.map((x) => x.end), 'a certain reading some days back does the same');
+  assert.notDeepEqual(wrong.list.map((x) => x.end), right.list.map((x) => x.end));
+  assert.deepEqual(fixed.list.map((x) => [x.k, x.end, x.inF]), right.list.map((x) => [x.k, x.end, x.inF]));
+  assert.deepEqual(A.days(y, '1', keys, null, { known: { day: '2026-11-24', level: 50 } }), right, 'agreeing changes nothing');
+  assert.deepEqual(A.days(y, '1', keys, null, { known: { day: '2026-11-24', level: 500 } }).list.map((x) => x.end), right.list.map((x) => x.end), 'a huge gap is not "a piece sold between two reads"');
 });

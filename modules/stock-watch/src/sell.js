@@ -20,6 +20,7 @@ function paceMap(brand) {
   for (const p of (brand && brand.products) || []) for (const [id, v] of Object.entries(p.variantPace || {})) m.set(String(id), { pace: v, best: !!p.best, product: p });
   return m;
 }
+const sureOf = (r) => r.confidence !== 'low' && !r.allocation && r.floorPerDay == null;   // ₹ a day only where the money missed is counted (a guess has none)
 const live = (r) => r && r.status !== 'Inactive' && r.stock != null;
 
 function bestNow(brand, rows, month, { all = false } = {}) {   // all: every product on sale (1.4.9: the switch)
@@ -38,7 +39,7 @@ function bestNow(brand, rows, month, { all = false } = {}) {   // all: every pro
       out: outRows.length > 0, outVariants: outRows.length, variantsLive: vs.length, outSince: outRows.length ? (main.outSince || null) : null,
       outFromDay: outRows.length ? (p.outFrom || {})[String(main.id)] || null : null,   // 12 months: the day this stock-out began (store day), else null
       stock: vs.reduce((s, r) => s + Math.max(0, r.stock), 0), status: main.status, orderQty: main.orderQty || 0, orderValue: main.orderValue || 0, onOrder: main.onOrder || null,
-      daysLeft: main.daysLeft ?? null, why: main.why || '', daysOutMonth: m ? m.daysOut : 0, lostMonth: m ? (m.counted != null ? m.counted : m.lost) : 0, apartMonth: m ? (m.lost - (m.counted != null ? m.counted : m.lost)) || 0 : 0, rangeMonth: m ? m.range : '',
+      daysLeft: main.daysLeft ?? null, costPerDay: outRows.reduce((s, r) => s + (sureOf(r) ? +r.costPerDay || 0 : 0), 0), why: main.why || '', daysOutMonth: m ? m.daysOut : 0, lostMonth: m ? (m.counted != null ? m.counted : m.lost) : 0, apartMonth: m ? (m.lost - (m.counted != null ? m.counted : m.lost)) || 0 : 0, rangeMonth: m ? m.range : '',
     });
   }
   return out.sort((a, b) => (b.out - a.out) || (b.lostMonth - a.lostMonth) || (b.sold - a.sold));
@@ -53,7 +54,7 @@ function ads(brand, rows, S = {}) {
     const b = pm.get(String(r.id)), pace = b && b.pace > 0 ? b.pace : +r.perDay || 0;   // the 12-month pace; the 28-day rate when it has none
     const price = +r.price || (b ? b.product.price : 0) || 0;
     const outFromDay = b && r.stock <= 0 ? (b.product.outFrom || {})[String(r.id)] || null : null;
-    const row = { outFromDay, id: r.id, name: r.name, sku: r.sku, image: r.image, adminUrl: r.adminUrl, webUrl: r.webUrl, stock: r.stock, pace: Math.round(pace * 100) / 100, price: Math.round(price), perDayValue: Math.round(pace * price), best: !!(b && b.best), status: r.status, why: r.why || '', backIn: r.backIn || null, outSince: r.outSince || null, daysLeft: r.daysLeft ?? null, ...(r.life ? { life: r.life } : {}) };
+    const row = { outFromDay, id: r.id, name: r.name, sku: r.sku, image: r.image, adminUrl: r.adminUrl, webUrl: r.webUrl, stock: r.stock, pace: Math.round(pace * 100) / 100, price: Math.round(price), perDayValue: Math.round(pace * price), best: !!(b && b.best), status: r.status, why: r.why || '', backIn: r.backIn || null, costPerDay: sureOf(r) ? +r.costPerDay || 0 : 0, outSince: r.outSince || null, daysLeft: r.daysLeft ?? null, ...(r.life ? { life: r.life } : {}) };
     if (r.mkt === 'pause' && pace > 0) { pause.push(row); continue; }
     if (r.allocation && r.stock > 0) { if (pace > 0) keep.push({ ...row, allocation: true }); continue; }   // 1.4.6: topped up from the warehouse: keep the ads on, check the warehouse
     if (r.stock > 0 && pace > 0) {

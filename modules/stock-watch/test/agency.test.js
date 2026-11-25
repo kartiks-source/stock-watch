@@ -102,7 +102,8 @@ test('money missed: out-of-stock days × seasonal pace × average price paid, sp
   assert.ok(perDay > 3 && perDay < 6 * 0.8, `November between the quiet months and October’s rush: ${perDay.toFixed(2)} a day`);
   const nov = r.months.find((m) => m.key === '2026-11');
   assert.equal(nov.lost, p.months['2026-11'].counted); assert.equal(nov.bestOut, 1); assert.equal(nov.daysOut, 30);
-  assert.ok(p.months['2026-11'].nr > 0 && p.months['2026-11'].nr < p.months['2026-11'].lost / 20, '30 Nov is day 31 of the stock-out: apart (1.4.7)');
+  assert.equal(p.months['2026-11'].counted, p.months['2026-11'].lost, 'every empty day counts (1.5.0)'); assert.ok(p.months['2026-11'].late > 0 && p.months['2026-11'].late < p.months['2026-11'].lost / 20, '30 Nov is day 31: named as after the first 30 days');
+  assert.equal(p.times, 1); assert.equal(p.monthsOut, 2);
   assert.equal(r.months.length, 12); assert.equal(r.months[11].key, '2026-11');
   assert.equal(r.headline.lost, r.months.reduce((s, m) => s + m.lost, 0), 'the headline is the sum of the months');
   assert.equal(r.asOf.through, '2026-11-30');
@@ -222,7 +223,7 @@ test('brand report month = report ₹ lost for the same dates (same §21 pace an
 
 /* 1.4.4: the brand report keeps apart the same parts as the pages (§4c): counted = the report's lostCounted for the same
    dates; "restock or drop?" (after day 30, nothing ordered) apart on both, to within one day's value */
-test('brand report parts = report parts for the same product and dates (counted, restock or drop?)', () => {
+test('brand report parts = report parts for the same product and dates (counted)', () => {
   const E = require('../src/engine');
   const IST = 330 * 60e3, at = (k, hh = 12) => Date.parse(`${k}T${String(hh).padStart(2, '0')}:00:00Z`) - IST;
   const dayOf = (t) => new Date(t + IST).toISOString().slice(0, 10);
@@ -244,7 +245,7 @@ test('brand report parts = report parts for the same product and dates (counted,
     const day = p0.monthPace['9']['2026-11'] * 1500;
     assert.ok(Math.abs(sum('counted') - row.lostCounted) <= day + 2, `${label}: counted ₹${sum('counted')} vs report ₹${row.lostCounted}`);
     assert.ok(Math.abs(sum('nr') - row.lostNotRestocked) <= day + 2, `${label}: restock or drop? ₹${sum('nr')} vs report ₹${row.lostNotRestocked}`);
-    if (today === '2026-12-11') assert.ok(sum('nr') > 0 && row.lostNotRestocked > 0, 'both keep the part after day 30 apart');
+    assert.equal(sum('nr') + row.lostNotRestocked, 0, '1.5.0: nothing is cut off after day 30');
   }
 });
 
