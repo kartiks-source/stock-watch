@@ -737,7 +737,7 @@
     { k: 'stock', label: 'In stock', r: 1, f: (p) => (p.stock == null ? '–' : pcs(p)) },
     { k: 'daysLeft', label: 'Days left', f: daysCell, val: (p) => p.daysLeft ?? -1, csv: (p) => p.daysLeft ?? '' },
     { k: 'sold', label: 'Sold', r: 1, tip: `₹ sold ${inPeriod()}. ${soldTip()}`, f: (p) => money(p.sold) },
-    { k: 'lost', label: AGENCY ? 'Money missed' : 'Sales lost', r: 1, tip: state.report.rule ? `Best sellers only, full days ${inPeriod()}. Open the product for the sum` : `Money missed while it was out of stock ${inPeriod()}. Red = in the headline. Grey = not: “est.” few sales behind the rate; “not restocked” after day ${nrDays()} with nothing ordered; “refill gaps” website allocations`, f: lostCell, val: lostSort, csv: (p) => p.lost },
+    { k: 'lost', label: AGENCY ? 'Money missed' : 'Sales lost', r: 1, tip: state.report.rule ? `Full days ${inPeriod()}. Open the product for the sum` : `Money missed while it was out of stock ${inPeriod()}. Red = in the headline. Grey = not: “est.” few sales behind the rate; “not restocked” after day ${nrDays()} with nothing ordered; “refill gaps” website allocations`, f: lostCell, val: lostSort, csv: (p) => p.lost },
     { k: 'lostCounted', label: 'Sales lost in headline', hide: 1 },
     { k: 'orderQty', label: 'Order', r: 1, tip: 'Units to order (only when an order is due)', f: (p) => (p.orderQty ? `<b>${inr.format(p.orderQty)}</b>` : '–') },
     { k: 'type', label: 'Category', opt: 1, f: (p) => `<span class="muted cat" title="${esc(p.type)}">${esc(p.type || '–')}</span>` },

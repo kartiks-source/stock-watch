@@ -19,21 +19,17 @@ function emptyDays(t, x, from, to) {
   for (const c of x.strip || '') { if (k >= from && k <= to && (c === '0' || c === '1')) out.push([k, c === '0' ? 1 : 0.5]); k = agency.keyPlus(k, 1); }
   return out;
 }
-const WHY = {
-  'not-best': 'not a best seller: days only', unsure: 'Shopify’s stock record doesn’t add up', 'started-empty': 'already empty when our record begins',
-  'few-days': 'not on the shelf long enough before', 'few-sold': 'sold too few to judge',
-};
+const WHY = { unsure: 'Shopify’s stock record doesn’t add up, or it sells at 0', gift: 'a gift line', 'started-empty': 'already empty when our record begins', 'few-days': 'under 30 shelf days before, or nothing sold on the last 60' };
 /** ₹ a day a row that is out now keeps missing (0 when it carries no ₹, or it has been out over 60 days). */
 function costNow(t, x) {
-  if (!x.out || !x.best) return 0;
-  const m = t.months[t.months.length - 1], c = m && m.pass && x.months[m.key], p = c && c.parts[c.parts.length - 1];
-  return p && p.lost > 0 && p.to === m.to && Date.parse(m.to) - Date.parse(p.start) < 59 * DAY ? Math.round(p.perDay * p.price * (p.cut || 1)) : 0;
+  if (!x.out) return 0;
+  const m = t.months[t.months.length - 1], c = x.months[m.key], p = c && c.parts[c.parts.length - 1];
+  return p && p.lost > 0 && p.to === m.to && Date.parse(m.to) - Date.parse(p.start) < 59 * DAY ? Math.round(p.perDay * p.price) : 0;
 }
 function cell(t, x, m) {
   const c = x.months[m.key]; if (!c) return null;
-  const ds = emptyDays(t, x, m.from, m.to), keys = ds.map((z) => z[0]), no = [...new Set(c.parts.map((p) => p.no).filter(Boolean))];
-  const lost = c.lost || 0, units = m.pass ? sum(c.parts.map((p) => p.units || 0)) : 0;
-  return { daysOut: c.empty, dates: keys, range: agency.ranges(keys), units: r2(units), countedUnits: r2(units), moneyDays: m.pass ? sum(c.parts.map((p) => p.first || 0)) : 0, lost, counted: lost, later: c.later || 0, ...(x.best && !m.pass ? { hidden: m.why || true } : {}), ...(x.best && no.length ? { no: no.map((k) => WHY[k] || k).join(', ') } : {}) };
+  const ds = emptyDays(t, x, m.from, m.to), keys = ds.map((z) => z[0]), no = [...new Set(c.parts.map((p) => p.no).filter(Boolean))], units = sum(c.parts.map((p) => p.units || 0));
+  return { daysOut: c.empty, dates: keys, range: agency.ranges(keys), units: r2(units), countedUnits: r2(units), moneyDays: sum(c.parts.map((p) => p.first || 0)), lost: c.lost, counted: c.lost, best: c.best, later: c.later || 0, ...(no.length ? { no: no.map((k) => WHY[k] || k).join(', ') } : {}) };
 }
 
 function products(t) {
@@ -42,8 +38,8 @@ function products(t) {
     const months = {}; for (const m of t.months) { const c = cell(t, x, m); if (c) months[m.key] = c; }
     const v = x.speed ? x.speed.perDay : 0, vn = x.speed ? x.speed.now : 0;
     return { productId: x.productId, variantId: x.id, ids: [x.id], name: nameOf(x), sku: x.sku, variants: 1, best: x.best, rank: x.rank, ...(x.active ? {} : { inactive: true }),
-      sold: x.sold, units: x.pieces, share: pct(x.sold, tot), price: x.price || 0, pace: { perDay: r2(v), now: r2(vn), units: x.speed ? x.speed.units : 0, inDays: x.speed ? x.speed.days : 0 }, variantPace: { [x.id]: vn }, could: x.best ? x.sold + (x.lost || 0) : null, outFrom: { [x.id]: x.out ? x.since || t.span.held : null },
-      months, times: x.times, monthsOut: Object.keys(months).length, lost: x.lost || 0, counted: x.lost || 0, low: x.low, high: x.high, later: x.later || 0, daysOut: x.empty, stockNow: Math.max(0, x.stock), ...(x.unsure ? { unsure: 1 } : {}),
+      sold: x.sold, units: x.pieces, share: pct(x.sold, tot), price: x.price || 0, pace: { perDay: r2(v), now: r2(vn), units: x.speed ? x.speed.units : 0, inDays: x.speed ? x.speed.days : 0 }, variantPace: { [x.id]: vn }, could: x.sold + (x.lost || 0), outFrom: { [x.id]: x.out ? x.since || t.span.held : null },
+      months, times: x.times, monthsOut: Object.keys(months).length, lost: x.lost || 0, counted: x.lost || 0, lostBest: x.lostBest || 0, low: x.low, high: x.high, later: x.later || 0, daysOut: x.empty, stockNow: Math.max(0, x.stock), ...(x.unsure ? { unsure: 1 } : {}),
       image: x.image, adminUrl: x.adminUrl, webUrl: x.webUrl, life: x.life };
   });
 }
@@ -52,14 +48,13 @@ function brand(t, { stockOf = null } = {}) {
   if (!t.ok || t.ready === false) return { ok: false, reason: t.reason || 'short' };
   const label = agency.monthLabel;
   const months = t.months.map((m) => {
-    const best = { lost: m.best.lost || 0, n: m.best.n, low: m.best.low, high: m.best.high, late: 0, later: m.best.later || 0, est: 0, nr: 0, apart: 0, total: m.best.lost || 0, units: 0, out: m.best.rows, ran: m.best.ran, daysOut: m.best.empty, noMoney: m.best.noMoney, sold: m.bestSold, pct: pct(m.best.lost || 0, m.bestSold) };
-    const all = { ...best, out: m.all.rows, ran: m.all.ran, daysOut: m.all.empty, sold: m.sold, pct: pct(m.best.lost || 0, m.sold) };
-    return { key: m.key, label: label(m.key), from: m.from, to: m.to, days: m.days, sold: m.sold, units: m.pieces, closed: m.closed, hidden: !m.pass, hiddenWhy: m.why, score: m.score, best, all, lost: best.lost, pct: best.pct, bestOut: best.out, daysOut: best.daysOut };
+    const of = (k, sold) => ({ lost: m[k].lost, low: m[k].low, high: m[k].high, n: m[k].n, later: m[k].later, out: m[k].rows, ran: m[k].ran, daysOut: m[k].empty, noMoney: m[k].noMoney, sold, pct: pct(m[k].lost, sold), late: 0, est: 0, nr: 0, apart: 0, total: m[k].lost, units: 0 });
+    const best = of('best', m.bestSold), all = of('all', m.sold);
+    return { key: m.key, label: label(m.key), from: m.from, to: m.to, days: m.days, sold: m.sold, units: m.pieces, closed: m.closed, best, all, lost: best.lost, pct: best.pct, bestOut: best.out, daysOut: best.daysOut };
   });
   const y = t.year, ps = products(t);
-  const head = (k, o) => ({ lost: y.lost, low: y.low, high: y.high, later: y.later, could: y.could, late: 0, est: 0, nr: 0, apart: 0, total: y.lost, noMoney: y.noMoney, ...o, pct: pct(y.lost, o.sold) });
-  const headline = { from: t.span.from, through: t.span.to, sold: y.sold, lost: y.lost, hidden: y.hidden, daysOut: y.bestEmpty, bestsellers: y.bestN, bestRanOut: y.bestRan, unsure: 0,
-    best: head('best', { products: y.bestN, ranOut: y.bestRan, daysOut: y.bestEmpty, sold: y.bestSold }), all: head('all', { products: ps.length, ranOut: y.allRan, daysOut: sum(t.months.map((m) => m.all.empty)), sold: y.sold }) };
+  const head = (k, o) => ({ lost: y[k].lost, low: y[k].low, high: y[k].high, later: y[k].later, could: y[k].could, open: y[k].open, noMoney: y[k].noMoney, daysOut: y[k].empty, late: 0, est: 0, nr: 0, apart: 0, total: y[k].lost, ...o, pct: pct(y[k].lost, o.sold) });
+  const headline = { from: t.span.from, through: t.span.to, sold: y.sold, lost: y.best.lost, daysOut: y.best.empty, bestsellers: y.bestN, bestRanOut: y.bestRan, unsure: 0, best: head('best', { products: y.bestN, ranOut: y.bestRan, sold: y.bestSold }), all: head('all', { products: ps.length, ranOut: y.allRan, sold: y.sold }) };
   const last = months[months.length - 1];
   const now = t.rows.map((x, i) => ({ x, p: ps[i] })).filter(({ x }) => x.active).map(({ x, p }) => {
     const c = p.months[last.key];
@@ -86,7 +81,7 @@ function ads(now) {
 function between(t, x, from, to) {
   let lost = 0, units = 0; const days = emptyDays(t, x, from, to);
   for (const m of t.months) {
-    if (!m.pass || m.to < from || m.from > to) continue;
+    if (m.to < from || m.from > to) continue;
     for (const p of (x.months[m.key] || { parts: [] }).parts) {
       if (!(p.lost > 0)) continue;
       const a = p.from > from ? p.from : from, b = p.to < to ? p.to : to; if (b < a) continue;
@@ -117,9 +112,9 @@ function period(rep, t, { from, to, y = null, only = false }) {
   const T = rep.totals || {}; Object.assign(T, { lost: L, lostAll: L, lostEstimate: 0, lostNotRestocked: 0, lostAllocation: 0, lostEstimateProducts: 0, lostNotRestockedProducts: 0, lostAllocationProducts: 0, lostProducts: N, lostPct: T.sold + L > 0 ? r2(L / (T.sold + L) * 100) : 0, stillOutPerDay: sum((rep.products || []).map((p) => p.costPerDay || 0)), stillOutPerDayApart: 0, ...(T.lostProfit != null ? { lostProfit: 0 } : {}) });
   if (sl) { const [u, v] = only ? [sum(rep.products.map((p) => p.unitsSold || 0)), sum(rep.products.map((p) => p.sold || 0))] : soldOf(sl.all); Object.assign(T, { sold: Math.round(v), unitsSold: u }); }
   if (T.sold + L > 0) T.lostPct = r2(L / (T.sold + L) * 100);
-  for (const d of rep.daily || []) { let v = 0; for (const x of t.rows) if (x.best) v += between(t, x, d.day, d.day).lost; d.lost = Math.round(v); if (sl) { const [u, w] = [Number((sl.all[d.day] || [])[0]) || 0, Number((sl.all[d.day] || [])[1]) || 0]; if (d.day <= to) { d.sold = Math.round(w); d.units = u; } } }
+  for (const d of rep.daily || []) { let v = 0; for (const x of t.rows) if (!only || x.best) v += between(t, x, d.day, d.day).lost; d.lost = Math.round(v); if (sl) { const [u, w] = [Number((sl.all[d.day] || [])[0]) || 0, Number((sl.all[d.day] || [])[1]) || 0]; if (d.day <= to) { d.sold = Math.round(w); d.units = u; } } }
   for (const s of rep.stockouts || []) { s.lost = 0; s.lostCounted = 0; }
-  if (rep.yesterday) rep.yesterday.lost = Math.round(sum(t.rows.filter((x) => x.best).map((x) => between(t, x, rep.yesterday.day, rep.yesterday.day).lost)));
+  if (rep.yesterday) rep.yesterday.lost = Math.round(sum(t.rows.filter((x) => !only || x.best).map((x) => between(t, x, rep.yesterday.day, rep.yesterday.day).lost)));
   if (rep.yesterday && sl && sl.all[rep.yesterday.day]) rep.yesterday.sold = Math.round(sl.all[rep.yesterday.day][1]);
   rep.rule = t.rule; rep.moneyThrough = to;
   return rep;
@@ -130,20 +125,20 @@ function profile(prof, t, id) {
   const x = t.ok && t.ready !== false ? t.rows.find((r) => r.id === String(id)) : null;
   if (!prof || !prof.ok || !x) return prof;
   const gaps = new Map();
-  for (const m of t.months) for (const p of (x.months[m.key] || { parts: [] }).parts) { const g = gaps.get(p.start) || { start: p.start, from: p.from, to: p.to, days: 0, lost: 0, later: 0, parts: [], best: !!p.best }; g.to = p.to; g.days += p.empty; g.parts.push({ ...p, month: m.key, pass: m.pass, off: m.score.off, closed: m.closed }); if (m.pass) { g.lost += p.lost || 0; g.later += p.laterLost || 0; } gaps.set(p.start, g); }
+  for (const m of t.months) for (const p of (x.months[m.key] || { parts: [] }).parts) { const g = gaps.get(p.start) || { start: p.start, from: p.from, to: p.to, days: 0, lost: 0, later: 0, parts: [], best: !!p.best }; g.to = p.to; g.days += p.empty; g.parts.push({ ...p, month: m.key, closed: m.closed }); g.lost += p.lost || 0; g.later += p.laterLost || 0; gaps.set(p.start, g); }
   const list = [...gaps.values()].sort((a, b) => a.start < b.start ? -1 : 1);
   const longest = list.slice().sort((a, b) => b.days - a.days)[0];
   for (const m of prof.months) {
     const M = t.months.find((z) => z.key === m.key), c = M ? cell(t, x, M) : null;
-    Object.assign(m, { missed: c ? c.lost : 0, missedUnits: c ? c.units : 0, apart: 0, later: c ? c.later : 0, daysOut: c ? c.daysOut : 0, hidden: !!(x.best && c && M && !M.pass), no: c ? c.no || null : null });
+    Object.assign(m, { missed: c ? c.lost : 0, missedUnits: c ? c.units : 0, apart: 0, later: c ? c.later : 0, daysOut: c ? c.daysOut : 0, no: c ? c.no || null : null });
   }
   const cal = []; let k0 = t.span.from; for (const c of x.strip) { if (c !== '-') cal.push([k0, c === '2' ? 1 : c === '1' ? 0.5 : 0]); k0 = agency.keyPlus(k0, 1); }
   const inD = sum(cal.map((z) => z[1]));
   Object.assign(prof, { calendar: cal, inStock: { days: r2(inD), of: cal.length, pct: cal.length ? Math.round(inD / cal.length * 100) : null }, best: x.best, rank: x.rank ? { n: x.rank, of: t.best.n, list: true } : null, season: null,
     pace: { ...prof.pace, perDay: x.speed ? r2(x.speed.perDay) : 0, perWeek: x.speed ? r2(x.speed.perDay * 7) : 0, perMonth: x.speed ? r2(x.speed.perDay * 30.4) : 0, sixMonths: x.speed ? r2(x.speed.perDay) : 0, basis: 'rule', speed: x.speed },
     outs: { times: x.times, days: r2(x.empty), longest: longest ? { from: longest.from, to: longest.to, days: r2(longest.days) } : null, open: x.out, since: x.since },
-    could: x.best ? x.sold + (x.lost || 0) : null, missed: { value: x.lost || 0, units: r2(sum(prof.months.map((m) => m.missedUnits))), apart: 0, low: x.low ?? null, high: x.high ?? null, later: x.later || 0 },
-    work: { rule: t.rule, best: x.best, gaps: list, proof: { off: t.proof.off, off60: t.proof.off60, tests: t.proof.tests, back: t.proof.back }, why: WHY } });
+    could: x.sold + (x.lost || 0), missed: { value: x.lost || 0, units: r2(sum(prof.months.map((m) => m.missedUnits))), apart: 0, low: x.low ?? null, high: x.high ?? null, later: x.later || 0 },
+    work: { rule: t.rule, best: x.best, gaps: list, proof: x.best ? t.proof.best : t.proof.other, why: WHY } });
   return prof;
 }
 

@@ -3,6 +3,10 @@
 Newest first. Date · module · what changed and why · anything open.
 Shared copy for the team: https://claude.ai/artifact/27Q6x8r3rpZHYaNzhjW2Zq
 
+## 2026-11-25 · stock-watch 3.0.0
+
+One tested model for every product (src/model.js, RULE.md): weighted average of the speed in stock × like products on the same days × price × days empty. Picked among 19 models by replayed stock-outs and real comebacks; rebuilt line by line by a separate engine. Open: December is the first month it hasn't seen; the apiv1 groups test compares two calls moments apart on ticking demo data.
+
 ## 2026-11-25 · stock-watch 2.0.0
 
 One simple rule for every number (RULE.md, src/truth.js, src/screen.js, src/ledger.js): speed in stock × days empty × price; sold + missed = could have earned. Screens keep their layout. Checked against Shopify and rebuilt by a second, separate engine. Open: December is the first month the rule hasn't seen; deck rebuild.

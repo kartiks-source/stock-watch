@@ -1188,3 +1188,4 @@ html.agency .rail a[data-view="reorder"], html.agency .owner { display: none !im
 .mtable .band { display: block; font-size: 11px; line-height: 1.2; white-space: nowrap; }
 .mtable td .band { margin-top: 1px; }
 .headline h1 .hsub { white-space: nowrap; }
+@media (min-width: 760px) { .bgrid .mtable th, .bgrid .mtable td { padding-left: 5px; padding-right: 5px; } }
