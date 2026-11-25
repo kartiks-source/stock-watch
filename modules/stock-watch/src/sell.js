@@ -53,7 +53,7 @@ function ads(brand, rows, S = {}) {
     const b = pm.get(String(r.id)), pace = b && b.pace > 0 ? b.pace : +r.perDay || 0;   // the 12-month pace; the 28-day rate when it has none
     const price = +r.price || (b ? b.product.price : 0) || 0;
     const outFromDay = b && r.stock <= 0 ? (b.product.outFrom || {})[String(r.id)] || null : null;
-    const row = { outFromDay, id: r.id, name: r.name, sku: r.sku, image: r.image, adminUrl: r.adminUrl, webUrl: r.webUrl, stock: r.stock, pace: Math.round(pace * 100) / 100, price: Math.round(price), perDayValue: Math.round(pace * price), best: !!(b && b.best), status: r.status, why: r.why || '', backIn: r.backIn || null, outSince: r.outSince || null, daysLeft: r.daysLeft ?? null };
+    const row = { outFromDay, id: r.id, name: r.name, sku: r.sku, image: r.image, adminUrl: r.adminUrl, webUrl: r.webUrl, stock: r.stock, pace: Math.round(pace * 100) / 100, price: Math.round(price), perDayValue: Math.round(pace * price), best: !!(b && b.best), status: r.status, why: r.why || '', backIn: r.backIn || null, outSince: r.outSince || null, daysLeft: r.daysLeft ?? null, ...(r.life ? { life: r.life } : {}) };
     if (r.mkt === 'pause' && pace > 0) { pause.push(row); continue; }
     if (r.allocation && r.stock > 0) { if (pace > 0) keep.push({ ...row, allocation: true }); continue; }   // 1.4.6: topped up from the warehouse: keep the ads on, check the warehouse
     if (r.stock > 0 && pace > 0) {

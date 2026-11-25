@@ -90,10 +90,11 @@ test('a PO marked (Mark ordered) keeps a 30+ day stock-out counting in full', ()
   assert.equal(late.lostNotRestocked, 0);
 });
 
-test('a long stock-out that ended (refilled) counts in full', () => {
+test('a long stock-out that ended counts its first 30 days, the rest is apart (1.4.7: the same rule as one still running)', () => {
   const p = product('c', { outAt: 45, backAt: 2, sales: range(99, 46) });
   const x = row(run(p), 'c');
-  assert.ok(x.lost > 0); assert.equal(x.lostNotRestocked, 0); assert.equal(x.lostCounted, x.lost);
+  assert.ok(x.lost > 0); assert.ok(x.lostNotRestocked > 0 && x.lostCounted > 0); assert.equal(x.lostCounted + x.lostNotRestocked, x.lost);
+  assert.ok(!x.notRestocked, 'it was refilled: not on the "restock or drop?" list');
 });
 
 test('low confidence and not restocked together: the parts add up to lost, nothing counted twice', () => {

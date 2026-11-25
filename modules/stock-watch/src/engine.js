@@ -480,6 +480,7 @@ function report(stock, orders, settings = {}, opts = {}) {
     if (c.active === false) { p.inactive = c.status || 'INACTIVE'; p.inactiveSince = c.inactiveSince || now; }
     /* earlier inactive spells of a variant that is active again (draft while sold out, reactivated on restock) */
     if (c.createdAt != null && Number.isFinite(+c.createdAt)) p.createdAt = +c.createdAt;   // 1.3.0: weeks live for G26 confidence (§4c)
+    if (c.oversell) p.oversell = true;
     if (Array.isArray(c.spells)) p.spells = c.spells.map((x) => ({ from: +x.from, to: +x.to })).filter((x) => Number.isFinite(x.from) && x.to > x.from);
   }
 
@@ -511,7 +512,7 @@ function report(stock, orders, settings = {}, opts = {}) {
     const spells = (p.spells || []).slice();
     if (p.inactive) spells.push({ from: Math.min(now, Math.max(p.inactiveSince, p.changes.length ? p.changes[p.changes.length - 1].t : 0)), to: Infinity });
     spells.sort((a, b) => a.from - b.from);
-    const eps = afterLastSale(cutBySpells(episodes(p.changes, now), spells), p.lines, p.changes, syncMs);
+    const eps = p.oversell ? [] : afterLastSale(cutBySpells(episodes(p.changes, now), spells), p.lines, p.changes, syncMs);   // 1.4.7: keeps selling at 0: never out
     if (p.inactive) for (const e of eps) if (e.open) { e.open = false; e.inactive = true; }
     const pFirst = Number.isFinite(p.first) ? p.first : demandFrom;
     const pFrom = Math.max(demandFrom, pFirst);   // a new launch isn't diluted by days before it existed
@@ -554,15 +555,18 @@ function report(stock, orders, settings = {}, opts = {}) {
        on every page as in the brand report. Reorder, days left and "Sells" keep the 28-day rate (perDay, §3). Without the
        12 months (no read_reports, Flow / Sheet / CSV, demo, a variant the year doesn't hold): the rules of §3–§4 as before. */
     const lpm = own(opts.lossPace, p.id), byMonth = lpm && typeof lpm === 'object' ? lpm : null;
-    const lossPrice = byMonth && num(own(opts.lossPrice, p.id)) > 0 ? num(own(opts.lossPrice, p.id)) : seeded && num(wsRow.n) > 0 ? num(wsRow.n) / units26 : price;
+    const lpp = own(opts.lossPrice, p.id), priceMap = byMonth && lpp && typeof lpp === 'object' ? lpp : null;   // 1.4.7: the price of each month
+    const lossPrice = priceMap && num(priceMap._) > 0 ? num(priceMap._) : byMonth && num(lpp) > 0 ? num(lpp) : seeded && num(wsRow.n) > 0 ? num(wsRow.n) / units26 : price;
     const lossPerHour = byMonth ? 0 : seeded ? units26 / FLOOR_DAYS / 24 : typeof lpm === 'number' && lpm > 0 && rate.basis !== 'window' && !lowData ? lpm / 24 : perSellingHour;
     const monthRate = (k) => { const v = byMonth[k.slice(0, 7)]; return (v != null ? num(v) : num(byMonth._)) / 24; };   // _ = this month's, for a day past the months held
     const unitsIn = (h) => (byMonth ? Object.entries(h.byDay).reduce((u, [k, w]) => u + w * monthRate(k), 0) : h.total * lossPerHour);
+    const priceOn = (k) => (priceMap && num(priceMap[k.slice(0, 7)]) > 0 ? num(priceMap[k.slice(0, 7)]) : lossPrice);
+    const valueIn = (h) => (priceMap ? Object.entries(h.byDay).reduce((s, [k, w]) => s + w * monthRate(k) * priceOn(k), 0) : unitsIn(h) * lossPrice);
     const unitsOn = (k, w) => (byMonth ? w * monthRate(k) : w * lossPerHour);
     /* §6 (1.3.0): Shopify's stock is a website allocation the warehouse tops up → no reorder from here; ₹ lost apart */
     const alloc = +S.allocationCheck !== 0 && !p.inactive && p.stock != null ? allocationOf(p.changes, now) : null;
 
-    let lost = 0, unitsLost = 0, outs = 0, smallTopUps = 0, repeats = 0, lostNR = 0;
+    let lost = 0, unitsLost = 0, outs = 0, smallTopUps = 0, repeats = 0, lostNR = 0, nrOpen = false;
     eps.forEach((e, i) => {
       if (e.end <= from) return;
       const a = Math.max(e.start, from);
@@ -570,15 +574,16 @@ function report(stock, orders, settings = {}, opts = {}) {
          marked ordered → "not restocked". A floor-rate product (seeded) is "not restocked" from the start */
       const cut = Math.max(a, Math.min(e.end, e.start + nrDays * DAY));
       const h1 = sellingHours(a, cut, profile, off), h2 = sellingHours(cut, e.end, profile, off);
-      const nr = e.open && !oo, nrAll = seeded && nr;
+      const nr = !(e.open && oo), nrAll = seeded && e.open && !oo;   // 1.4.7: the same for a stock-out that ended
       const u1 = unitsIn(h1), u2 = unitsIn(h2), uLost = u1 + u2;
-      const vLost = uLost * lossPrice, vOver = nrAll ? vLost : u2 * lossPrice;
+      const vLost = valueIn(h1) + valueIn(h2), vOver = nrAll ? vLost : valueIn(h2);
+      if (nr && e.open && vOver > 0) nrOpen = true;
       lost += vLost; unitsLost += uLost; outs++;
       if (nr) lostNR += vOver;
       for (const [h, late] of [[h1, false], [h2, true]]) {
         for (const [k, w] of Object.entries(h.byDay)) {
           const d = daily[k]; if (!d) continue;
-          const uu = unitsOn(k, w), v = uu * lossPrice;
+          const uu = unitsOn(k, w), v = uu * priceOn(k);
           if ((late || nrAll) && nr) d.lostNotRestocked += v; else if (alloc) d.lostAllocation += v; else if (confidence === 'low' || seeded) d.lostEstimate += v; else d.lost += v;
           d.unitsLost += uu; d.outSkus.add(p.id);
         }
@@ -628,7 +633,7 @@ function report(stock, orders, settings = {}, opts = {}) {
     row.lostCounted = row.lost - row.lostNotRestocked - row.lostAllocation - row.lostEstimate;
     if (alloc && pl) Object.assign(row, { status: ALLOCATION_STATUS, allocation: alloc, orderQty: 0, orderValue: 0 });   // §6: no reorder sized on an allocation
     row.lostConfidence = row.lost > 0 ? confidence : null;
-    if (row.lostNotRestocked > 0) row.notRestocked = true;
+    if (row.lostNotRestocked > 0 && nrOpen) row.notRestocked = true;
     /* the product's first stock record (UI-1): before it there's no stock history, so ₹ lost there is unknown, not 0 */
     row.historyFrom = p.changes.length ? p.changes[0].t : null;
     /* mostly given away (M4): average paid under 10% of the list price and no unit cost → a free gift? kept out of the budget rank */

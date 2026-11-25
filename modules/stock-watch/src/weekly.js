@@ -55,7 +55,7 @@ function file() {
 }
 const dayKey = (t, zone) => engine.dayKey(t, zone);
 /** What the snapshots were worked out on: engine rules, the stock history rebuild, the order price basis. */
-const calcOf = (d) => [engine.CALC_VERSION, 'loss-1.4.6', (d.shopify && d.shopify.history && d.shopify.history.at) || '', (d.shopify && d.shopify.priceBasis) || '', lossPaceKey(d)].join('|');
+const calcOf = (d) => [engine.CALC_VERSION, 'loss-1.4.7', (d.shopify && d.shopify.history && d.shopify.history.at) || '', (d.shopify && d.shopify.priceBasis) || '', lossPaceKey(d)].join('|');
 /* 1.4.0 (LOGIC §21): the 12-month pace for long stock-outs' ₹ lost, from server.js (null without Shopify's 12 months) */
 let lossPaceFn = () => null, lossPaceKey = () => '';
 function useLossPace(fn, key) { lossPaceFn = fn; lossPaceKey = key || (() => ''); }

@@ -111,6 +111,17 @@
     if (!ms.length) return '';
     return `<section class="panel"><h2>Month by month</h2><div class="ylost">${ms.map((m) => `<p><b>${esc(mText(m))}:</b> out for ${esc(nDays(m.daysOut))}. It sold ${inr.format(m.units)}${m.missedUnits > 0 ? ` and would have sold ${about(m.missedUnits)} more` : ''}. ${m.missed > 0 ? `<b class="lostv">${money(m.missed)}</b> missed${m.apart > 0 ? `, +${money(m.apart)} not counted` : ''}` : m.apart > 0 ? `${money(m.apart)} missed, not counted` : 'Nothing missed'}.</p>`).join('')}</div></section>`;
   }
+  /** 1.4.7: every period it was active, draft or archived, newest first */
+  function periodsBlock(prof) {
+    const d = prof.details || {}, ps = (d.periods || []).slice().reverse(); if (!ps.length) return '';
+    const dd = SW_PROD.day;
+    const line = (p, i) => {
+      const name = SW_PROD.LIFE[p.status] || p.status, to = p.to == null ? 'now' : dd(p.to), first = i === ps.length - 1;
+      const off = p.status !== 'ACTIVE' && p.status !== 'UNKNOWN', from = p.from == null ? '' : dd(p.from), early = off && (first || (ps[i + 1] && ps[i + 1].status === 'UNKNOWN'));
+      return `<p class="life-row ${p.status === 'ACTIVE' ? 'on' : off ? 'offl' : 'unk'}"><b>${esc(name)}</b> <span>${early ? `${from} or earlier` : from} – ${to}</span>${p.status === 'UNKNOWN' ? `<small class="muted">Shopify doesn’t keep this far back${d.lastSold ? `. Last sold ${esc(dd(Date.parse(`${d.lastSold}T00:00:00Z`) - 330 * 6e4))}` : ''}</small>` : ''}</p>`;
+    };
+    return `<section class="panel" id="life"><h2>Active, draft or archived</h2>${ps.map(line).join('')}${d.oversell ? '<p class="muted small">Shopify keeps selling this product at 0 stock, so it is never counted as out of stock.</p>' : ''}</section>`;
+  }
   function details(prof) {
     const d = prof.details; if (!d) return '';
     const row = (k, v) => (v ? `<div><span>${k}</span><b>${v}</b></div>` : '');
@@ -132,7 +143,7 @@
       <section class="panel"><div class="panel-head"><h2>Stock level</h2><span class="muted small">pieces at each day’s end · ${esc(span(prof.span.from, prof.span.through))}</span></div>
         <div class="chartbox"><div class="lazy-chart" data-chart="stock" style="height:160px"></div></div>
         <p class="muted small">Shaded = out of stock. ▼ = restocked (+pieces).</p></section>
-      ${seasonBlock(prof)}${monthList(prof)}${details(prof)}`;
+      ${seasonBlock(prof)}${monthList(prof)}${periodsBlock(prof)}${details(prof)}`;
   }
 
   const priceOf = (prof, key) => (prof.price && prof.price.byMonth ? prof.price.byMonth.find((m) => m.key === key) : null);

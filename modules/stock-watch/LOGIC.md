@@ -1165,7 +1165,6 @@ The last 30 days to the hour (Why, sales lost with its confidence, every stock-o
 | Drafted / archived products | kept when they sold in the window, up to the day they went inactive (already inactive at our first read: up to their last sale). Out of the season index, best sellers, restock and ads | dropped, with their past |
 | Re-published (Shopify moves `publishedAt`) | the days between its last sale before that and the new date are skipped; never sold before → starts there | everything before the new date was dropped |
 | Drafted for a while (`spells`) | those days are skipped | counted as out |
-| Hidden when empty (re-published, or not on sale now) | only the first 30 days of a stock-out can be counted; the rest is "restock or drop?" | – |
 | Still out (`outRun`) | the last day must end empty, and a day that ended with stock breaks the run | half days joined into one long stock-out |
 | Confidence (§4c G26) | share of the weeks it **could be bought** (any day in stock), when it sold in 4+ weeks; never out of fewer than 12. Otherwise all 25 weeks, as before | always all weeks since it was created |
 | New (under 60 days held) or unsure variants | §3–§4's own rate | ₹ lost 0 on every page |
@@ -1177,3 +1176,22 @@ The last 30 days to the hour (Why, sales lost with its confidence, every stock-o
 Known and not changed: a stock-out that ended counts every day (except hidden products), one still running 30 (§4c); the price is a 12-month average; no allowance for shoppers who bought something else or for fewer visitors; the order speed (§3) differs from the money speed (§21); "% of sales" is missed ÷ sold on the brand report and missed ÷ (sold + missed) on the period pages; "keep selling at 0" in Shopify is not read (one product, dropped as unsure).
 
 Sammsara, 24 Nov 2026, same data on both versions: all products ₹28.1 L → ₹32.2 L, best sellers 41 → 44, ₹13.9 L → ₹15.2 L; guesses ₹8.9 L → ₹7.0 L; restock or drop? ₹22.2 L → ₹24.8 L; last 30 days ₹4.85 L → ₹5.30 L.
+
+## 27. 1.4.7: unlimited stock, status history, price of the time, one 30-day rule, and how accurate it is (wins over the sections above)
+
+- **Unlimited stock.** A variant with Shopify's "Continue selling when out of stock" (`inventoryPolicy` CONTINUE → catalog `oversell`) is never out of stock, on every page. Shopify keeps no history of the setting: today's is used for the whole year. Checked 25 Nov 2026: 1 of 253 active tracked variants (Oversized Queen Chess); gift cards are untracked and not shown. For the other 252, `availableForSale` equals stock > 0 without exception.
+- **Status (`src/status.js`, status.json).** Read once a day from Shopify's product events (`status_changed`): about 90 days back at the first read (28 Aug 2026), kept from then on. Shopify sets `publishedAt` again when a draft is made active (6 of 6 events), so an active product has been active since its `publishedAt`. Before that, and for drafts made before the record began: "not known", with the last sale. Draft / archived periods with a known start are no stock-out.
+- **Price of the time.** Money missed in a month uses what people paid in that month and the months either side (2+ sold), else the 12-month average; the same on every page (`lossPrice` per month).
+- **One 30-day rule.** The first 30 days (or lead + buffer + 14 when longer) of every stock-out can be sure, ended or still running; the days after are apart. Only a running one marked ordered keeps counting. (Before: an ended one counted every day.) Why: after 60+ days out products came back at 0.61 of their normal speed (9 cases, too few to price), so the later days can't be called sure.
+
+**How accurate (25 Nov 2026, real Sammsara data).** 1,196 periods of 7–30 days when a product was in stock were hidden from the rule, predicted, and compared with what sold (₹2.31 Cr):
+
+| | Total | 95% range | Typical miss for one product and period |
+|---|---|---|---|
+| All | +1.7% | −5.1% to +7.6% | 40% |
+| Best sellers | +3.9% | −3.2% to +11.6% | 31% |
+| The rest | −4.7% | −11.6% to +2.1% | 65% |
+
+So a store or month total can be trusted to within about 10%; one product in one month is a rough figure. Tried and not better: 12-month or 6-month flat speed, the store's daily traffic, the 60 days around. Price: typical miss 4.8% with the 12-month average, 4.1% with recent months. Shoppers buying a sibling instead: 0.03 extra per missed sale on best sellers (26 stock-outs), no sign of it, but the test is noisy (all: −2.63 to 0.42), so it isn't deducted. Product page visits fall to almost none once a product is out (Oakwood 138 a week → 7, 4, 2): the estimate assumes normal visits.
+
+Sammsara, same data on 1.4.6 → 1.4.7: all products ₹32.2 L → ₹28.7 L, best sellers ₹15.2 L → ₹14.8 L (44), last 30 days ₹5.34 L → ₹5.46 L.

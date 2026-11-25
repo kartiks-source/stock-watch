@@ -23,11 +23,21 @@
       : p.webUrl === null ? `<span class="pnoweb" title="This product isn’t on the online store">Not on website</span>` : '';
     return a || w ? `<span class="plinks">${a}${w}</span>` : '';
   }
+  /* 1.4.7: active / draft / archived in Shopify, and since when (row.life from the server) */
+  const LIFE = { ACTIVE: 'Active', DRAFT: 'Draft', ARCHIVED: 'Archived', UNLISTED: 'Unlisted', DELETED: 'Deleted', UNKNOWN: 'Not known' };
+  const day = (t) => new Date(+t + 330 * 6e4).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+  const recent = (t) => t && Date.now() - t < 365 * 864e5;
+  function life(p) {
+    const l = p && p.life; if (!l) return '';
+    const s = LIFE[l.s] || l.s, on = l.s === 'ACTIVE';
+    const tip = `${s} in Shopify${l.since ? ` since ${day(l.since)}${on ? '' : ' or earlier'}` : ''}. Open the product to see every period.${l.unlimited ? ' Shopify keeps selling it at 0 stock.' : ''}`;
+    return `<span class="life ${on ? 'on' : 'offl'}" title="${esc(tip)}">${s}${on && recent(l.since) ? ` since ${day(l.since).replace(/ \d{4}$/, '')}` : ''}${l.unlimited ? ' · sells at 0' : ''}</span>`;
+  }
   /** One product cell: picture | name (+ extra html after it) / code + links. */
-  const cell = (p, { extra = '', before = '', size = 40 } = {}) => `<span class="prod">${thumb(p, size)}<span class="pt"><span class="pl1">${before}<span class="pname" title="${esc(p.name)}">${esc(p.name)}</span>${extra}</span><span class="pl2">${p.sku ? `<span class="psku" title="Product code (SKU)">${esc(p.sku)}</span>` : ''}${links(p)}</span></span></span>`;
+  const cell = (p, { extra = '', before = '', size = 40 } = {}) => `<span class="prod">${thumb(p, size)}<span class="pt"><span class="pl1">${before}<span class="pname" title="${esc(p.name)}">${esc(p.name)}</span>${extra}</span><span class="pl2">${p.sku ? `<span class="psku" title="Product code (SKU)">${esc(p.sku)}</span>` : ''}${links(p)}${life(p)}</span></span></span>`;
   /** The drawer's top: big picture, name, code, both links as labelled buttons. */
   const hero = (p, extra = '') => `<div class="phero">${thumb(p, 120)}<div class="pht"><h2 id="drawer-title">${esc(p.name)}</h2>${p.sku ? `<div class="psku">Code ${esc(p.sku)}</div>` : ''}${extra}${links(p, true)}</div></div>`;
   /** CSV columns for a row. */
   const csv = (p) => [(p && p.adminUrl) || '', (p && p.webUrl) || (p && p.webUrl === null ? 'Not on website' : '')];
-  window.SW_PROD = { thumb, links, cell, hero, csv, CSV_HEAD: ['Shopify admin link', 'Website link'] };
+  window.SW_PROD = { life, LIFE, day, thumb, links, cell, hero, csv, CSV_HEAD: ['Shopify admin link', 'Website link'] };
 })();

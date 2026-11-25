@@ -62,6 +62,7 @@ const links = require('./src/links');       // 1.4.0: product image, Shopify adm
 const year = require('./src/year');         // 1.4.0: 12 months of daily sales + stock from ShopifyQL (LOGIC §20)
 const sell = require('./src/sell');         // 1.4.0: best sellers now, push / pause ads (LOGIC §23)
 const closed = require('./src/closed');     // 1.4.6: closed months keep the ₹ they closed with
+const status = require('./src/status');     // 1.4.7: active / draft / archived, and when
 const agency = require('./src/agency');     // 1.4.0: the brand report: best sellers out of stock, month by month (LOGIC §20–§22)
 
 const PORT = /^\d+$/.test(process.env.PORT || '') ? Number(process.env.PORT) : 4400;   // PORT=0 picks a free port (tests)
@@ -273,7 +274,7 @@ function brandInputs(d) {
 /** The brand report's options on the saved settings (links added by the caller that sends products). */
 function brandOptsOf(d, extra = {}) {
   const S = { ...engine.DEFAULT_SETTINGS, ...d.settings }, zone = TZ.zoneOf(d.settings), w = weeks.forReport(d.shopify);
-  return { paceMonths: Math.round(+S.paceMonths || 6), bestShare: (+S.bestShare || 80) / 100, firstSeenDay: d.shopify && d.shopify.history && +d.shopify.history.until ? TZ.dayKey(+d.shopify.history.until, zone) : null, dayOf: (t) => TZ.dayKey(t, zone),
+  return { paceMonths: Math.round(+S.paceMonths || 6), bestShare: (+S.bestShare || 80) / 100, offOf: (c) => status.offSpells(status.of(c)), firstSeenDay: d.shopify && d.shopify.history && +d.shopify.history.until ? TZ.dayKey(+d.shopify.history.until, zone) : null, dayOf: (t) => TZ.dayKey(t, zone),
     rankBy: w ? Object.fromEntries(Object.entries(w.by).map(([k, v]) => [k, v.n])) : null, ...extra };   // 26 weeks, while the 12 months load
 }
 /** 1.4.3: the whole store's 12-month build with every variant's days (the drawer, ₹ lost pace), once per data version. */
@@ -410,6 +411,7 @@ async function pullOne(id) {
     store.setShopify({ lastSync: Date.now(), lastTry: started, lastError: null });
     if (history.due(store.load().shopify)) await history.run().catch((e) => console.warn('history:', e.message));   // SW-063: once per store and rules version (1.1.1 redoes 1.1.0's), never fails the pull
     if (weeks.due(store.load().shopify, Date.now(), TZ.zoneOf(store.load().settings))) await weeks.run().catch((e) => console.warn('weeks:', e.message));   // 1.3.0: once a day per store, after the pull is saved; never fails it
+    if (status.due()) await status.run();   // 1.4.7: once a day, never fails the pull
     if (year.due(year.load(), Date.now(), TZ.zoneOf(store.load().settings))) await year.run().catch((e) => console.warn('year:', e.message));   // 1.4.0: 12 months (LOGIC §20), a few reads per pull until done, then once a day; never fails the pull
     await catalog.refreshCollections().catch((e) => console.warn('collections:', e.message));   // Group by (SW-022): once a day, resumable
     log.info('shopify pull done', { store: id, stockChanges: stock, orderLines: orders, seconds: Math.round((Date.now() - started) / 1000) });
@@ -648,6 +650,7 @@ async function storeApi(req, res, url, role, id) {
     const r = helpers.enrich(engine.report(d.stock, d.orders, S, reportOpts()), { decisions: decide.all(), rates: trial ? savedRates() : null });
     r.period = periodKind; r.yesterday = period.yesterdayFor(d.stock, d.orders, S, r, reportOpts());   // SW-027
     links.annotateReport(r, d.catalog, shopLinks());   // 1.4.0: image + links on every product row
+    status.annotate(r.products, d.catalog);
     r.rev = cache.rev();
     return r;
   });
@@ -664,12 +667,14 @@ async function storeApi(req, res, url, role, id) {
       const fk = closed.keyOf(o), r = agency.build(b.y, b.cat, { ...o, frozen: keep ? closed.get(fk) : null });
       if (keep && !readOnly()) closed.close(fk, r, b.y);
       for (const x of r.products || []) { x.name = x.name || x.sku; if (b.cat[x.variantId] && b.cat[x.variantId].variant && x.variants === 1) x.name = `${x.name} · ${b.cat[x.variantId].variant}`; }
+      status.annotate(r.products, b.cat);
       return { b, r };
     });
   }
   function brandBody() {
     /* 1.4.0 (§23): today's report (30 days, saved settings): best sellers now, ads, and website allocations (§6, kept apart) */
     const rep = links.annotateReport(helpers.enrich(engine.report(d.stock, d.orders, d.settings, reportOpts({ days: 30, from: undefined }))), d.catalog, shopLinks());
+    status.annotate(rep.products, d.catalog);
     const { b, r } = brandFull(rep);
     const month = r.ok ? r.months[r.months.length - 1].key : null;
     const now = r.ok ? sell.bestNow(r, rep.products, month) : [];
@@ -703,7 +708,7 @@ async function storeApi(req, res, url, role, id) {
       if (det.profile.ok && det.product && det.product.allocation) det.profile.allocation = true;
       det.profile.basis = b.basis;
       const c = b.cat[vid] || {}, gc = catalog.current(d.source, d.catalog);
-      det.profile.details = { type: c.type || '', vendor: String(c.vendor || '').trim(), tags: c.tags || [], createdAt: c.createdAt || null, publishedAt: c.publishedAt || null, published: !!c.published,
+      det.profile.details = { type: c.type || '', vendor: String(c.vendor || '').trim(), tags: c.tags || [], createdAt: c.createdAt || null, publishedAt: c.publishedAt || null, published: !!c.published, oversell: !!c.oversell, periods: status.of(c), lastSold: Object.keys((b.y && b.y.sales.by[vid]) || {}).filter((k) => Number(b.y.sales.by[vid][k][0]) > 0).sort().pop() || null,
         collections: Object.values(gc.collections || {}).filter((x) => (x.productIds || []).map(String).includes(String(c.productId))).map((x) => x.title).filter((t) => !/^all( products)?$/i.test(t)).slice(0, 12) };
       det.profile.ms = Date.now() - t0;
     } catch (e) { det.profile = { ok: false, reason: e.message }; }
@@ -778,7 +783,7 @@ async function storeApi(req, res, url, role, id) {
     const g = loadDemo();
     return send(res, 200, { ok: true, stock: g.stock.length, orders: g.orders.length });
   }
-  if (p === '/api/clear' && req.method === 'POST') { if (pulls.has(id)) return fail(res, 409, PULL_RUNNING); store.replaceAll([], [], 'empty'); onorder.clear(); decide.clear(); weekly.clear(); year.clear(); closed.clear(); return send(res, 200, { ok: true }); }
+  if (p === '/api/clear' && req.method === 'POST') { if (pulls.has(id)) return fail(res, 409, PULL_RUNNING); store.replaceAll([], [], 'empty'); onorder.clear(); decide.clear(); weekly.clear(); year.clear(); closed.clear(); status.clear(); return send(res, 200, { ok: true }); }
   if (p === '/api/export/reorder.csv' && req.method === 'GET') {
     /* SW-025: usable as a PO: the tab filter and search on the page, vendor, unit cost, variant ID (LOGIC.md §15b) */
     const r = links.annotateReport(helpers.enrich(engine.report(d.stock, d.orders, settingsFor(url, d.settings), reportOpts())), d.catalog, shopLinks());

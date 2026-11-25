@@ -473,7 +473,7 @@
   const nrDays = () => state.report.totals.notRestockedDays || 30;
   /* 1.3.0 (UI-2): a row's ₹ lost = the counted part in red; the parts not in the headline in grey under it, "+₹X est." */
   const apartParts = (p) => [[p.lostEstimate, 'est.', `Estimate: ${confWhy(p)}, so ${money(p.lostEstimate)} is not in the headline`],
-    [p.lostNotRestocked, 'not restocked', `Not restocked: ${money(p.lostNotRestocked)} after day ${p.nrDays || nrDays()} of a stock-out with nothing marked ordered${p.floorPerDay != null ? ` (out since before our data; ${p.units26} sold in Shopify’s last 26 weeks)` : ''}, not in the headline`],
+    [p.lostNotRestocked, 'after day 30', `After day 30: ${money(p.lostNotRestocked)} after day ${p.nrDays || nrDays()} of a stock-out${p.floorPerDay != null ? ` (out since before our data; ${p.units26} sold in Shopify’s last 26 weeks)` : ''}, not in the headline`],
     [p.lostAllocation, 'refill gaps', `Refill gaps: ${money(p.lostAllocation)} while the website allocation waited for a top-up from the warehouse, not in the headline`]].filter(([v]) => v > 0);
   const lostMark = (p) => apartParts(p).map(([v, l, tip], i) => `<small class="lmark${l === 'est.' ? '' : ' nr'}" title="${esc(tip)}">${p.lostCounted > 0 || i ? '+' : ''}${money(v)} ${l}</small>`).join('');
   const lostRed = (p) => (p.lostCounted > 0 ? `<span class="lostv">${money(p.lostCounted)}</span>` : '');
@@ -483,14 +483,14 @@
   /* the line under a headline: what is NOT in its ₹ (UI-5), each part opening its rows */
   function lostSub(t, view) {
     const parts = [t.lostEstimate > 0 ? `<a href="#${view}" data-go="${view}" data-filter="estimate" title="Products sold in under 22% of Shopify’s last 25 weeks (or with 4 or fewer units sold): an estimate (LOGIC §4c)">${money(t.lostEstimate)} estimate from few sales</a>` : '',
-      t.lostNotRestocked > 0 ? `<a href="#${view}" data-go="${view}" data-filter="notrestocked" title="Stock-outs open more than ${nrDays()} days with nothing marked ordered: only the sales lost after day ${nrDays()} (LOGIC §4c)">${money(t.lostNotRestocked)} after day ${nrDays()} on ${inr.format(t.lostNotRestockedProducts || 0)} items not restocked</a>` : '',
+      t.lostNotRestocked > 0 ? `<a href="#${view}" data-go="${view}" data-filter="notrestocked" title="Stock-outs longer than ${nrDays()} days: only the sales lost after day ${nrDays()} (LOGIC §4c)">${money(t.lostNotRestocked)} after day ${nrDays()} on ${inr.format(t.lostNotRestockedProducts || 0)} items not restocked</a>` : '',
       t.lostAllocation > 0 ? `<a href="#products" data-go="products" data-filter="warehouse" title="Website allocations refilled from the warehouse: the shelf was empty until the top-up (LOGIC §6)">${money(t.lostAllocation)} lost in refill gaps on ${inr.format(t.lostAllocationProducts || 0)} allocation items</a>` : ''].filter(Boolean);
     return parts.length ? `<p class="lost-sub" id="lost-sub">Not in ${money(t.lost)}: ${parts.join(' · ')}</p>` : '';
   }
-  const lostApart = (t) => [t.lostEstimate > 0 ? `${moneyFull(t.lostEstimate)} estimated from products with few sales` : '', t.lostNotRestocked > 0 ? `${moneyFull(t.lostNotRestocked)} after day ${t.notRestockedDays || 30} on ${t.lostNotRestockedProducts || 0} products not restocked` : '',
+  const lostApart = (t) => [t.lostEstimate > 0 ? `${moneyFull(t.lostEstimate)} estimated from products with few sales` : '', t.lostNotRestocked > 0 ? `${moneyFull(t.lostNotRestocked)} after day ${t.notRestockedDays || 30} on ${t.lostNotRestockedProducts || 0} products empty longer` : '',
     t.lostAllocation > 0 ? `${moneyFull(t.lostAllocation)} in refill gaps on ${t.lostAllocationProducts || 0} website-allocation products` : ''].filter(Boolean).join(' and ');
   /* a filtered view of one part (UI-3) leads with that part's own ₹ */
-  const BUCKET = { estimate: ['lostEstimate', 'estimated from few sales, not in the headline'], notrestocked: ['lostNotRestocked', () => `after day ${nrDays()} of stock-outs nobody restocked, not in the headline`], warehouse: ['lostAllocation', 'lost in refill gaps on website allocations, not in the headline'] };
+  const BUCKET = { estimate: ['lostEstimate', 'estimated from few sales, not in the headline'], notrestocked: ['lostNotRestocked', () => `after day ${nrDays()} of long stock-outs, not in the headline`], warehouse: ['lostAllocation', 'lost in refill gaps on website allocations, not in the headline'] };
   const bucketLine = (f, rows) => { const b = BUCKET[f]; if (!b) return ''; const v = rows.reduce((a, p) => a + (p[b[0]] || 0), 0); return `<p class="bucket" id="bucket-line"><b class="nw">${money(v)}</b> ${esc(typeof b[1] === 'function' ? b[1]() : b[1])} · ${inr.format(rows.length)} products</p>`; };
 
   /* one line under the Overview headline (SW-027, LOGIC.md §5a) */

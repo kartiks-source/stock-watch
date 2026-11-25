@@ -82,7 +82,7 @@ const IMG_PX = 320;
 const STOCK_Q = `query Stock($after: String) {
   productVariants(first: 250, after: $after) {
     pageInfo { hasNextPage endCursor }
-    nodes { id sku title price compareAtPrice createdAt inventoryQuantity inventoryItem { tracked unitCost { amount } } product { id title status productType tags vendor handle onlineStoreUrl publishedAt featuredMedia { preview { image { url(transform: { maxWidth: ${IMG_PX} }) } } } } }
+    nodes { id sku title price compareAtPrice createdAt inventoryPolicy inventoryQuantity inventoryItem { tracked unitCost { amount } } product { id title status productType tags vendor handle onlineStoreUrl publishedAt featuredMedia { preview { image { url(transform: { maxWidth: ${IMG_PX} }) } } } } }
   }
 }`;
 /** 1.4.0: the shop's own address, for "View on website" links when a product has no onlineStoreUrl (LOGIC §19). */
@@ -159,6 +159,7 @@ function diffStock(variants, lastQty, t) {
       status: tracked ? status : (status === 'ACTIVE' ? 'UNTRACKED' : status), tracked, active: tracked && status === 'ACTIVE',
       stock: Number.isFinite(now) ? now : null, seenAt: t,
       ...(Number.isFinite(Date.parse(v.createdAt)) ? { createdAt: Date.parse(v.createdAt) } : {}),   // 1.3.0: weeks live for G26 confidence (LOGIC §4c)
+      ...(v.inventoryPolicy === 'CONTINUE' ? { oversell: true } : {}),   // 1.4.7: "continue selling when out of stock": it can always be bought
       ...productLinks(v.product),   // 1.4.0: image, handle, website address (LOGIC §19)
       ...(Number(v.compareAtPrice) > 0 ? { compareAt: Number(v.compareAtPrice) } : {}),   // 1.4.1: MRP, the "compare at" price (LOGIC §24)
     };
