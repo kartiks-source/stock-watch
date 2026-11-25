@@ -2,6 +2,13 @@
 
 User-facing changes, newest first. Semver: minor when a number's rule changes or a feature lands, patch for fixes. The version in `package.json` matches the top heading. Versions before 0.9.0 were reconstructed from `docs/DEVLOG.md` on 20 Nov 2026 (no tags existed); dates are the DEVLOG dates. Per DEVLOG, nothing from 0.6.0 on has been deployed yet. Since 1.0.0-rc.1, `/health`, `/status` and the page footer show the version and the build's commit (SW-056); `test/docs.test.js` checks the top heading matches `package.json`.
 
+## 3.0.0 · one tested model, every product
+
+- **Every product has its own money missed** (All products no longer repeats the best-seller number).
+- **Model:** weighted average of how fast it sells in stock × how like products did on the same days × price × days empty. Chosen against 18 others by replaying stock-outs and real comebacks; tests with 95% intervals are on the page.
+- Nothing hidden and nothing cut: small months say "only n times". After 60 empty days stays apart.
+- Best sellers are the list known at the start of each quarter.
+
 ## 2.0.1 · 2026-11-25 · the sum can be redone
 
 - "Why this number" shows every step with enough decimals, and what a sale on an empty day takes off, so anyone can redo it.
