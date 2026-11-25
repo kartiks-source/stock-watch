@@ -113,7 +113,7 @@ test('Phone 390 and 360: new small buttons are at least 44 px tall; sort label n
   }
 });
 
-test('Products filters: no duplicate lists; overstock tile opens Push these (critic r2 S1)', opts, async () => {
+test('Products filters: no duplicate lists; overstock tile opens Overstock (critic r2 S1)', opts, async () => {
   const pg = await page();
   await pg.goto(base + '/#products'); await pg.waitForSelector('#f-more');
   const chips = await pg.$$eval('[data-filter-products]', (b) => b.map((x) => x.dataset.filterProducts));
@@ -125,7 +125,7 @@ test('Products filters: no duplicate lists; overstock tile opens Push these (cri
   assert.ok((await heads(pg)).includes('Decide'), 'Slow sellers carries the Decide column');
   await pg.goto(base + '/#overview'); await pg.waitForSelector('.tile.plum');
   await pg.click('.tile.plum'); await pg.waitForSelector('[data-filter-products="push"].on');
-  assert.match(await pg.textContent('.headline h1'), /^Push [\d,]+ overstocked products$/);
+  assert.match(await pg.textContent('.headline h1'), /^[\d,]+ overstocked products$/);
   assert.deepEqual(pg.errors, []);
   await pg.context().close();
 });

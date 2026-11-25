@@ -23,6 +23,10 @@
     const all = r.totals.lost, best = r.products.reduce((s, p) => s + (p.abc === 'A' ? p.lostCounted || 0 : 0), 0);
     return SW_BRAND.scopeLine(all, best, periodDates(r));
   }
+  /* 1.4.6: the switch filters the rows of Restock list and All products */
+  const bestOnly = () => !!window.SW_BRAND && SW_BRAND.scope() === 'best';
+  const scoped = (list) => (bestOnly() ? list.filter((p) => p.abc === 'A') : list);
+  const pcs = (p) => inr.format(Math.max(0, p.stock));   // an oversold −1 reads as 0 (nobody can buy it)
   const ASSUME = [
     ['leadDays', 'Lead time (days)', '', 1, 'Days from placing a supplier order until the stock can be sold'],
     ['coverDays', 'Stock should last (days after delivery)', '', 5, 'How long each reorder should last once it arrives'],
@@ -404,6 +408,7 @@
   const status = (p) => {
     const g = group(p.status);
     if (g === 'ordered') return `<span class="st g-ordered" title="${esc(`Ordered ${inr.format(p.onOrder.qty)} pcs${p.onOrder.by ? ` by ${p.onOrder.by}` : ''}; stock + order covers the need`)}">Ordered · lands ${dateShort(p.onOrder.eta)}</span>`;
+    if (g === 'slow' && p.abc === 'A') return p.stock != null && p.stock <= 0 ? `<span class="st g-week" title="A best seller of the last 12 months, slow lately: refill it or drop it">Refill or drop?</span>${poTag(p)}` : poTag(p) || '<span class="muted">–</span>';   // 1.4.6: never "Slow seller" beside "Best seller"
     return `<span class="st g-${g}" title="${esc(p.status === 'Critical' ? 'Order today: 3 days or less left' : g === 'warehouse' ? 'Shopify shows a website allocation refilled from the warehouse: check the warehouse, no reorder is sized here' : p.status)}">${GROUP_LABEL[g]}</span>${poTag(p)}`;
   };
   const outDot = (p) => (p.stock != null && p.stock <= 0 ? '<span class="dot" title="Out of stock now"></span>' : '');
@@ -558,10 +563,12 @@
   };
   function reorder() {
     const r = state.report, t = r.totals, f = state.filter.reorder, q = state.q.reorder.toLowerCase();
-    const week = r.reorder.filter((p) => p.status === 'Order this week').length;
-    const open = onOrderRows(r.products), ordered = f === 'ordered';
-    const groups = [['today', 'Order today', t.orderToday], ['week', 'This week', week], ...(open.length || ordered ? [['ordered', 'Ordered', open.length]] : []), ['all', 'All', r.reorder.length]];
-    let rows = (ordered ? open : r.reorder.filter((p) => f === 'all' || group(p.status) === f)).filter((p) => !q || `${p.name} ${p.sku}`.toLowerCase().includes(q));
+    const list = scoped(r.reorder), sum = (l) => l.reduce((a, p) => a + (p.orderValue || 0), 0), today = list.filter((p) => TODAY.includes(p.status));
+    const nToday = bestOnly() ? today.length : t.orderToday, vNow = bestOnly() ? sum(today) : t.orderValueNow, vAll = bestOnly() ? sum(list) : t.orderValueAll;   // 1.4.6: the headline follows the switch
+    const week = list.filter((p) => p.status === 'Order this week').length;
+    const open = onOrderRows(scoped(r.products)), ordered = f === 'ordered';
+    const groups = [['today', 'Order today', nToday], ['week', 'This week', week], ...(open.length || ordered ? [['ordered', 'Ordered', open.length]] : []), ['all', 'All', list.length]];
+    let rows = (ordered ? open : list.filter((p) => f === 'all' || group(p.status) === f)).filter((p) => !q || `${p.name} ${p.sku}`.toLowerCase().includes(q));
     if (window.SW_MONEY && !ordered) rows = SW_MONEY.rows(rows);   // SW-041: a budget ranks by profit kept per ₹ (money.js)
     const canPick = (p) => !viewOnly() && !p.onOrder && p.orderQty > 0;   // view-only sign-in can't mark ordered (SW-029)
     const pickable = rows.filter(canPick);
@@ -570,7 +577,7 @@
       { k: 'lands', label: 'Lands', tip: 'Expected landing date; late = past it with less than 90% received', f: landsCell, val: (p) => (p.onOrder.late ? -1e15 : 0) + p.onOrder.eta },
       { k: 'onOrder', label: 'On order (pcs)', r: 1, tip: 'Still to come: ordered minus what has arrived since the order was marked', f: (p) => `<b>${inr.format(p.onOrder.remaining)}</b>`, val: (p) => p.onOrder.remaining },
       { k: 'daysLeft', label: 'Days left', f: daysCell, val: (p) => p.daysLeft ?? -1 },
-      { k: 'stock', label: 'In stock', r: 1, f: (p) => inr.format(p.stock) },
+      { k: 'stock', label: 'In stock', r: 1, f: pcs },
     ] : [
       { k: 'name', label: 'Product', f: (p) => (canPick(p) ? `<input type="checkbox" class="pick" data-pick="${esc(p.id)}" aria-label="Tick ${esc(p.name)}" ${state.pick.has(p.id) ? 'checked' : ''}>` : (viewOnly() ? '' : '<span class="pick-sp"></span>')) + nameCell(p, true, true) },
       ...(f === 'all' ? [{ k: 'status', label: 'Status', f: status, val: (p) => -['Out now', 'Critical', 'Order now', 'Order this week', 'Ordered'].indexOf(p.status) }] : []),   // SW-024: a tab of one status needs no Status column
@@ -580,7 +587,7 @@
       ...(window.SW_MONEY ? SW_MONEY.cols() : []),   // SW-041
       { k: 'daysLeft', label: 'Days left', f: daysCell, val: (p) => p.daysLeft ?? -1 },
       { k: 'lost', label: 'Sales lost', r: 1, tip: `Sales lost to stock-outs ${inPeriod()}: red = in the headline; grey = not (estimate, not restocked)`, f: lostCell, val: lostSort },
-      { k: 'stock', label: 'In stock', r: 1, opt: 1, f: (p) => inr.format(p.stock) },
+      { k: 'stock', label: 'In stock', r: 1, opt: 1, f: pcs },
       { k: 'perDay', label: 'Sells', r: 1, opt: 1, tip: 'How fast it sells while in stock (exact rate per in-stock day used in the maths)', f: (p) => `<span title="${n1(p.perDay)} per in-stock day">${rate(p.perDay)}</span>` },
       { k: 'trendPct', label: 'Trend', pr: 'w', tip: trendTip(), f: trendCell, val: (p) => p.trendPct ?? (p.trendNew ? 999 : -999) },
       { k: 'outs', label: 'Times out', r: 1, opt: 1 },
@@ -592,11 +599,11 @@
     const head = ordered
       ? `<h1>${open.length ? `${inr.format(open.length)} on order · ${inr.format(soon)} due this week${late ? ` · <span class="lost">${inr.format(late)} late</span>` : ''}` : 'Nothing on order'}</h1>
         ${due.length ? `<p class="exp">Next lands ${dateShort(due[0].onOrder.eta)}. Late = past its date with less than 90% received: chase the supplier.</p>` : ''}`
-      : `<h1>${t.hasCost ? `Order <span class="amberv">${money(t.orderValueNow)}</span> today across ${t.orderToday} products` : `Order <span class="amberv">${inr.format(t.orderToday)} products</span> today <small class="hsub">${money(t.orderValueNow)} at selling price</small>`}${f === 'all' && week ? ` <span class="nw">· ${money(Math.max(0, t.orderValueAll - t.orderValueNow))} more this week (${week})</span>` : ''}</h1>
+      : `<h1>${t.hasCost ? `Order <span class="amberv">${money(vNow)}</span> today across ${nToday} ${bestOnly() ? 'best sellers' : 'products'}` : `Order <span class="amberv">${inr.format(nToday)} ${bestOnly() ? 'best sellers' : 'products'}</span> today <small class="hsub">${money(vNow)} at selling price</small>`}${f === 'all' && week ? ` <span class="nw">· ${money(Math.max(0, vAll - vNow))} more this week (${week})</span>` : ''}</h1>
         <p class="exp">Each order covers lead time (${r.settings.leadDays} d, assumed until set per supplier) + days the stock should last + buffer, at the product’s in-stock sales rate. Biggest sales a day first.${t.hasCost ? '' : ' <span id="nocost-reorder">No unit costs in Shopify: ₹ are at selling price.</span>'}</p>
         ${t.allocation ? `<p class="exp" id="alloc-note"><a href="#products" data-go="products" data-filter="warehouse">${inr.format(t.allocation)} ${t.allocation === 1 ? 'product is' : 'products are'} a website allocation refilled from the warehouse</a>: not on this list, because warehouse stock isn’t in Shopify. Check the warehouse.</p>` : ''}`;
     return `
-      <section class="headline">${head}${narrow() ? '' : scopeLine()}</section>
+      <section class="headline">${head}${narrow() && !bestOnly() ? '' : scopeLine()}</section>
       ${planBar()}
       <div class="toolbar"><div class="chips">${groups.map(([k, l, c]) => `<button class="chip ${f === k ? 'on' : ''}" data-filter-reorder="${k}">${l}<span class="c">${c}</span></button>`).join('')}</div>
         <input class="search" id="q-reorder" placeholder="Search…" title="Search product or SKU" value="${esc(state.q.reorder)}">${colPicker('reorder', cols)}${window.SW_MONEY && !ordered ? SW_MONEY.toggle() : ''}${dlMenu('reorder', storeUrl(`/api/export/reorder.csv?days=${state.days}${whatQs()}&filter=${f}&q=${encodeURIComponent(state.q.reorder)}${window.SW_MONEY && !ordered ? SW_MONEY.qs() : ''}`), pickable.length ? `<button class="linkbtn" id="pick-all">Tick all ${pickable.length} in view</button>` : '')}</div>
@@ -663,7 +670,7 @@
   /* SW-026: Pause / Push for marketing replace the Overstock chip (Push = the overstock list by ₹ stuck).
      Critic r2 S1: no duplicates. Overstock was the same rows as Push these, and Slow sellers the same as Slow sellers to
      decide, so More… holds one of each: Push these is the overstock list, Slow sellers carries the Decide column. */
-  const PRODUCT_TABS = [['all', 'All'], ['bestrisk', 'Best sellers at risk'], ['today', 'Order today'], ['pause', 'Pause promotion'], ['push', 'Push these'], ['lost', 'Losing sales']];
+  const PRODUCT_TABS = [['all', 'All'], ['bestrisk', 'Best sellers at risk'], ['today', 'Order today'], ['pause', 'Pause promotion'], ['push', 'Overstock'], ['lost', 'Losing sales']];
   /* SW-064: "High returns" (15%+ of units ordered came back, 5+ ordered) only when some product qualifies */
   const HIGH_RETURN = 15;
   const productTabs = (f) => (state.report.totals.highReturns || f === 'returns' ? [...PRODUCT_TABS, ['returns', 'High cancels/refunds']] : PRODUCT_TABS);
@@ -683,7 +690,7 @@
     const r = state.report, q = state.q.products.toLowerCase(), f = pFilter(), gr = state.group;
     const dm = f === 'slow' ? decideOf() : null;
     const lm = window.SW_LISTS ? SW_LISTS.match(state.q.products, r.products) : null;   // SW-044: a pasted list
-    const list = r.products.filter((p) => (dm ? dm.has(p.id) : productMatch(p, f)) && (!gr || gr.ids.has(p.id)) && (lm ? lm.ids.has(p.id) : !q || `${p.name} ${p.sku} ${p.type}`.toLowerCase().includes(q)));
+    const list = scoped(r.products).filter((p) => (dm ? dm.has(p.id) : productMatch(p, f)) && (!gr || gr.ids.has(p.id)) && (lm ? lm.ids.has(p.id) : !q || `${p.name} ${p.sku} ${p.type}`.toLowerCase().includes(q)));
     if (f === 'pause' || f === 'push') return mktSort(list, f);
     if (dm) return list.sort((a, b) => dm.get(b.id).value - dm.get(a.id).value);
     return list;
@@ -705,7 +712,7 @@
   function downloadMktCsv(f) {
     const head = [...(f === 'pause' ? ['Product', 'SKU', 'Variant ID', 'Why', 'Back in stock', 'In stock', 'Days left'] : ['Product', 'SKU', 'Variant ID', 'Overstock ₹', 'In stock', 'Days left']), ...SW_PROD.CSV_HEAD];
     const body = productRows().map((p) => [...(f === 'pause' ? [p.name, p.sku, p.id, p.why, p.backIn, p.stock, p.daysLeft ?? ''] : [p.name, p.sku, p.id, p.excessValue, p.stock, p.daysLeft ?? '']), ...SW_PROD.csv(p)]);
-    saveCsv(`${f === 'pause' ? 'pause-promotion' : 'push-these'}-${isoToday()}.csv`, [head, ...body]);
+    saveCsv(`${f === 'pause' ? 'pause-promotion' : 'overstock'}-${isoToday()}.csv`, [head, ...body]);
   }
   const isoToday = () => local(Date.now()).toISOString().slice(0, 10);
   function saveCsv(name, lines) {
@@ -715,11 +722,11 @@
     a.download = name; a.click(); URL.revokeObjectURL(a.href);
   }
   const PRODUCT_COLS = () => [
-    { k: 'name', label: 'Product', f: (p) => nameCell(p, true, true), csv: (p) => p.name },
+    { k: 'name', label: 'Product', f: (p) => nameCell(p), csv: (p) => p.name },
     { k: 'sku', label: 'SKU', hide: 1 },
     { k: 'abc', label: 'Rank (A = best seller)', hide: 1 },
     { k: 'status', label: 'Status', f: status, val: (p) => -['Out now', 'Critical', 'Order now', 'Order this week', ALLOC, 'OK', 'Slow seller', 'No stock data'].indexOf(p.status), csv: (p) => GROUP_LABEL[group(p.status)] },
-    { k: 'stock', label: 'In stock', r: 1, f: (p) => (p.stock == null ? '–' : inr.format(p.stock)) },
+    { k: 'stock', label: 'In stock', r: 1, f: (p) => (p.stock == null ? '–' : pcs(p)) },
     { k: 'daysLeft', label: 'Days left', f: daysCell, val: (p) => p.daysLeft ?? -1, csv: (p) => p.daysLeft ?? '' },
     { k: 'sold', label: 'Sold', r: 1, tip: `₹ sold ${inPeriod()}. ${soldTip()}`, f: (p) => money(p.sold) },
     { k: 'lost', label: 'Sales lost', r: 1, tip: `Sales lost to stock-outs ${inPeriod()}. Red = in the headline. Grey = not: “est.” few sales behind the rate; “not restocked” after day ${nrDays()} with nothing ordered; “refill gaps” website allocations`, f: lostCell, val: lostSort, csv: (p) => p.lost },
@@ -746,7 +753,7 @@
     if (state.lens) return groupView();
     const r = state.report, f = pFilter(), gr = state.group;
     const rows = productRows();
-    const inType = r.products.filter((p) => !gr || gr.ids.has(p.id));
+    const inType = scoped(r.products).filter((p) => !gr || gr.ids.has(p.id));
     /* §4c: the same definition as the Overview: lost = the headline part; estimates and not restocked on the small line */
     const tot = rows.reduce((a, p) => ({ sold: a.sold + p.sold, lost: a.lost + (p.lostCounted ?? p.lost), lostEstimate: a.lostEstimate + (p.lostEstimate || 0), lostNotRestocked: a.lostNotRestocked + (p.lostNotRestocked || 0), lostAllocation: a.lostAllocation + (p.lostAllocation || 0),
       lostNotRestockedProducts: a.lostNotRestockedProducts + (p.lostNotRestocked > 0 ? 1 : 0), lostAllocationProducts: a.lostAllocationProducts + (p.lostAllocation > 0 ? 1 : 0), stock: a.stock + (p.stock > 0 ? p.stock : 0) }),
@@ -761,7 +768,7 @@
     /* final r2 M5: phone cards sorted by ₹ lost (every tab but Pause / Push / Slow) put ₹ lost top-right, status in the facts */
     const so = state.sort.products, lossSort = !['pause', 'push', 'slow'].includes(f) && (!so || so.k === 'lost');
     return `
-      <section class="headline"><h1>${f === 'pause' ? `Pause promotion on ${inr.format(rows.length)} products` : f === 'push' ? `Push ${inr.format(rows.length)} overstocked products` : 'All products'}</h1>${scopeLine()}${BUCKET[f] ? `${bucketLine(f, rows)}<p>${inr.format(rows.length)} shown · <span class="nw">${money(tot.sold)} sold</span> · ${inr.format(tot.stock)} pcs in stock</p>` : `<p>${inr.format(rows.length)} shown · <span class="nw">${money(tot.sold)} sold</span> · <span class="lostv">${money(tot.lost)} lost</span> · ${inr.format(tot.stock)} pcs in stock</p>${lostSub(tot, 'products')}`}
+      <section class="headline"><h1>${f === 'pause' ? `Pause promotion on ${inr.format(rows.length)} products` : f === 'push' ? `${inr.format(rows.length)} overstocked products` : bestOnly() ? 'Best sellers' : 'All products'}</h1>${scopeLine()}${BUCKET[f] ? `${bucketLine(f, rows)}<p>${inr.format(rows.length)} shown · <span class="nw">${money(tot.sold)} sold</span> · ${inr.format(tot.stock)} pcs in stock</p>` : `<p>${inr.format(rows.length)} shown · <span class="nw">${money(tot.sold)} sold</span> · <span class="lostv">${window.SW_BRAND ? SW_BRAND.rs(tot.lost) : money(tot.lost)} missed</span> · ${inr.format(tot.stock)} pcs in stock</p>${lostSub(tot, 'products')}`}
         <span class="hfind">${viewSelect()}<input class="search" id="q-products" placeholder="Search or paste a list…" title="Search name, SKU or category, or paste a list of SKUs / names / variant IDs" value="${esc(state.q.products)}">${window.SW_LISTS ? SW_LISTS.pick(state.q.products, { canEdit: !viewOnly(), rerender: () => { if (state.view === 'products') render(); } }) : ''}</span></section>
       <div class="toolbar"><div class="chips">${groupChip()}${productTabs(f).map(([k, l]) => `<button class="chip ${f === k ? 'on' : ''}" data-filter-products="${k}"${MKT_TIP[k] ? ` title="${esc(MKT_TIP[k])}"` : ''}>${l}<span class="c">${countIn(inType, k)}</span></button>`).join('')}
         <select class="chip sel ${moreOn ? 'on' : ''}" id="f-more" aria-label="More filters"><option value="">More…</option>${productMore(f).map(([k, l]) => `<option value="${k}" ${f === k ? 'selected' : ''}>${l} (${countIn(inType, k)})</option>`).join('')}</select></div>
@@ -769,7 +776,7 @@
       ${window.SW_LISTS ? SW_LISTS.bar(state.q.products, r.products) : ''}
       ${table('products', cols.filter((c) => showCol('products', c)), rows, 'No products match.', (p) => `
         <header><h3>${nameCell(p, false)}</h3>${mspark(p)}${f === 'pause' ? `<span class="st g-week bk">${esc(p.backIn || '–')}</span>` : lossSort ? `<div class="mq"><b class="${p.lostCounted ? 'lostv' : 'muted'}">${p.lostCounted ? money(p.lostCounted) : '–'}</b><small>sales lost</small>${lostMark(p)}</div>` : status(p)}</header>
-        <div class="mfacts">${lossSort ? status(p) : ''}<span class="${p.stock != null && p.stock <= 0 ? 'bad' : ''}"><b>${p.stock == null ? '–' : inr.format(p.stock)}</b> in stock</span><span><b>${p.daysLeft == null ? '–' : n1(p.daysLeft)}</b> days left</span><span><b>${money(p.sold)}</b> sold</span>${p.lost && !lossSort ? `${p.lostCounted ? `<span class="lostv">${money(p.lostCounted)} lost</span>` : ''}${lostMark(p)}` : ''}${p.orderQty ? `<span>order <b>${inr.format(p.orderQty)}</b></span>` : ''}${p.returnPct >= HIGH_RETURN ? `<span class="amberv">${n1(p.returnPct)}% cancelled/refunded</span>` : ''}${bestTag(p)}</div>${f === 'slow' ? `<div class="mfacts">${decideCell(p)}${decideBtns(p)}</div>` : ''}`)}
+        <div class="mfacts">${lossSort ? status(p) : ''}<span class="${p.stock != null && p.stock <= 0 ? 'bad' : ''}"><b>${p.stock == null ? '–' : pcs(p)}</b> in stock</span><span><b>${p.daysLeft == null ? '–' : n1(p.daysLeft)}</b> days left</span><span><b>${money(p.sold)}</b> sold</span>${p.lost && !lossSort ? `${p.lostCounted ? `<span class="lostv">${money(p.lostCounted)} lost</span>` : ''}${lostMark(p)}` : ''}${p.orderQty ? `<span>order <b>${inr.format(p.orderQty)}</b></span>` : ''}${p.returnPct >= HIGH_RETURN ? `<span class="amberv">${n1(p.returnPct)}% cancelled/refunded</span>` : ''}${bestTag(p)}</div>${f === 'slow' ? `<div class="mfacts">${decideCell(p)}${decideBtns(p)}</div>` : ''}`)}
       ${f === 'slow' ? decidedNote() : ''}`;
   }
   /* SW-032: decided items are hidden until their sales change by more than half; listed here so a decision can be undone */
@@ -991,7 +998,7 @@
     body.innerHTML = row && window.SW_PROFILE
       ? `${manyStores() ? `<p class="dstore">${esc(SW_STORES.name())}</p>` : ''}${SW_PROFILE.top(row, null, nowHtmlOf(row, null) + status(row))}${SW_PROFILE.skeleton()}`
       : '<p class="muted">Loading…</p>';
-    dr.hidden = false;
+    dr.hidden = false; const card = dr.querySelector('.drawer-card'); if (card) card.scrollTop = 0;   // 1.4.6: always from the top
     try {
       const d = await fetchProduct(id);
       if (body.dataset.id !== String(id) || dr.hidden) return;   // another product was opened meanwhile
@@ -1003,7 +1010,7 @@
         ${window.SW_PROFILE ? SW_PROFILE.body(prof, p, p && (viewOnly() ? p.onOrder : p.orderQty > 0 || p.onOrder) ? orderForm(p) : '') : ''}
         <details class="panel fold" id="hour-fold" ${hourFoldOpen() ? 'open' : ''}><summary><b>Last ${state.report.days || 30} days, to the hour</b> <span class="muted">${esc(periodDates(state.report))}</span></summary>
         ${p?.why ? `<p class="dwhy">${whyCell(p)}</p>` : ''}
-        <p class="small">Money missed in these days: <b class="lostv">${money(p?.lost)}</b>${p && p.lost ? ` · how sure: ${esc((CONF_LABEL[p.confidence] || '–').toLowerCase())}${weeksText(p) ? ` (${esc(weeksText(p))})` : ''}` : ''}. ${p && p.lossPace != null ? `Valued at ${esc(rate(p.lossPace))} (its usual pace for this month, as in the 12 months above). ` : ''}Sells ${esc(rate(p?.perDay))} on days in stock lately (last 28 days: sets the order).</p>${p && p.lost ? lostSplitLine(p) : ''}
+        <p class="small">Money missed in these days: <b class="lostv">${money(p?.lostCounted ?? p?.lost)}</b>${p && p.lostCounted != null && p.lost > p.lostCounted + 1 ? ` +${money(p.lost - p.lostCounted)} not counted` : ''}${p && p.lost ? ` · how sure: ${esc((CONF_LABEL[p.confidence] || '–').toLowerCase())}${weeksText(p) ? ` (${esc(weeksText(p))})` : ''}` : ''}. ${p && p.lossPace != null ? `Valued at ${esc(rate(p.lossPace))} (its usual pace for this month, as in the 12 months above). ` : ''}Sells ${esc(rate(p?.perDay))} on days in stock lately (last 28 days: sets the order).</p>${p && p.lost ? lostSplitLine(p) : ''}
         <div><h3 class="small">Every stock-out</h3>${d.stockouts.length ? `<div>${d.stockouts.map((s) => `<div class="ep"><span>${dt(s.start)} → ${s.open ? '<span class="st open">still out</span>' : dt(s.end)}</span><span class="muted">${dur(s.hours)}</span><b style="color:#E0506E">${money(s.lost)}</b>${s.topUp != null ? `<span>refilled ${s.topUp} pcs</span>` : ''}${s.small ? '<span class="st small">Small top-up</span>' : ''}${s.repeat ? '<span class="st again">Out again</span>' : ''}</div>`).join('')}</div>` : '<p class="muted">None in these days.</p>'}</div></details>`;
       $('#hour-fold')?.addEventListener('toggle', (e) => { try { if (e.target.open) localStorage.removeItem(HOUR_FOLD); else localStorage.setItem(HOUR_FOLD, 'closed'); } catch { /* private window */ } });
       if (window.SW_PROFILE) SW_PROFILE.charts(body, prof);
@@ -1267,6 +1274,11 @@
   });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') closeDrawer();
+    if (e.key === 'Tab' && !$('#drawer').hidden) {   // 1.4.6: the drawer is a modal: Tab stays inside it
+      const card = $('.drawer-card'), els = [...card.querySelectorAll('a[href], button, input, select, summary, [tabindex="0"]')].filter((x) => !x.disabled && x.getClientRects().length);
+      const a = els[0], z = els[els.length - 1], now = document.activeElement;
+      if (a && (!card.contains(now) || (e.shiftKey ? now === a : now === z))) { e.preventDefault(); (e.shiftKey ? z : a).focus(); }
+    }
     if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('.mcard[data-id], tr[data-id]')) { e.preventDefault(); if (e.target.closest('.groups')) { openGroup(e.target.dataset.id); return; } lastRow = e.target; openProduct(e.target.dataset.id); }
     if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('th[data-k]')) { e.preventDefault(); e.target.click(); }
     if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('[data-product][role=button]')) { e.preventDefault(); lastRow = e.target; openProduct(e.target.dataset.product); }   // Overview rows (critic UI-3)
