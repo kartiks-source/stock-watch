@@ -20,7 +20,7 @@ function paceMap(brand) {
   for (const p of (brand && brand.products) || []) for (const [id, v] of Object.entries(p.variantPace || {})) m.set(String(id), { pace: v, best: !!p.best, product: p });
   return m;
 }
-const sureOf = (r) => r.confidence !== 'low' && !r.allocation && r.floorPerDay == null;   // ₹ a day only where the money missed is counted (a guess has none)
+const sureOf = (r) => r.confidence !== 'low' && !r.allocation && (r.floorPerDay == null || r.lossPace != null);   // ₹ a day only where the money missed is counted (a guess has none)
 const live = (r) => r && r.status !== 'Inactive' && r.stock != null;
 
 function bestNow(brand, rows, month, { all = false } = {}) {   // all: every product on sale (1.4.9: the switch)

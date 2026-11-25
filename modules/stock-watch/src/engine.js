@@ -557,6 +557,7 @@ function report(stock, orders, settings = {}, opts = {}) {
        on every page as in the brand report. Reorder, days left and "Sells" keep the 28-day rate (perDay, §3). Without the
        12 months (no read_reports, Flow / Sheet / CSV, demo, a variant the year doesn't hold): the rules of §3–§4 as before. */
     const lpm = own(opts.lossPace, p.id), byMonth = lpm && typeof lpm === 'object' ? lpm : null;
+    const floorOnly = seeded && !byMonth;   // 1.5.0: out longer than the 60 days held: a guess only when the 12 months don't measure its pace (the brand report counts it then too)
     const lpp = own(opts.lossPrice, p.id), priceMap = byMonth && lpp && typeof lpp === 'object' ? lpp : null;   // 1.4.7: the price of each month
     const lossPrice = priceMap && num(priceMap._) > 0 ? num(priceMap._) : byMonth && num(lpp) > 0 ? num(lpp) : seeded && num(wsRow.n) > 0 ? num(wsRow.n) / units26 : price;
     const lossPerHour = byMonth ? 0 : seeded ? units26 / FLOOR_DAYS / 24 : typeof lpm === 'number' && lpm > 0 && rate.basis !== 'window' && !lowData ? lpm / 24 : perSellingHour;
@@ -586,7 +587,7 @@ function report(stock, orders, settings = {}, opts = {}) {
         for (const [k, w] of Object.entries(h.byDay)) {
           const d = daily[k]; if (!d) continue;
           const uu = unitsOn(k, w), v = uu * priceOn(k);
-          if ((late || nrAll) && nr) d.lostNotRestocked += v; else if (alloc) d.lostAllocation += v; else if (confidence === 'low' || seeded) d.lostEstimate += v; else d.lost += v;
+          if ((late || nrAll) && nr) d.lostNotRestocked += v; else if (alloc) d.lostAllocation += v; else if (confidence === 'low' || floorOnly) d.lostEstimate += v; else d.lost += v;
           d.unitsLost += uu; d.outSkus.add(p.id);
         }
       }
@@ -631,7 +632,7 @@ function report(stock, orders, settings = {}, opts = {}) {
        gaps (§6), estimate, counted */
     row.lostNotRestocked = Math.min(row.lost, Math.round(lostNR));
     row.lostAllocation = alloc ? Math.max(0, row.lost - row.lostNotRestocked) : 0;
-    row.lostEstimate = !alloc && (confidence === 'low' || seeded) ? Math.max(0, row.lost - row.lostNotRestocked) : 0;
+    row.lostEstimate = !alloc && (confidence === 'low' || floorOnly) ? Math.max(0, row.lost - row.lostNotRestocked) : 0;
     row.lostCounted = row.lost - row.lostNotRestocked - row.lostAllocation - row.lostEstimate;
     if (alloc && pl) Object.assign(row, { status: ALLOCATION_STATUS, allocation: alloc, orderQty: 0, orderValue: 0 });   // §6: no reorder sized on an allocation
     row.lostConfidence = row.lost > 0 ? confidence : null;

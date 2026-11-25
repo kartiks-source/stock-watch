@@ -1209,4 +1209,4 @@ Sammsara, same data on 1.4.6 → 1.4.7: all products ₹32.2 L → ₹28.7 L, be
 - **Pattern per product:** `times` = separate stock-outs, `monthsOut` = months with one, in the 365 days; rank by 12 months' sales on every row; what each more empty day costs (sure products only).
 - **Screens** (`public/agency.js`): Brand report, Out now, Ads, All products, Data. The brand owner's tools (Restock list, quantities, purchase orders, suppliers, budget, overstock, slow-seller decisions, planning rules, Overview, Stock-outs page, digest panel) are off; their code and APIs stay, and `?owner=1` shows them for one browser tab.
 
-Sammsara, 24 Nov 2026, same data on 1.4.9 → 1.5.0: best sellers ₹14.8 L → ₹19.0 L (₹4.2 L of it after the first month empty), all products ₹28.7 L → ₹44.9 L (₹16.2 L), guesses ₹4.9 L → ₹19.5 L (apart), last 30 days ₹5.5 L → ₹6.3 L.
+Sammsara, 24 Nov 2026, same data on 1.4.9 → 1.5.0: best sellers ₹14.8 L → ₹19.0 L (₹4.2 L of it after the first month empty), all products ₹28.7 L → ₹44.9 L (₹16.2 L), guesses ₹4.9 L → ₹19.5 L (apart), last 30 days ₹5.5 L → ₹10.9 L (best sellers ₹1.8 L → ₹3.4 L).

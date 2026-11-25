@@ -61,7 +61,7 @@ const allocationWhy = (level) => `Shopify shows a website allocation (~${level} 
 /** §4c G26 (1.3.0): the evidence behind the confidence, "sold in 10 of 25 weeks" (null when it came from units). */
 const weeksText = (p) => (p && p.weeksLive ? `sold in ${p.weeksSold || 0} of ${p.weeksLive} weeks` : null);
 /** §3 floor (1.3.0): a product out the whole time we hold, priced from Shopify's 26 weeks before. */
-const counted = (p) => (p.confidence === 'high' || p.confidence === 'medium') && !p.notRestocked && !p.allocation && p.floorPerDay == null;
+const counted = (p) => (p.confidence === 'high' || p.confidence === 'medium') && !p.notRestocked && !p.allocation && (p.floorPerDay == null || p.lossPace != null);
 /** ₹ a day a stock-out costs: the money-missed pace (1.4.3: §21's expected pace × its price when the 12 months are read), else
  *  the sales rate (or the 26-week floor) × the average price paid (LOGIC §15a) */
 const costADay = (p) => Math.round(p.lossPace != null ? (+p.lossPace || 0) * (+p.lossPrice || +p.price || 0) : (+p.perDay || +p.floorPerDay || 0) * (+p.price || 0));

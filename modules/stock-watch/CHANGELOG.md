@@ -8,7 +8,7 @@ User-facing changes, newest first. Semver: minor when a number's rule changes or
 - **Every empty day counts.** No "refill or drop?" and no 30-day cut-off; one line says how much came after a product had already been empty for a month.
 - **Long patterns:** rank by 12 months' sales, times it ran out and in how many months, 12-month money missed, what each more day costs, and "could have been" per month.
 - **A shifted stock log can't create false stock-outs any more:** the year is anchored on our own readings.
-- Sammsara on the same data: best sellers ₹14.8 L → ₹19.0 L, all products ₹28.7 L → ₹44.9 L, last 30 days ₹5.5 L → ₹6.3 L.
+- Sammsara on the same data: best sellers ₹14.8 L → ₹19.0 L, all products ₹28.7 L → ₹44.9 L, last 30 days ₹5.5 L → ₹10.9 L (best sellers ₹1.8 L → ₹3.4 L).
 
 ## 1.4.9 · 2026-11-25 · the switch drives every page; denser phone rows
 
