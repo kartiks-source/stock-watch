@@ -8,7 +8,7 @@
  */
 const { sideFile } = require('./sidefile');
 const agency = require('./agency');
-const RULES = '1.4.7', GRACE = 3;
+const RULES = '1.5.0', GRACE = 3;
 const file = sideFile('closed.json');
 const r2 = (x) => Math.round((Number(x) || 0) * 100) / 100;
 const read = () => { try { return file.read(); } catch (e) { console.warn('closed.json:', e.message); return null; } };
@@ -27,7 +27,7 @@ function close(key, r, y, now = Date.now()) {
     const last = new Date(Date.UTC(+m.key.slice(0, 4), +m.key.slice(5, 7), 0)).toISOString().slice(0, 10);
     if (have[m.key] || m.days !== +last.slice(8) || r.span.through < agency.keyPlus(last, GRACE)) continue;
     const by = {};
-    for (const [id, v] of Object.entries(r.details)) { const x = v.perMonth[m.key]; if (x && !v.unsure) by[id] = [x.units, x.lost, x.apart, x.nr, x.est, x.cu].map(r2); }
+    for (const [id, v] of Object.entries(r.details)) { const x = v.perMonth[m.key]; if (x && !v.unsure) by[id] = [x.units, x.lost, x.apart, x.nr, x.est, x.cu, x.late || 0].map(r2); }
     add[m.key] = { at: now, by };
   }
   if (!Object.keys(add).length) return [];

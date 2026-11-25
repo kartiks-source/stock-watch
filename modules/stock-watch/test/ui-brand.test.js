@@ -276,7 +276,7 @@ test('1440 and 390: the switch is on every page and every list, number, chart, t
     near(j.headline.best.sold, j.products.filter((x) => x.best).reduce((s, x) => s + x.sold, 0), 'best sellers sold = their rows');
     const sw = async (sc) => { await pg.click(`.scope [data-scope="${sc}"]`); await pg.waitForSelector(`.scope button.on[data-scope="${sc}"]`); await pg.waitForFunction((n) => true); await pg.waitForTimeout(700); };
     const seen = {};
-    for (const [hash, sel] of [['brand', '.brand-h h1'], ['best', '#view h1'], ['ads', '#view h1'], ['reorder', '#view h1'], ['products', '#view h1'], ['stockouts', '#view h1'], ['overview', '#view h1']]) {
+    for (const [hash, sel] of [['brand', '.brand-h h1'], ['best', '#view h1'], ['ads', '#view h1'], ['products', '#view h1']]) {
       await pg.goto(`${base}/?store=sammsara-demo&w=${w}${hash}#${hash}`); await pg.waitForSelector(sel); await pg.waitForTimeout(400);
       assert.equal((await pg.$$('.scope')).length, 1, `${w} ${hash}: one switch`);
       seen[hash] = {};
@@ -284,20 +284,11 @@ test('1440 and 390: the switch is on every page and every list, number, chart, t
       assert.notEqual(seen[hash].all, seen[hash].best, `${w} ${hash}: nothing changed`);
       await sw('all');
     }
-    assert.match(seen.reorder.best, new RegExp(`${R.best.totals.orderToday} best sellers`)); assert.match(seen.products.best, /^Best sellers/);
+    assert.match(seen.products.best, /^Best sellers/);
     /* the bars themselves move */
     await pg.goto(`${base}/?store=sammsara-demo&c=${w}#brand`); await pg.waitForSelector('#brand-chart .sold');
     const bars = () => pg.$$eval('#brand-chart .sold', (e) => e.map((x) => x.getAttribute('height')).join());
     await sw('all'); const a = await bars(); await sw('best'); assert.notEqual(await bars(), a, 'the sold bars follow'); await sw('all');
-    /* ticks: nothing hidden can be marked */
-    await pg.goto(`${base}/?store=sammsara-demo&t=${w}#reorder`); await pg.waitForSelector(w > 760 ? '.tbl.desk' : '.mcard');
-    if (w > 760) {
-      await pg.$eval('#pick-all', (b) => b.click()); await pg.waitForSelector('.bulk'); await sw('best'); assert.equal(await pg.$('.bulk'), null, 'ticks made in All are dropped');
-      await pg.$eval('#pick-all', (b) => b.click()); await pg.waitForSelector('.bulk');
-      assert.match(await pg.textContent('#pick-mark'), new RegExp(`Mark ${R.best.reorder.filter((x) => !x.onOrder && x.orderQty > 0).length} ordered`));
-      assert.equal(await pg.textContent('#n-reorder'), String(R.best.totals.orderToday || ''), 'the badge');
-      await pg.click('#pick-clear'); await sw('all');
-    }
     const lines = async (q) => (await (await fetch(`${base}/api/export/reorder.csv?days=30&filter=all${q}&store=sammsara-demo`)).text()).trim().split('\n').length;
     assert.equal(await lines('&best=1') - 1, R.best.reorder.length + 0 * 1, 'reorder CSV'); assert.ok(await lines('') > await lines('&best=1'));
     const G = { all: await get('/api/groups?lens=type&days=30'), best: await get('/api/groups?lens=type&days=30&best=1') };
@@ -326,9 +317,9 @@ test('13 months, refilled-a-few-at-a-time and no-longer-on-sale rows, counted + 
     assert.equal(await sideways(pg), 0);
     if (w < 760) { await pg.click('#brand-chart .mb[data-month="2026-08"]', { force: true }); await pg.waitForTimeout(400); assert.match(await pg.textContent('#month-line'), /^August 2026: sold/); assert.ok(await pg.evaluate(() => scrollY < 1500), 'no jump'); }
     await pg.goto(`${base}/?store=sammsara-demo&a=1#best`); await pg.waitForSelector('#scope-line');
-    assert.match(await pg.textContent('#view'), /Topped Up Table[\s\S]*?Check the warehouse · 2 days left/);
+    assert.match(await pg.textContent('#view'), /Topped Up Table[\s\S]*?website top-up/); assert.ok(!/Check the warehouse|Enough stock/.test(await pg.textContent('#view')));
     await pg.goto(`${base}/?store=sammsara-demo&a=2#ads`); await pg.waitForSelector('#ads-keep .arow');
-    assert.match(await pg.textContent('#ads-keep'), /Keep ads on: refilled a few at a time[\s\S]*Kept Table[\s\S]*check the warehouse/);
+    assert.match(await pg.textContent('#ads-keep'), /Keep ads on: refilled a few at a time[\s\S]*Kept Table[\s\S]*refilled a few at a time/);
     assert.equal(await sideways(pg), 0);
     const t = await pg.evaluate(() => { const months = [{ key: '2026-11', label: '', from: '2026-11-01', to: '2026-11-23', days: 23, units: 1, missedUnits: 2, missed: 500, apart: 700, daysOut: 4, season: 1 }]; return SW_PROFILE.body({ ok: true, span: { from: '2025-11-25', through: '2026-11-23', days: 364 }, outs: { times: 1, days: 4 }, pace: { perDay: 1, sixMonths: 0.2857 }, missed: { value: 500, units: 0.4, apart: 700 }, months, sold: { units: 1, value: 1 }, share: 1, inStock: { pct: 1, days: 1, of: 1 }, stock: [], calendar: [], restocks: [] }, null); });
     assert.match(t, /about 2 a week when it is in stock/); assert.match(t, /That cost about ₹500 in sales, \+₹700 not counted/); assert.ok(!/about less than/.test(t));
@@ -348,4 +339,26 @@ test('390: the drawer opens at the top; charts start at the newest days; Tab sta
   await pg.evaluate(() => document.querySelectorAll('#view .mcard')[1].click()); await pg.waitForSelector('#drawer .pstory');
   assert.equal(await pg.$eval('.drawer-card', (c) => c.scrollTop), 0);
   assert.deepEqual(pg.errors, []);
+});
+
+/* 1.5.0: the screens are the agency's: nothing about ordering, suppliers, overstock or dropping a product */
+test('1440 and 390: no brand-owner words or pages on any screen, the drawer included; old links open the report; ?owner=1 still has them', opts, async () => {
+  const BAD = /reorder|restock or|refill or|order today|order by|supplier|purchase order|overstock|slow seller|lead time|mark ordered|not ordered|margin|profit|unit cost|drop\?/i;
+  for (const [w, h] of [[1440, 900], [390, 844]]) {
+    const pg = await open(w, h, '/?store=sammsara-demo#brand', '.brand-h h1');
+    assert.equal(await pg.$eval('#tabs a[data-view="reorder"]', (a) => getComputedStyle(a).display), 'none');
+    for (const t of ['brand', 'best', 'ads', 'products', 'data']) {
+      await pg.goto(`${base}/?store=sammsara-demo&p=${t}${w}#${t}`); await pg.waitForSelector('#view h1'); await pg.waitForTimeout(500);
+      const hit = (await pg.innerText('#view')).match(BAD); assert.equal(hit && hit[0], null, `${w} ${t}`);
+      assert.equal(await sideways(pg), 0);
+    }
+    for (const t of ['reorder', 'overview', 'stockouts']) { await pg.goto(`${base}/?store=sammsara-demo&o=${t}${w}#${t}`); await pg.waitForSelector('.brand-h h1'); }
+    for (const f of ['lost', 'out', 'pause']) { await pg.goto(`${base}/?store=sammsara-demo&f=${f}${w}#products`); await pg.waitForSelector(`[data-filter-products="${f}"]`); await pg.click(`[data-filter-products="${f}"]`); await pg.waitForTimeout(300); const hit = (await pg.innerText('#view')).match(BAD); assert.equal(hit && hit[0], null, `${w} products ${f}`); }
+    await pg.goto(`${base}/?store=sammsara-demo&d=${w}#best`); await pg.waitForSelector(w > 760 ? 'table[data-table="best"] tbody tr' : '.mcard h3'); await pg.click(w > 760 ? 'table[data-table="best"] tbody tr' : '.mcard h3'); await pg.waitForSelector('#drawer .pstory');
+    const hit = (await pg.innerText('#drawer')).match(BAD); assert.equal(hit && hit[0], null, `${w} drawer`);
+    assert.match(await pg.innerText('#view'), /#\d+ by sales/, 'the rank is on the row');
+    assert.deepEqual(pg.errors, []);
+    const ctx = await browser.newContext({ viewport: { width: w, height: h } }), p2 = await ctx.newPage();
+    await p2.goto(`${base}/?store=sammsara-demo&owner=1#reorder`); await p2.waitForSelector('[data-filter-reorder="all"]'); await ctx.close();
+  }
 });

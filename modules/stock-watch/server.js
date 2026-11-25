@@ -271,10 +271,29 @@ function brandInputs(d) {
     return { y: src, cat, basis: shopY ? 'shopify' : 'rows' };
   });
 }
+/** 1.5.0: (variantId, dayKey) → the stock at the end of that store day from our own readings (pulled rows, not rebuilt ones),
+ *  or null when it isn't certain: no reading before that midnight, or a change seen in the pull window after it. */
+function knownEndOf(d) {
+  const zone = TZ.zoneOf(d.settings), by = new Map();
+  for (const r of d.stock || []) { if (r.src === 'rebuilt' || r.now == null) continue; const id = String(r.variantId); if (!by.has(id)) by.set(id, []); by.get(id).push(r); }
+  for (const l of by.values()) l.sort((x, y) => x.t - y.t);
+  const mid = new Map(), after = SYNC_EVERY + 45 * 60e3;
+  return (id, through) => {
+    const l = by.get(String(id)); if (!l) return null;
+    for (let n = 0, day = through; n < 10; n++, day = agency.keyPlus(day, -1)) {   // the latest day that is certain
+      if (!mid.has(day)) mid.set(day, TZ.fromLocal(Date.parse(`${agency.keyPlus(day, 1)}T00:00:00Z`), zone));
+      const t = mid.get(day); let last = null, sure = true;
+      for (const r of l) { if (r.t < t) last = r; else { sure = r.t >= t + after; break; } }
+      if (!last) return null;
+      if (sure) return { day, level: Number(last.now) };
+    }
+    return null;
+  };
+}
 /** The brand report's options on the saved settings (links added by the caller that sends products). */
 function brandOptsOf(d, extra = {}) {
   const S = { ...engine.DEFAULT_SETTINGS, ...d.settings }, zone = TZ.zoneOf(d.settings), w = weeks.forReport(d.shopify);
-  return { paceMonths: Math.round(+S.paceMonths || 6), bestShare: (+S.bestShare || 80) / 100, offOf: (c) => status.offSpells(status.of(c)), firstSeenDay: d.shopify && d.shopify.history && +d.shopify.history.until ? TZ.dayKey(+d.shopify.history.until, zone) : null, dayOf: (t) => TZ.dayKey(t, zone),
+  return { paceMonths: Math.round(+S.paceMonths || 6), bestShare: (+S.bestShare || 80) / 100, offOf: (c) => status.offSpells(status.of(c)), ...(d.source === 'live' ? { knownEnd: knownEndOf(d) } : {}), firstSeenDay: d.shopify && d.shopify.history && +d.shopify.history.until ? TZ.dayKey(+d.shopify.history.until, zone) : null, dayOf: (t) => TZ.dayKey(t, zone),
     rankBy: w ? Object.fromEntries(Object.entries(w.by).map(([k, v]) => [k, v.n])) : null, ...extra };   // 26 weeks, while the 12 months load
 }
 /** 1.4.3: the whole store's 12-month build with every variant's days (the drawer, ₹ lost pace), once per data version. */

@@ -55,26 +55,17 @@ test('rateUnits = the units the rate was measured on (history basis for a long s
   assert.ok(x.rateUnits >= 27 && x.rateUnits <= 29, `rateUnits ${x.rateUnits}`); assert.equal(x.confidence, 'high');
 });
 
-test('open 30+ days with nothing ordered: ₹ after day 30 is "not restocked"; the rest counts; Why says restock or drop', () => {
-  const p = product('n', { outAt: 45, sales: range(99, 46) });
-  const r = run(p), x = row(r, 'n');
-  /* period = last 30 days, all out; day 30 of the stock-out = 15 days ago → about half after it */
-  assert.ok(x.lostNotRestocked > 0.4 * x.lost && x.lostNotRestocked < 0.6 * x.lost, `${x.lostNotRestocked} of ${x.lost}`);
-  assert.equal(x.lostCounted, x.lost - x.lostNotRestocked);
-  assert.equal(x.notRestocked, true);
-  assert.equal(r.totals.lostNotRestocked, x.lostNotRestocked); assert.equal(r.totals.lost, x.lostCounted); assert.equal(r.totals.lostAll, x.lost);
-  assert.equal(r.totals.lostNotRestockedProducts, 1);
-  const so = r.stockouts.find((s) => s.id === 'n');
-  assert.equal(so.lostNotRestocked, x.lostNotRestocked); assert.equal(so.lostOver30, x.lostNotRestocked); assert.equal(so.confidence, 'high');
-  H.enrich(r);
-  assert.equal(x.why, 'Out 30+ days, not restocked: restock or drop?');
-  /* daily: the counted part only in `lost`, the rest per day apart */
-  const sum = (k) => r.daily.reduce((s, d) => s + d[k], 0);
-  assert.ok(Math.abs(sum('lost') - r.totals.lost) <= r.daily.length);
-  assert.ok(Math.abs(sum('lostNotRestocked') - r.totals.lostNotRestocked) <= r.daily.length);
-  /* a 7-day view of the same stock-out: all of it is past day 30 */
-  const r7 = run(p, { days: 7 }), x7 = row(r7, 'n');
-  assert.equal(x7.lostNotRestocked, x7.lost); assert.equal(r7.totals.lost, 0);
+test('1.5.0: a stock-out of any length counts every empty day, marked ordered or not, ended or still running', () => {
+  for (const [label, p] of [['open 45 days', product('n', { outAt: 45, sales: range(99, 46) })], ['ended', product('n', { outAt: 45, backAt: 2, sales: range(99, 46) })]]) {
+    const r = run(p), x = row(r, 'n');
+    assert.ok(x.lost > 0, label); assert.equal(x.lostCounted, x.lost, label); assert.equal(x.lostNotRestocked, 0); assert.ok(!x.notRestocked);
+    assert.equal(r.totals.lost, x.lost); assert.equal(r.totals.lostAll, x.lost); assert.equal(r.totals.lostNotRestocked, 0);
+    const sum = r.daily.reduce((s, d) => s + d.lost, 0); assert.ok(Math.abs(sum - r.totals.lost) <= r.daily.length);
+  }
+  const x7 = row(run(product('n', { outAt: 45, sales: range(99, 46) }), { days: 7 }), 'n');
+  assert.equal(x7.lostCounted, x7.lost); assert.ok(x7.lost > 0, 'a 7-day view of an old stock-out still counts');
+  const r = H.enrich(run(product('n', { outAt: 45, sales: range(99, 46) })));
+  assert.match(row(r, 'n').why, /^Out 45 d · lost ₹/); assert.ok(!/drop|not restocked/i.test(row(r, 'n').why));
 });
 
 test('a PO marked (Mark ordered) keeps a 30+ day stock-out counting in full', () => {
@@ -90,18 +81,11 @@ test('a PO marked (Mark ordered) keeps a 30+ day stock-out counting in full', ()
   assert.equal(late.lostNotRestocked, 0);
 });
 
-test('a long stock-out that ended counts its first 30 days, the rest is apart (1.4.7: the same rule as one still running)', () => {
-  const p = product('c', { outAt: 45, backAt: 2, sales: range(99, 46) });
-  const x = row(run(p), 'c');
-  assert.ok(x.lost > 0); assert.ok(x.lostNotRestocked > 0 && x.lostCounted > 0); assert.equal(x.lostCounted + x.lostNotRestocked, x.lost);
-  assert.ok(!x.notRestocked, 'it was refilled: not on the "restock or drop?" list');
-});
-
-test('low confidence and not restocked together: the parts add up to lost, nothing counted twice', () => {
+test('low confidence: all of it is a guess, however long it is out', () => {
   const p = product('s', { outAt: 44, sales: [80, 70, 60] });   // Seville-type: 3 older sales, 0 in the period
   const x = row(run(p), 's');
   assert.equal(x.confidence, 'low');
-  assert.ok(x.lostNotRestocked > 0 && x.lostEstimate > 0);
+  assert.equal(x.lostEstimate, x.lost); assert.ok(x.lost > 0);
   assert.equal(x.lostCounted, 0);
   assert.equal(x.lostEstimate + x.lostNotRestocked + x.lostCounted, x.lost);
 });
@@ -119,7 +103,7 @@ test('totals: headline = Σ counted; lostAll = Σ lost = headline + estimate + n
   const sum = (k) => r.products.reduce((s, p) => s + p[k], 0);
   assert.equal(t.lost, sum('lostCounted')); assert.equal(t.lostEstimate, sum('lostEstimate')); assert.equal(t.lostNotRestocked, sum('lostNotRestocked'));
   assert.equal(t.lostAll, sum('lost')); assert.equal(t.lostAll, t.lost + t.lostEstimate + t.lostNotRestocked);
-  assert.ok(t.lostEstimate > 0 && t.lostNotRestocked > 0 && t.lost > 0);
+  assert.ok(t.lostEstimate > 0 && t.lostNotRestocked === 0 && t.lost > 0);
   assert.equal(t.lostPct, Math.round((t.lost / (t.sold + t.lost)) * 1000) / 10);
 });
 
@@ -130,7 +114,7 @@ test('the same headline in /api/v1/summary, the digest, the weekly snapshot, gro
   assert.equal(v1.lostPct, t.lostPct);
   const d = DG.build({ report: r, role: 'ceo', storeName: 'S', now: NOW });
   assert.ok(d.text.includes(`last 30 days: ${DG.money(t.lost)} (`), d.text);
-  assert.ok(d.text.includes(`+${DG.money(t.lostEstimate)} est.`) && d.text.includes(`+${DG.money(t.lostNotRestocked)} after day 30, `), d.text);
+  assert.ok(d.text.includes(`+${DG.money(t.lostEstimate)} est.`) && !d.text.includes('after day 30'), d.text);
   assert.ok(d.lines.every((l) => l.length <= 160));
   /* weekly snapshot of yesterday (store day): lost = that day's report headline, not lostAll */
   const key = TZ.dayKey(NOW - DAY, 'Asia/Kolkata');

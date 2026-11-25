@@ -26,7 +26,7 @@ test.before(async () => {
   await new Promise((ok) => server.listen(0, ok));
   base = `http://127.0.0.1:${server.address().port}`;
   assert.equal((await fetch(base + '/api/demo', { method: 'POST' })).status, 200);
-  browser = await pw.chromium.launch(process.env.PLAYWRIGHT_CHANNEL ? { channel: process.env.PLAYWRIGHT_CHANNEL } : {});
+  browser = await pw.chromium.launch(process.env.PLAYWRIGHT_CHANNEL ? { channel: process.env.PLAYWRIGHT_CHANNEL } : {}); { const nc = browser.newContext.bind(browser); browser.newContext = async (o) => { const c = await nc(o); await c.addInitScript(() => { try { sessionStorage.setItem('sw-owner', '1'); } catch { /* */ } }); return c; }; }   // 1.5.0: these pages are the brand owner's (public/agency.js)
 });
 test.after(async () => { if (browser) await browser.close(); if (server.listening) await new Promise((ok) => server.close(ok)); });
 
@@ -119,7 +119,7 @@ test('Products filters: no duplicate lists; overstock tile opens Overstock (crit
   const chips = await pg.$$eval('[data-filter-products]', (b) => b.map((x) => x.dataset.filterProducts));
   const more = await pg.$$eval('#f-more option', (o) => o.map((x) => x.value).filter(Boolean));
   assert.equal(chips.length, 7);   // + High returns (SW-064); 1.2.0 Estimates / Not restocked are in More… (LOGIC §4c)
-  assert.ok(more.includes('estimate') && more.includes('notrestocked'), `More… has the §4c filters: ${more}`); assert.equal(more.length, more.includes('warehouse') ? 9 : 8, `More… options ${more}`);   // 1.3.0: + Top-up from warehouse when a product is an allocation
+  assert.ok(more.includes('estimate') && !more.includes('notrestocked'), `More… ${more}`); assert.equal(more.length, more.includes('warehouse') ? 8 : 7, `More… options ${more}`);   // 1.5.0: nothing is "not restocked"
   assert.ok(!more.includes('over') && !more.includes('decide'), 'Overstock = Push these; Slow sellers = Slow sellers to decide');
   await pg.selectOption('#f-more', 'slow'); await pg.waitForSelector('.tbl.desk');
   assert.ok((await heads(pg)).includes('Decide'), 'Slow sellers carries the Decide column');

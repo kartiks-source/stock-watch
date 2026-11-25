@@ -1199,3 +1199,14 @@ Sammsara, same data on 1.4.6 → 1.4.7: all products ₹32.2 L → ₹28.7 L, be
 ## 28. 1.4.9: the Best sellers | All products switch
 
 `?best=1` on `/api/report`, `/api/groups` and `/api/export/reorder.csv` gives the same report for the best sellers only (`opts.only` in the engine): rows, totals, daily chart, stock-outs, orders. The store's selling hours and the best-seller list stay the whole store's. On the brand report each month carries `best.sold` / `all.sold`, and "% of sales" is missed ÷ what that scope sold. The weekly review, the digest and the Data page cover all products.
+
+## 29. 1.5.0: the agency's view; every empty day counts; long patterns (wins over the sections above)
+
+- **Every empty day counts**, ended or still running, marked ordered or not. Nothing is cut off after day 30 and nothing is called "restock or drop?": whether a brand refills or drops a product is the brand's call, the money missed meanwhile is the agency's evidence. Kept apart: guesses (few sales) and gaps between small refills. `late` = the part after the first 30 days of a stock-out, **inside** the total, shown as one line on the report. (Replaces §4c's "not restocked" and §27's 30-day rule.)
+  Why it holds: 683 real in-stock periods of 60–120 days were hidden and predicted (₹3.72 Cr): +2.1% in total, after day 30 −4.5% on best sellers and +9.9% on the rest; typical miss per case 23% on best sellers (34% on 7–30 day periods): the longer the period, the closer.
+- **Two years were tried and not used** (25 Nov 2026): Shopify reads them fine (80 reads), but its older stock log doesn't add up for 80 of 252 variants and the prediction is no better (seasons from two years: −4.9% vs −3.3%; speed from 24 months: +14%).
+- **The stock walk is anchored on our own readings** (server.js `knownEndOf`): the walk starts from "stock now" and a piece sold between reading the stock and reading Shopify's log (or a log that is late) shifted a product's whole year. The latest day in the last 10 that our 2-hourly readings are certain of now sets the level (up to 25 pieces). Found on Sable Leaf: 2 sold at 00:35, log 0 → 6 days out read as 22.
+- **Pattern per product:** `times` = separate stock-outs, `monthsOut` = months with one, in the 365 days; rank by 12 months' sales on every row; what each more empty day costs (sure products only).
+- **Screens** (`public/agency.js`): Brand report, Out now, Ads, All products, Data. The brand owner's tools (Restock list, quantities, purchase orders, suppliers, budget, overstock, slow-seller decisions, planning rules, Overview, Stock-outs page, digest panel) are off; their code and APIs stay, and `?owner=1` shows them for one browser tab.
+
+Sammsara, 24 Nov 2026, same data on 1.4.9 → 1.5.0: best sellers ₹14.8 L → ₹19.0 L (₹4.2 L of it after the first month empty), all products ₹28.7 L → ₹44.9 L (₹16.2 L), guesses ₹4.9 L → ₹19.5 L (apart), last 30 days ₹5.5 L → ₹10.9 L (best sellers ₹1.8 L → ₹3.4 L).

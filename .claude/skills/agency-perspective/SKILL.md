@@ -41,3 +41,6 @@ Brand side is operations-heavy (reorder, suppliers, stock). Agency side is outco
 - Break the problem down before building: who asks, what they decide, what proof they need, what data proves it.
 - When a tangent comes up, note it, then come back to the main goal: bestsellers out of stock → revenue lost → proof by month.
 - Check every claim against Shopify before it goes in front of a brand.
+
+## Off the screens (1.5.0, owner's decision 25 Nov 2026)
+Nothing from the brand owner's side: no reorder, restock quantities, suppliers, purchase orders, lead times, overstock, margins, slow-seller or "refill or drop" decisions. A product that stays empty is the client not restocking: show since when, how often, what it cost. Judge on long patterns (12 months), never on one month.

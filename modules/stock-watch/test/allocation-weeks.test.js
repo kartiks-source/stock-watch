@@ -91,7 +91,7 @@ test('G26: a variant live under 8 full weeks keeps the units rule; weeks live fr
   assert.equal(p.confBasis, 'units'); assert.equal(p.confidence, 'low'); assert.equal(p.weeksLive, null);
 });
 
-test('§3 floor: out since before our data, sold in Shopify\'s 26 weeks → units ÷ 182 a day, all of it "not restocked"', () => {
+test('§3 floor: out since before our data, sold in Shopify\'s 26 weeks → units ÷ 182 a day, all of it a guess (1.5.0)', () => {
   const stock = [{ t: now - 59 * DAY, variantId: 'f', before: null, now: 0, price: 7149 }];
   const catalog = { f: { product: 'Solis Gold Accent Table', stock: 0, active: true, createdAt: Date.UTC(2024, 0, 1), price: 7149 } };
   const other = [{ t: now - 59 * DAY, order: '#o', variantId: 'other', qty: 1, price: 100 }];   // the store's orders start 59 days ago
@@ -102,9 +102,9 @@ test('§3 floor: out since before our data, sold in Shopify\'s 26 weeks → unit
   assert.equal(p.perDay, 0, 'the order quantity keeps its own rate');
   const hours = r.stockouts.find((s) => s.id === 'f').hoursInPeriod;
   assert.ok(Math.abs(p.lost - (19 / 182) * 6500 * hours / 24) < 0.05 * p.lost, `≈ floor × ₹6,500 (Shopify's net ÷ units) × days out: ${p.lost}`);
-  assert.equal(p.lostNotRestocked, p.lost); assert.equal(p.lostCounted, 0); assert.equal(p.lostEstimate, 0);
+  assert.equal(p.lostEstimate, p.lost); assert.equal(p.lostCounted, 0); assert.equal(p.lostNotRestocked, 0);   // 1.5.0
   assert.ok(!r.stockouts.find((s) => s.id === 'f').notSelling, 'no longer "out but not selling"');
-  assert.match(p.why, /^Out since before \d+ \w+ · sold 19 in 26 w: restock or drop\?$/);
+  assert.match(p.why, /^Out since before \d+ \w+ · sold 19 in 26 w$/);
   /* in stock part of the time we hold (sold 0 while in stock): no floor, it really isn't selling */
   const inStock = [{ t: now - 59 * DAY, variantId: 'f', before: null, now: 2, price: 7149 }, { t: now - 10 * DAY, variantId: 'f', before: 2, now: 0, price: 7149 }];
   const q = E.report(inStock, other, S, opts).products.find((x) => x.id === 'f');
@@ -112,17 +112,6 @@ test('§3 floor: out since before our data, sold in Shopify\'s 26 weeks → unit
   /* no weekly data: as before, ₹0 and "out but not selling" */
   const z = E.report(stock, other, S, { days: 30, now, catalog });
   assert.equal(z.products.find((x) => x.id === 'f').lost, 0); assert.equal(z.stockouts.find((x) => x.id === 'f').notSelling, true);
-});
-
-test('not-restocked cutoff = max(30, lead + buffer + 14) days', () => {
-  assert.equal(E.notRestockedDays(7, 3), 30); assert.equal(E.notRestockedDays(21, 5), 40);
-  const stock = [{ t: now - 59 * DAY, variantId: 'n', before: null, now: 50, price: 1000 }, { t: now - 35 * DAY, variantId: 'n', before: 1, now: 0, price: 1000 }];
-  const orders = []; for (let d = 58; d > 35; d--) orders.push({ t: now - d * DAY, order: `#${d}`, variantId: 'n', qty: 2, price: 1000 });
-  const a = E.report(stock, orders, S, { days: 30, now }).products[0];
-  const b = E.report(stock, orders, { ...S, leadDays: 21, safetyDays: 5 }, { days: 30, now }).products[0];
-  assert.ok(a.lostNotRestocked > 0 && a.nrDays === 30);
-  assert.equal(b.nrDays, 40); assert.equal(b.lostNotRestocked, 0, 'out 35 days < 40-day cutoff'); assert.equal(b.lostCounted, b.lost);
-  assert.equal(H.why(H.enrich(E.report(stock, orders, S, { days: 30, now })).products[0], S, now, now - 35 * DAY).why.startsWith('Out 30+ days, not restocked'), true);
 });
 
 test('L3: still out ₹/day counts the headline\'s part; estimates, not restocked and allocations apart (digest too)', () => {

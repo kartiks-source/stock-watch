@@ -73,7 +73,7 @@ test('profile: 12 months (units, missed, days out, season), day calendar, stock 
   assert.equal(p.months.length, 12);
   const feb = p.months.find((m) => m.key === '2026-02'), jun = p.months.find((m) => m.key === '2026-06');
   assert.equal(feb.units, 36); assert.equal(feb.daysOut, 11, '1–10 Feb out, 11 Feb back (½), 28 Feb ran out (½)');
-  assert.equal(jun.units, 0); assert.equal(jun.daysOut, 30); assert.ok(jun.missed + jun.apart > 0); assert.equal(jun.missed, 0, 'past day 30 of a stock-out: apart (1.4.7)');
+  assert.equal(jun.units, 0); assert.equal(jun.daysOut, 30); assert.ok(jun.missed + jun.apart > 0); assert.equal(jun.apart, 0, 'every empty day counts (1.5.0)');
   assert.ok(p.months.every((m) => m.season >= 0.5 && m.season <= 2));
   assert.equal(p.calendar.length, 365); assert.deepEqual(p.calendar[0], ['2025-12-01', 1]);
   assert.equal(p.stock.length, 365); assert.equal(p.stock[p.stock.length - 1][1], 0);
