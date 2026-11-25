@@ -1101,7 +1101,7 @@ body.no-period .top .range, body.no-period .top .rlabel, body.no-period .top .rd
   body:not(.no-period) .top .sync-pill { top: 2px; right: 10px; }
   body:not(.no-period) .storebar:not([hidden]) { padding-right: 0; }
   .storebar .store-m { min-height: 44px; }
-  .rdates { white-space: nowrap; width: auto; margin: 0 0 0 2px; }
+  .plan { margin: 0; } .rdates { white-space: nowrap; width: auto; margin: 0 0 0 2px; }
   .rail a .rs, .rail a > span { white-space: nowrap; }
   .rail a { font-size: 10px; letter-spacing: -.01em; }
 
@@ -1110,18 +1110,63 @@ body.no-period .top .range, body.no-period .top .rlabel, body.no-period .top .rd
   .headline .lead { font-size: 14px; }
   .m-apart > summary { display: inline-block; padding: 8px 0; font-size: 13px; color: var(--soft); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 
+  /* 1.4.9 cards: the picture on the left, everything else stacked beside it, the money top right and the links under it */
   .mcard, .arow, .t5 { position: relative; }
+  .mcards { gap: 0; margin-top: 2px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .mcard { padding: 7px 8px 7px 10px; gap: 1px; min-height: 66px; border: 0; border-radius: 0; box-shadow: none; border-bottom: 1px solid var(--line); border-left: 4px solid transparent; }
+  .mcard:last-child { border-bottom: 0; }
+  .mcard:has(.prod) { padding-left: 70px; }
+  .mcard:has(.mfacts .st.g-today, header .st.g-today) { border-left-color: var(--lost); }
+  .mcard:has(.mfacts .st.g-week) { border-left-color: #E0A63A; }
+  .mcard:has(.mfacts .st.ok, .mfacts .st.g-ok) { border-left-color: #58B583; }
+  .mcard:has(.mfacts .st.g-today) { border-left-color: var(--lost); }
+  .arow, .t5 { padding: 7px 2px 7px 64px; min-height: 66px; gap: 2px; flex-direction: column; flex-wrap: nowrap; align-items: stretch; justify-content: flex-start; }
+  .mcard h3 .thumb, .arow .thumb, .t5 .thumb { position: absolute; left: 8px; top: 8px; width: 52px; height: 52px; border-radius: 7px; }
+  .arow .thumb, .t5 .thumb { left: 2px; top: 8px; }
+  .mcard h3 .prod, .arow .prod, .t5 .prod { align-items: flex-start; gap: 0; flex: none; }
   .pl1 { display: block; white-space: normal; }
-  .pl1 .pname { white-space: normal; line-height: 1.3; }
+  .pl1 .pname { white-space: normal; line-height: 1.25; }
   .pl1 .best { margin-left: 6px; }
-  .pl2 { gap: 8px; min-height: 18px; flex-wrap: wrap; }
-  .mcard h3 .thumb, .arow .thumb, .t5 .thumb { width: 52px; height: 52px; align-self: flex-start; }
-  .mcard h3 .prod, .arow .prod, .t5 .prod { align-items: flex-start; }
-  .mcard .pl2 .plinks, .arow .pl2 .plinks, .t5 .pl2 .plinks { position: absolute; right: 2px; bottom: 0; gap: 0; }
-  .mcard .mfacts { padding-right: 88px; min-height: 30px; align-items: center; }
-  .mcard .mfacts .why { white-space: normal; }
+  .pl1 .best:not(.tu) { font-size: 0; padding: 0; background: none; vertical-align: 0; }
+  .pl1 .best:not(.tu)::before { content: '★'; font-size: 13px; color: #C98A00; }
+  .mcard .mfacts .st { white-space: normal; }
+  .pl2 { gap: 8px; min-height: 17px; flex-wrap: wrap; }
+  .mcard header { gap: 8px; }
   .mcard header:has(.prod) .mspark { display: none; }
-  .mcard header { gap: 10px; }
-  .arow .af, .t5 .af { padding-left: 62px; padding-right: 88px; min-height: 26px; }
+  .mcard h3 { font-size: 14px; line-height: 1.25; }
+  .mcard .mq b { font-size: 15.5px; } .mcard .mq { line-height: 1.15; }
+  /* the facts read as one sentence: coloured words instead of pills, " · " between them */
+  .mcard:has(.prod) .mfacts:not(:has(button, select, input)) { display: block; padding-right: 72px; font-size: 12.5px; line-height: 1.35; color: var(--soft); }
+  .mcard:has(.prod) .mfacts:not(:has(button, select, input)) > * { display: inline; }
+  .mcard:has(.prod) .mfacts:not(:has(button, select, input)) > * + *::before { content: ' · '; color: var(--faint); font-weight: 400; }
+  .mcard:has(.prod) .mfacts:not(:has(button)) .st { background: none; padding: 0; font-size: 12.5px; font-weight: 650; border: 0; }
+  .mcard:has(.prod) .mfacts .st.g-today { color: var(--lost); } .mcard:has(.prod) .mfacts .st.g-week { color: #8A5A00; }
+  .mcard .mfacts .why { white-space: normal; }
+  .mcard .pl2 .plinks, .arow .pl2 .plinks, .t5 .pl2 .plinks { position: absolute; right: 0; bottom: -2px; gap: 0; }
+  .mcard .pl2 .plink, .arow .pl2 .plink, .t5 .pl2 .plink { place-items: end center; padding-bottom: 12px; width: 40px; }
+  /* Restock: the tick box sits on the picture's corner */
+  .mcard header .mpick { position: absolute; left: 2px; top: 2px; margin: 0; width: 44px; min-height: 44px; z-index: 1; align-items: flex-start; justify-content: flex-start; padding: 5px 0 0 5px; }
+  .mcard header .mpick .pick { background: #fff; box-shadow: 0 0 0 2px #fff; border-radius: 4px; }
+  .arow .af, .t5 .af { flex: none; flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 0 8px; padding: 0 78px 0 0; text-align: left; line-height: 1.3; }
+  /* side panel */
+  .phero { gap: 12px; } .phero .thumb { width: 88px; height: 88px; }
+  .pht .plinks { flex-wrap: nowrap; margin-left: -100px; } .pht .plink.big { padding: 0 9px; font-size: 12.5px; white-space: nowrap; }
+  .kgrid { gap: 6px; } .kv { padding: 7px 9px; gap: 0; border-radius: 8px; } .kv b { font-size: 16px; } .kv small { font-size: 11.5px; }
   .hrow .pl2 .plinks { display: none; }   /* the grid is a heat map: the links are in the panel one tap away */
+}
+
+/* 1.4.9: one switch on every page */
+.scope-top:empty, .scopebar:empty { display: none; }
+.scopebar { display: none; }
+@media (max-width: 759.98px) {
+  .scope .wl { display: none; }
+  .storebar:not([hidden]) { width: 42%; margin: 6px 0 0 10px; padding-right: 0; align-self: flex-start; }
+  body:not(.no-period) .storebar:not([hidden]), body.no-period .storebar:not([hidden]) { padding-right: 0; }
+  .storebar .sm-n { display: none; }
+  .scopebar:not(:empty) { display: block; margin: 6px 10px 0 calc(42% + 18px); }
+  .storebar:not([hidden]) + .scopebar:not(:empty) { margin-top: -46px; }
+  body.no-period .scopebar:not(:empty) { margin-right: 64px; }
+  .scopebar .scope { display: flex; } .scopebar .scope button { flex: 1 1 auto; min-height: 44px; padding: 0 6px; white-space: nowrap; font-size: 12.5px; }
+  .headline .scopeline { font-size: 12.5px; margin: 2px 0 0; }
+  .wrap { padding-top: 8px; }
 }

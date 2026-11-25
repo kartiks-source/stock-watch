@@ -19,7 +19,7 @@
     </a>
     <a href="#best" data-view="best">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z"/></svg>
-      <span class="rl">Best sellers now</span><span class="rs">Best sellers</span><em id="n-best"></em>
+      <span class="rl">Out now</span><span class="rs">Out now</span><em id="n-best"></em>
     </a>
     <a href="#ads" data-view="ads">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4h3l6 4V6L7 10z"/><path d="M16.5 9a4 4 0 0 1 0 6M19 6.5a7.5 7.5 0 0 1 0 11"/></svg>
@@ -46,6 +46,7 @@
       </a>
       <details class="colpick rolepick"><summary class="store-pill" title="Store · switch brand" aria-label="Store menu"><span id="store-name" class="store-name">Store</span>
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></summary><div class="menu"><div id="store-menu"></div></div></details>
+      <div class="scope-top" id="scope-top"></div>
       <div class="top-gap"></div>
       <span class="rlabel">Period</span><div class="range" role="group" aria-label="Period for every number on the page">
         <button data-days="7" aria-label="7 days">7<span class="wide-only"> days</span><span class="ph-d">d</span></button><button data-days="14" aria-label="14 days">14<span class="wide-only"> days</span><span class="ph-d">d</span></button><button data-days="30" class="on" aria-label="30 days">30<span class="wide-only"> days</span><span class="ph-d">d</span></button><button data-days="60" aria-label="60 days">60<span class="wide-only"> days</span><span class="ph-d">d</span></button><button data-days="month" title="From the 1st of this month (store time)"><span class="wide-only">This </span>month</button>
@@ -56,6 +57,7 @@
     </header>
 
     <div class="storebar" id="storebar" hidden></div>
+    <div class="scopebar" id="scopebar"></div>
     <div class="stale" id="stale" role="status" hidden></div>
     <main id="view" class="wrap" aria-live="polite"><p class="muted pad">Loading…</p></main>
     <footer class="source" id="source"></footer>

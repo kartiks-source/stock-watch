@@ -496,7 +496,7 @@ function report(stock, orders, settings = {}, opts = {}) {
   const lastKey = dayKey(now, off);
   for (const k of TZ.dayKeys(from, now, off)) { daily[k] = daily[k] || { sold: 0, lost: 0, lostEstimate: 0, lostNotRestocked: 0, lostAllocation: 0, units: 0, unitsLost: 0, outSkus: new Set() }; if (k === lastKey) break; }   // a 23- or 25-hour day is one day (SW-049)
   for (const o of orders) {
-    if (o.t < from) continue;
+    if (o.t < from || (opts.only instanceof Set && !opts.only.has(String(o.variantId)))) continue;
     const d = daily[dayKey(o.t, off)]; if (!d) continue;
     d.sold += num(o.qty) * num(o.price); d.units += num(o.qty);
   }
@@ -505,7 +505,9 @@ function report(stock, orders, settings = {}, opts = {}) {
   const ws = opts.weekSales && typeof opts.weekSales === 'object' && opts.weekSales.by ? opts.weekSales : null;
   const products = [], reorder = [], stockouts = [];
   const excluded = { variants: 0, pcs: 0, byStatus: {} };
+  const only = opts.only instanceof Set ? opts.only : null;   // 1.4.9: the report of some variants only (the best sellers): the store's selling hours and best-seller list stay, every total is theirs
   for (const p of P.values()) {
+    if (only && !only.has(String(p.id))) continue;
     const name = [p.product, p.variant && p.variant !== 'Default Title' ? p.variant : ''].filter(Boolean).join(' · ') || p.sku || p.id;
     /* an inactive product can't be bought, so a stock-out it was in ends when it went inactive */
     /* and one that was inactive for a while and came back: the spell is cut out, so ₹ lost for those days never comes back later */

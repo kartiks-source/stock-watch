@@ -1195,3 +1195,7 @@ Sammsara, 24 Nov 2026, same data on both versions: all products ₹28.1 L → �
 So a store or month total can be trusted to within about 10%; one product in one month is a rough figure. Tried and not better: 12-month or 6-month flat speed, the store's daily traffic, the 60 days around. Price: typical miss 4.8% with the 12-month average, 4.1% with recent months. Shoppers buying a sibling instead: 0.03 extra per missed sale on best sellers (26 stock-outs), no sign of it, but the test is noisy (all: −2.63 to 0.42), so it isn't deducted. Product page visits fall to almost none once a product is out (Oakwood 138 a week → 7, 4, 2): the estimate assumes normal visits.
 
 Sammsara, same data on 1.4.6 → 1.4.7: all products ₹32.2 L → ₹28.7 L, best sellers ₹15.2 L → ₹14.8 L (44), last 30 days ₹5.34 L → ₹5.46 L.
+
+## 28. 1.4.9: the Best sellers | All products switch
+
+`?best=1` on `/api/report`, `/api/groups` and `/api/export/reorder.csv` gives the same report for the best sellers only (`opts.only` in the engine): rows, totals, daily chart, stock-outs, orders. The store's selling hours and the best-seller list stay the whole store's. On the brand report each month carries `best.sold` / `all.sold`, and "% of sales" is missed ÷ what that scope sold. The weekly review, the digest and the Data page cover all products.

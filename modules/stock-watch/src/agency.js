@@ -354,6 +354,8 @@ function build(y, catalog = {}, { paceMonths = 6, bestShare = 0.8, links = () =>
     });
   }
   /* 1.4.4: every month in two scopes, best sellers and all products: counted (the headline), and the parts kept apart */
+  const bestSold = new Map();   // 1.4.9: what the best sellers sold each month (the chart's bars follow the switch)
+  for (const p of byP.values()) if (p.best) for (const v of p.variants) for (const [k, x] of Object.entries((y.sales.by && y.sales.by[v.id]) || {})) if (inWin(k) && k <= sp.through) bestSold.set(monthOf(k), (bestSold.get(monthOf(k)) || 0) + (Number(x[1]) || 0));
   const scopeRow = () => ({ lost: 0, est: 0, nr: 0, apart: 0, total: 0, units: 0, out: 0, daysOut: 0 });
   for (const m of months.values()) { m.best = scopeRow(); m.all = scopeRow(); }
   for (const p of out) {
@@ -368,7 +370,7 @@ function build(y, catalog = {}, { paceMonths = 6, bestShare = 0.8, links = () =>
     }
   }
   for (const m of months.values()) {
-    for (const k of ['best', 'all']) { const sc = m[k]; for (const f of ['lost', 'est', 'nr', 'apart', 'total']) sc[f] = Math.round(sc[f]); sc.units = Math.round(sc.units); sc.daysOut = r2(sc.daysOut); sc.pct = m.sold > 0 ? r2((sc.lost / m.sold) * 100) : 0; }
+    for (const k of ['best', 'all']) { const sc = m[k]; sc.sold = k === 'all' ? Math.round(m.sold) : Math.round(bestSold.get(m.key) || 0); for (const f of ['lost', 'est', 'nr', 'apart', 'total']) sc[f] = Math.round(sc[f]); sc.units = Math.round(sc.units); sc.daysOut = r2(sc.daysOut); sc.pct = sc.sold > 0 ? r2((sc.lost / sc.sold) * 100) : 0; }   // 1.4.9: % of what that scope sold
     m.lost = m.best.lost; m.lostApart = m.best.apart; m.lostUnits = m.best.units; m.bestOut = m.best.out; m.daysOut = m.best.daysOut;   // 1.4.0 names = best sellers
   }
   const mlist = [...months.values()].map((m) => ({ ...m, sold: Math.round(m.sold), lost: Math.round(m.lost), lostAll: Math.round(m.lostAll), lostUnits: Math.round(m.lostUnits), lostApart: Math.round(m.lostApart), daysOut: r2(m.daysOut), pct: m.sold > 0 ? r2((m.lost / m.sold) * 100) : 0 }));
@@ -381,7 +383,7 @@ function build(y, catalog = {}, { paceMonths = 6, bestShare = 0.8, links = () =>
     lostApart: sum('lostApart'), apart: best.filter((p) => p.allocation).length };
   headline.pct = headline.sold > 0 ? r2((headline.lost / headline.sold) * 100) : 0;
   headline.best = scopeHead('best', best); headline.all = scopeHead('all', out); headline.all.inactive = out.filter((p) => p.inactive).length;   // of products: no longer on sale
-  for (const k of ['best', 'all']) headline[k].pct = headline.sold > 0 ? r2((headline[k].lost / headline.sold) * 100) : 0;
+  for (const k of ['best', 'all']) { headline[k].sold = mlist.reduce((s, m) => s + m[k].sold, 0); headline[k].pct = headline[k].sold > 0 ? r2((headline[k].lost / headline[k].sold) * 100) : 0; }
   const dv = detail && detail !== true ? variants.find((v) => v.id === String(detail)) : null;
   const det = (v) => ({ id: v.id, list: v.dayMap, pace: v.pace, perMonth: v.perMonth, price: v.price, sold: v.sold, units: v.units, isApart: v.isApart, unsure: !!v.ds.unsure, monthKeys, nowM });
   const res = {
