@@ -319,7 +319,7 @@ test('13 months, refilled-a-few-at-a-time and no-longer-on-sale rows, counted + 
     await pg.goto(`${base}/?store=sammsara-demo&a=1#best`); await pg.waitForSelector('#scope-line');
     assert.match(await pg.textContent('#view'), /Topped Up Table[\s\S]*?website top-up/); assert.ok(!/Check the warehouse|Enough stock/.test(await pg.textContent('#view')));
     await pg.goto(`${base}/?store=sammsara-demo&a=2#ads`); await pg.waitForSelector('#ads-keep .arow');
-    assert.match(await pg.textContent('#ads-keep'), /Keep ads on: refilled a few at a time[\s\S]*Kept Table[\s\S]*check the warehouse/);
+    assert.match(await pg.textContent('#ads-keep'), /Keep ads on: refilled a few at a time[\s\S]*Kept Table[\s\S]*refilled a few at a time/);
     assert.equal(await sideways(pg), 0);
     const t = await pg.evaluate(() => { const months = [{ key: '2026-11', label: '', from: '2026-11-01', to: '2026-11-23', days: 23, units: 1, missedUnits: 2, missed: 500, apart: 700, daysOut: 4, season: 1 }]; return SW_PROFILE.body({ ok: true, span: { from: '2025-11-25', through: '2026-11-23', days: 364 }, outs: { times: 1, days: 4 }, pace: { perDay: 1, sixMonths: 0.2857 }, missed: { value: 500, units: 0.4, apart: 700 }, months, sold: { units: 1, value: 1 }, share: 1, inStock: { pct: 1, days: 1, of: 1 }, stock: [], calendar: [], restocks: [] }, null); });
     assert.match(t, /about 2 a week when it is in stock/); assert.match(t, /That cost about ₹500 in sales, \+₹700 not counted/); assert.ok(!/about less than/.test(t));
