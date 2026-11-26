@@ -37,8 +37,6 @@
   const nDays = (x) => { const v = Math.round((+x || 0) * 2) / 2; return `${v.toLocaleString('en-IN')} day${v === 1 ? '' : 's'}`; };
   const units = (x) => { const v = +x || 0; return v >= 10 ? inr.format(Math.round(v)) : v >= 1 ? String(Math.round(v)) : v > 0 ? 'less than 1' : '0'; };
   const about = (x) => ((+x || 0) >= 1 ? `about ${units(x)}` : units(x));   // never "about less than 1"
-  /** Units behind the counted money (1.4.6: countedUnits from the server). */
-  const countedUnits = (x) => (x.countedUnits != null ? x.countedUnits : x.lost > 0 ? x.units * ((x.counted ?? x.lost) / x.lost) : x.units);
   const counted = (p) => p.counted ?? p.lost ?? 0;
   const narrow = () => matchMedia('(max-width: 759.98px)').matches;
   /** "5 a week", "1 a day", "2 a month" */
@@ -49,14 +47,16 @@
     return `${Math.max(1, Math.round(perDay * 30.4))} a month`;
   };
   const S = () => A.state;
-  /* 1.4.4: "Best sellers | All products" for every part of the brand report; All products by default, remembered on this
+  /* 1.4.4: "Best sellers | All products" for every part of the brand report; 4.2.0: Best sellers by default, remembered on this
      browser once changed, ?view=best / ?view=all win */
   const SCOPE_KEY = 'sw-brand-scope';
   const scope = () => {
     const st = S();
-    if (!st.brandScope) { let v = null; try { v = new URLSearchParams(location.search).get('view'); } catch { /* */ } if (v !== 'all' && v !== 'best') { try { v = localStorage.getItem(SCOPE_KEY); } catch { /* */ } } st.brandScope = v === 'best' ? 'best' : 'all'; }   // 1.4.4: All products unless chosen otherwise
+    if (!st.brandScope) { let v = null; try { v = new URLSearchParams(location.search).get('view'); } catch { /* */ } if (v !== 'all' && v !== 'best') { try { v = localStorage.getItem(SCOPE_KEY); } catch { /* */ } } st.brandScope = v === 'all' || v === 'best' ? v : window.SW_AGENCY === false ? 'all' : 'best'; }   // 4.2.0: the agency's pages: Best sellers unless chosen otherwise (the owner's pages keep All products)
+    const b = st.brand; if (b && b.ok && b.months && noList(b)) return 'all';   // 4.2.0: no best-seller list yet: all products
     return st.brandScope;
   };
+  function noList(b) { return !((b.bestList ? b.bestList.n : b.headline && b.headline.bestsellers) > 0); }
   const setScope = (v) => { S().brandScope = v; S().brandAll = false; S().brandMonthAll = false; S().adsAll = false; try { const u = new URL(location.href); if (u.searchParams.has('view')) { u.searchParams.delete('view'); history.replaceState(null, '', u); } } catch { /* */ } try { localStorage.setItem(SCOPE_KEY, v); } catch { /* private window */ } };
   const scopeName = (sc = scope(), one = false) => (sc === 'all' ? (one ? 'product' : 'all products') : (one ? 'best seller' : 'best sellers'));
   const scopeSwitch = () => `<div class="scope" role="group" aria-label="Which products">${[['best', 'Best sellers'], ['all', 'All<span class="wl"> products</span>']].map(([k, l]) => `<button class="${scope() === k ? 'on' : ''}" data-scope="${k}" aria-pressed="${scope() === k}">${l}</button>`).join('')}</div>`;
@@ -69,33 +69,24 @@
     const host = narrow() ? bar : top, other = narrow() ? top : bar;
     other.innerHTML = ''; host.innerHTML = hide ? '' : scopeSwitch();
   }
-  /** A month or the headline seen through the scope: lost (counted), parts kept apart, ran out, days out. */
+  /** A month or the headline seen through the scope: lost (counted), parts kept apart, ran out, empty days. */
   const inScopeOf = (m, k) => (m && m[k] ? m[k] : { lost: m ? m.lost : 0 });
   const inScope = (m) => (m && m[scope()] ? { ...m, ...m[scope()], bestOut: m[scope()].out ?? m.bestOut } : m);
-  /** "Not counted" in one small line (the same parts as every page, LOGIC §4c, §22). */
-  const apartLine = (h) => { const parts = [h.est ? `${rs(h.est)} a guess: products that hardly sell` : '', h.apart ? `${rs(h.apart)} while the warehouse topped up a few pieces` : ''].filter(Boolean); return parts.length ? `<p class="muted small" id="brand-apart">Not counted in ${rs(h.lost)}: ${parts.join(' · ')}.</p>` : ''; };
   const B = () => S().brand;
-  /* 2.0.0 (RULE.md): ₹ only for best sellers, always a range; b.rule is set when the numbers come from the one rule */
+  /* 2.0.0 (RULE.md): b.rule is set when the numbers come from the one rule. 4.2.0: the screens say "about ₹X", never a range */
   const rule = () => !!(B() && B().rule);
-  const band = (x) => (rule() && x && x.lost > 0 && x.low != null ? `${rs(x.low)}–${rs(x.high)}`.replace(/^₹([\d.]+) lakh–₹/, '₹$1–') : '');
-  const bandSmall = (x) => (band(x) ? ` <small class="muted band">${band(x)}</small>` : rule() && x && x.lost > 0 && x.n ? ` <small class="muted band">only ${x.n} time${x.n === 1 ? '' : 's'}</small>` : '');
-  const names = (ks) => { const n = ks.map((k) => mShort(k)); return n.length > 1 ? `${n.slice(0, -1).join(', ')} and ${n[n.length - 1]}` : n[0] || ''; };
-  const whyNone = (p, x) => (!rule() ? '' : x && x.later > 0 ? `Past 60 empty days: ${rs(x.later)} if still wanted` : x && x.no ? x.no.charAt(0).toUpperCase() + x.no.slice(1) : '');
-  const lostOf = (p, x) => (counted(x) > 0 || !rule() ? `<b class="lostv">${money(counted(x))}</b>` : `<span class="muted" title="${esc(whyNone(p, x))}">–</span>`);
-  const ruleLines = (b, h) => (!b.rule ? '' : `<p class="late" id="brand-later">Sold + missed = <b>${money(h.could)}</b>. <b>${money(h.open)}</b> of the missed is on products that are not back yet, so it can’t be checked against a comeback.${h.later > 0 ? ` Another <b class="lostv">${money(h.later)}</b> came after 60 empty days: not tested enough, so not added.` : ''}</p>
-        <p class="muted small">${h.noMoney > 0 ? `${inr.format(Math.round(h.noMoney))} empty days carry no ₹: no recent sales, or no history before. ` : ''}${b.countsNow ? `Out now: ${inr.format(b.countsNow.out)} of ${inr.format(b.countsNow.onSale)} products, ${b.countsNow.best} of them best sellers.` : ''}</p>`);
   const testText = (t) => (t ? `${t.off >= 0 ? '+' : '−'}${pct(Math.abs(t.off) * 100)} (95% interval ${t.low >= 0 ? '+' : '−'}${pct(Math.abs(t.low) * 100)} to ${t.high >= 0 ? '+' : '−'}${pct(Math.abs(t.high) * 100)}; ${inr.format(t.n)} tries, ${inr.format(t.products)} products)` : 'too few to test');
   const howNew = (b) => `<p><b>Empty day:</b> the shelf was empty all day. The day it ran out counts ½, the day it came back 0. From Shopify’s own stock log.</p>
-        <p><b>Money missed</b> = what it makes a day in stock × how busy the shop was that day × days empty. Products off the best-seller list × 0.74. <b>Could have sold</b> = sold + missed.</p>
+        <p><b>Money missed</b> = what it makes a day in stock × how busy the shop was that day × empty days. Products off the best-seller list × 0.74.</p>
         <p><b>A day in stock:</b> its real sales (after discounts and returns) on its in-stock days in the 90 days before it ran out, ÷ those days. It needs 60 of them.</p>
         <p><b>How busy:</b> the shop’s sales that day ÷ its sales on those same days, this product left out. That carries Diwali, sales and quiet days.</p>
         <p><b>× 0.74:</b> products off the best-seller list sell about a quarter less than their last 90 days say, even when nothing ran out (tested on normal in-stock weeks). Best sellers don’t.</p>
-        <p><b>Is it true?</b> We tested it two ways. Real comebacks, guess against real: best sellers ${testText(b.proof.best.back)}; other products ${testText(b.proof.other.back)}. Replayed stock-outs (real sales hidden after a pretend run-out): best sellers ${testText(b.proof.best.replay)}; others ${testText(b.proof.other.replay)}. The range is meant to hold 9 times in 10; it is not yet checked blind for this rule.</p>
+        <p><b>Is it true?</b> We tested it two ways. Real comebacks, guess against real: best sellers ${testText(b.proof.best.back)}; other products ${testText(b.proof.other.back)}. Replayed stock-outs (real sales hidden after a pretend run-out): best sellers ${testText(b.proof.best.replay)}; others ${testText(b.proof.other.replay)}.</p>
         <p><b>Best sellers:</b> the products that made 80% of real sales before each quarter began (now: ${b.bestList.n}, ${span(b.bestList.from, b.bestList.to)}). A size or colour counts as its own product.</p>
         <p><b>Locked:</b> a month is saved 3 days after it ends and never changes. This month can still move. Rule ${esc(b.rule)}.</p><p><b>Not provable:</b> a missed sale can’t be seen. Some buyers may have bought something else; we don’t take that off. It is demand we couldn’t serve, not profit lost. If people had no ads or saw the empty page less, we don’t know that either.</p>`;
   /** The products of the open view. Best sellers: each month's money only when it was on that quarter's list, so rows add up to the headline. */
   const viewOf = (b, p) => { if (!rule() || scope() === 'all') return p; const months = Object.fromEntries(Object.entries(p.months || {}).filter(([, x]) => x.best)); return { ...p, months, lost: p.lostBest, counted: p.lostBest, daysOut: Object.values(months).reduce((t, x) => t + x.daysOut, 0) }; };
-  const loading = '<p class="muted pad">Reading the 12 months…</p>';
+  const loading = '<p class="muted pad">Getting 12 months of sales from Shopify. This page fills in when it’s done.</p>';
 
   async function fetchBrand(force = false) {
     const st = S();
@@ -107,7 +98,10 @@
   /** The rail's badge: best sellers out right now. */
   const badge = (j) => { const el = document.getElementById('n-best'); if (!el) return; const n = ((j && j.now) || []).filter((p) => p.out).length; el.textContent = n || ''; el.title = `${n} best sellers out of stock now`; };
   const need = () => { if (!B()) { fetchBrand().then(() => A.render()); return true; } return false; };
-  const notReady = (b) => b && b.error ? `<section class="headline"><h1>Couldn’t load the 12 months.</h1><p>${esc(b.error)}</p><p><button class="btn" id="brand-retry">Try again</button></p></section>` : `<section class="headline"><h1>No 12-month history yet</h1><p>It is read from Shopify’s reports after the first pull (the Shopify token needs read_reports). Until then the other pages work as before.</p></section>`;
+  /* 4.2.0: a store still loading, or too young for a month, says so with the report's own reason ('none' | 'short') */
+  const notReady = (b) => b && b.error ? `<section class="headline"><h1>Couldn’t load the 12 months.</h1><p>${esc(b.error)}</p><p><button class="btn" id="brand-retry">Try again</button></p></section>`
+    : b && b.reason === 'short' ? `<section class="headline" id="not-ready"><h1>Not a full month of sales yet</h1><p>The report starts on the 1st of the first month Shopify holds${b.from ? ` (we hold sales from ${esc(dayY(b.from))})` : ''}. Out now and All products work already.</p></section>`
+    : `<section class="headline" id="not-ready"><h1>Getting 12 months of sales from Shopify.</h1><p>This page fills in when it’s done (after the first pull; the Shopify token needs read_reports). Out now and All products work already.</p></section>`;
   const bestShare = () => Math.round(((B().settings || {}).bestShare || 0.8) * 100);
 
   /* ---------- Brand report ---------- */
@@ -118,7 +112,7 @@
     const y = (v) => T + (H - T - Bm) * (1 - v / top);
     const bw = (W - L - R) / months.length, gap = Math.min(10, bw * 0.25);
     const ticks = []; for (let v = 0; v <= top; v += step) ticks.push(`<g><line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" class="gl"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${rs(v)}</text></g>`);
-    const sel = S().brandMonth, keys = months.map((m) => m.key), who = scope() === 'all' ? ['product', 'products'] : ['best seller', 'best sellers'];
+    const sel = null, keys = months.map((m) => m.key), who = scope() === 'all' ? ['product', 'products'] : ['best seller', 'best sellers'];
     const bars = months.map((m, i) => {
       const x = L + i * bw + gap / 2, w2 = bw - gap;
       const tip = `${monthText(m)}: sold ${exact(m.sold)}; ${inr.format(m.bestOut || 0)} ${who[m.bestOut === 1 ? 0 : 1]} ran out, about ${exact(m.lost)} missed (${m.pct}% of sales)${m.days && m.days < 28 ? ` · ${m.days} days` : ''}`;
@@ -129,7 +123,9 @@
         ${m.lost > 0 && bw > 30 ? `<text class="lv" x="${x + w2 / 2}" y="${y(m.sold + m.lost) - 5}" text-anchor="middle">${rs(m.lost)}</text>` : ''}
         <text x="${x + w2 / 2}" y="${H - 8}" text-anchor="middle">${narrow() ? ((months.length - 1 - i) % 2 ? '' : mShort(m.key)) : `${shortLabel(m.key, keys)}${m.days && m.days < 28 ? '*' : ''}`}</text></g>`;
     }).join('');
-    return `<svg class="bchart" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Sold and money missed each month">${ticks.join('')}${bars}</svg>`;
+    const st = agencyStart(), si = st ? months.findIndex((m) => m.from <= st && st <= m.to) : -1, sx = si >= 0 ? L + si * bw + bw * ((Date.parse(st) - Date.parse(months[si].from)) / 864e5) / Math.max(1, months[si].days) : st && months.length && st < months[0].from ? L : null;   // 4.2.0: "We started"
+    const mark = sx != null ? `<g class="started" aria-hidden="true"><line x1="${sx.toFixed(1)}" x2="${sx.toFixed(1)}" y1="${T - 16}" y2="${H - Bm}"/><text x="${(sx + 4).toFixed(1)}" y="${T - 8}">We started</text></g>` : '';
+    return `<svg class="bchart" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Sold and money missed each month">${ticks.join('')}${bars}${mark}</svg>`;
   }
   function niceStep(x) { const p = 10 ** Math.floor(Math.log10(Math.max(1, x))); const m = x / p; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * p; }
   /** "since 4 Nov": the day the stock-out began from the 12 months (whole days), else the engine's time; "since before …"
@@ -145,98 +141,198 @@
   const rk = (p) => { const n = rankOf(p); return n ? `<span class="rk" title="Rank on the best-seller list">#${n} by sales</span>` : ''; };
   /** 1.5.1: the sum on the row: days × pieces a day × price */
   const sum = (days, u, lost, md = null) => { if (md != null) days = md; return sumOf(days, u, lost); };
-  const sumOf = (days, u, lost) => (days > 0 && u > 0 && lost > 0 ? `<small class="why-sum" title="Days empty × pieces a day × price paid. Open the product for every step.">${(Math.round(days * 2) / 2).toLocaleString('en-IN')} days × ${(Math.round((u / days) * 100) / 100).toLocaleString('en-IN')} a day × ₹${inr.format(Math.round(lost / u))}</small>` : '');
+  const sumOf = (days, u, lost) => (days > 0 && u > 0 && lost > 0 ? `<small class="why-sum" title="Empty days × pieces a day × price paid. Open the product for every step.">${(Math.round(days * 2) / 2).toLocaleString('en-IN')} days × ${(Math.round((u / days) * 100) / 100).toLocaleString('en-IN')} a day × ₹${inr.format(Math.round(lost / u))}</small>` : '');
   const topUp = (p) => (p.allocation ? '<span class="best tu" title="Shopify shows a few pieces topped up from the warehouse: these gaps are refill waits, not counted in the totals (LOGIC §6)">website top-up</span>' : '');
   const offSale = (p) => (p.inactive ? '<span class="best tu off" title="Now draft or archived in Shopify. What it missed while on sale stays in the report.">No longer on sale</span>' : '');
   const heat = (d) => (d <= 0 ? 0 : d < 3 ? 1 : d < 8 ? 2 : d < 15 ? 3 : 4);
 
+  /* ---------- 4.2.0 Brand report: month first (one month at a time, or the 12 months) ---------- */
+  const DIM = (m) => new Date(Date.UTC(+m.slice(0, 4), +m.slice(5, 7), 0)).getUTCDate();
+  const monthsOf = (b) => b.months.filter((m) => m.days);
+  /** The month on screen: the one in the address (#brand/2026-10, #brand/12m), else the server's default (this month; last month on the 1st–3rd). */
+  function selOf(b) {
+    const ms = monthsOf(b), want = S().brandMonth;
+    if (want === 'year') return 'year';
+    if (want && ms.some((m) => m.key === want)) return want;
+    const d = b.home && b.home.defaultMonth;
+    return ms.some((m) => m.key === d) ? d : (ms[ms.length - 1] || {}).key;
+  }
+  const defaultMonth = (b) => { const d = b.home && b.home.defaultMonth, ms = monthsOf(b); return ms.some((m) => m.key === d) ? d : (ms[ms.length - 1] || {}).key; };
+  /** "November" (this year's), "December 2025"; a first month held in part: "27–30 Sep" */
+  const mWord = (b, m) => { const last = monthsOf(b).slice(-1)[0]; return partOf(m) ? `${+m.from.slice(8, 10)}–${day(m.to)}` : last && last.key.slice(0, 4) === m.key.slice(0, 4) ? MONTH[+m.key.slice(5, 7) - 1] : monthName(m.key); };
+  /** the bar: "November 2026 · so far, 1–24 Nov" */
+  const barText = (m) => (partOf(m) ? `${monthText(m)}${m.closed ? '' : ' · so far'}` : m.closed ? monthName(m.key) : narrow() ? `${mShort(m.key)} ${m.key.slice(0, 4)} · ${+m.from.slice(8, 10)}–${+m.to.slice(8, 10)} so far` : `${monthName(m.key)} · so far, ${+m.from.slice(8, 10)}–${day(m.to)}`);   // phones: "Nov 2026 · 1–24 so far"
+  const dates = (a, b) => (a === b ? day(a) : a.slice(0, 7) === b.slice(0, 7) ? `${+a.slice(8, 10)}–${day(b)}` : `${day(a)} – ${day(b)}`);
+  const prevText = (p) => (p.whole && p.from.slice(8) === '01' ? MONTH[+p.key.slice(5, 7) - 1] : dates(p.from, p.to));
+  const daysNum = (x) => (Math.round((+x || 0) * 2) / 2).toLocaleString('en-IN');
+  const agencyStart = () => { const s = (S().settings || {}).agencyStart; return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null; };
+  const WHY_SHORT = { later: 'out over 60 days', 'few-days': 'too new to know their sales', 'started-empty': 'already empty when our record began', gift: 'a gift line', unsure: 'Shopify’s stock record doesn’t add up', sib: 'another size was in stock' };
+  const whyShort = (x) => (x.why && x.why.length ? x.why.map((k) => WHY_SHORT[k] || k) : x.later > 0 ? [WHY_SHORT.later] : x.est ? ['they hardly sell'] : x.apart ? ['topped up from the warehouse'] : ['too new to know their sales']);
+  /** 4.2.0: a month that was only website top-ups (src/agency.js: its ₹ all apart) is not "ran out", as in the server's count */
+  const topUpOnly = (c) => (c.apart || 0) > 0 && c.apart >= (c.lost || 0) - 1;
+  const inMonth = (p, m) => { const c = p.months && p.months[m.key]; return !!c && (c.daysOut > 0 || (c.counted ?? c.lost) > 0) && !topUpOnly(c) && (scope() === 'all' || (rule() ? c.best : p.best)); };
+
+  /** The products of one month for the scope: paid = carry ₹ (the list), none = empty but no ₹ (the grey line). Their ₹ adds up to the month's. */
+  function monthList(b, m) {
+    const paid = [], none = [];
+    for (const p0 of b.products) {
+      if (!inMonth(p0, m)) continue;
+      const p = viewOf(b, p0), c = p.months[m.key], row = { ...p, id: p.variantId, x: { ...c, counted: c.counted ?? c.lost ?? 0 }, mrank: rule() ? c.rank ?? null : rankOf(p) };
+      (row.x.counted > 0 ? paid : none).push(row);
+    }
+    const byRank = (a, c) => (a.mrank || 1e9) - (c.mrank || 1e9) || c.x.counted - a.x.counted;
+    paid.sort(S().brandSort === 'rank' ? byRank : (a, c) => c.x.counted - a.x.counted || c.x.daysOut - a.x.daysOut || byRank(a, c));
+    none.sort((a, c) => byRank(a, c) || c.x.daysOut - a.x.daysOut);
+    return { paid, none };
+  }
+  /** One small cell per day of the month so far: in stock / empty / out part of the day / not on the website (hatched). */
+  function strip(b, p, m) {
+    const s = p.strip || '', from = (b.home && b.home.stripFrom) || m.from, n = DIM(m.key), base = (Date.parse(`${m.key}-01`) - Date.parse(from)) / 864e5;
+    const set = new Set((p.x && p.x.dates) || []), out = [];
+    for (let d = 1; d <= n; d++) {
+      const k = `${m.key}-${String(d).padStart(2, '0')}`, i = Math.round(base + d - 1);
+      if (k > m.to) break;   // days still to come are not drawn
+      const ch = k < m.from ? 'n' : s ? (i >= 0 && i < s.length ? s[i] : '-') : set.has(k) ? '0' : '2';
+      const [cls, what] = ch === '2' ? ['i', 'in stock'] : ch === '0' ? ['e', 'empty all day'] : ch === '1' ? ['h', 'out part of the day'] : ch === '-' ? ['o', 'not on the website'] : ch === 'n' ? ['o', 'before our record'] : ['f', 'still to come'];
+      out.push(`<i class="d ${cls}" title="${d} ${MON[+m.key.slice(5, 7) - 1]}: ${what}"></i>`);
+    }
+    return `<span class="dstrip" style="--days:${n}" aria-label="${esc(`${nDays(p.x ? p.x.daysOut : 0)} empty in ${monthName(m.key)}`)}">${out.join('')}</span>`;
+  }
+  const legend = '<span class="dlegend muted small"><i class="d i"></i>in stock <i class="d e"></i>empty <i class="d h"></i>out part of the day <i class="d o"></i>off the website</span>';
+  const outChip = (p) => (p.outNow ? `<span class="ochip out">${p.since ? `Out since ${day(p.since)}` : 'Out now'}</span>` : '');
+  const rankChip = (n) => (n ? `<span class="ochip rk2" title="Rank by sales on the best-seller list">#${n} seller</span>` : '');
+  const noSku = (p) => ({ ...p, sku: '' });   // 4.2.0: the code is in the CSV, not on the brand report's rows
+  /** "6.5 days × ₹1,240 a day" from the parts: the days that count × ₹ a day on them */
+  const half = (x) => { const v = Math.round((+x || 0) * 2) / 2, w = Math.floor(v); return v - w ? `${w || ''}½` : inr.format(w); };   // 6½, ½
+  const sumLine = (x) => {
+    const d = x.countedDays ?? x.moneyDays ?? x.daysOut, e = x.daysOut; if (!(d > 0 && x.counted > 0)) return '';
+    const a = exact(x.counted / d);
+    return Math.abs(d - e) < 0.25 ? `<small class="osum">${half(d)} day${d === 1 ? '' : 's'} × ${a} a day</small>`
+      : `<small class="osum" title="Only days we can price count. The day it ran out counts as half.">${a} a day × ${half(d)} of ${half(e)} day${e === 1 ? '' : 's'} counted</small>`;
+  };
+  const listRow = (b, p, m) => `<div class="orow" data-product="${esc(p.variantId)}" tabindex="0" role="button">
+      <span class="oname">${SW_PROD.cell(noSku(p), { size: 36, extra: offSale(p), sub: rankChip(p.mrank) + outChip(p) })}</span>
+      <span class="ostrip">${strip(b, p, m)}</span>
+      <span class="odays"><b>${daysNum(p.x.daysOut)}</b><small>empty day${p.x.daysOut === 1 ? '' : 's'}</small></span>
+      <span class="omoney"><b class="lostv">${money(p.x.counted)}</b>${sumLine(p.x)}</span></div>`;
+  /** "3 more were empty but we can't put a price on them: A, B, C (out over 60 days, or too new to know their sales). Ask the brand…" */
+  function zeroLine(rows, id, more = true) {
+    if (!rows.length) return '';
+    const why = [...new Set(rows.flatMap((p) => (p.x ? whyShort(p.x) : Object.values(p.months || {}).filter((x) => x.daysOut > 0).flatMap(whyShort))))], show = rows.slice(0, 6);
+    return `<p class="zero muted small" id="${id}">${inr.format(rows.length)}${more ? ' more' : ''} ${rows.length === 1 ? 'was' : 'were'} empty but we can’t put a price on ${rows.length === 1 ? 'it' : 'them'}: ${show.map((p) => `<button class="linkbtn nm" data-product="${esc(p.variantId)}">${esc(p.name)}</button>`).join(', ')}${rows.length > show.length ? '…' : ''} (${esc(why.join(', or '))}). Ask the brand if they still sell ${rows.length === 1 ? 'it' : 'them'}.</p>`;
+  }
+  const tile = (label, value, sub, { cls = '', href = '', id = '' } = {}) => `<${href ? `a href="${href}"` : 'div'} class="tile3 ${cls}"${id ? ` id="${id}"` : ''}><span class="tl">${label}</span><b class="tv">${value}</b>${sub ? `<small>${sub}</small>` : ''}</${href ? 'a' : 'div'}>`;
+  /** best sellers (or products) out right now and what one more day costs (the Out now page's ₹ a day) */
+  function nowTile(b) {
+    const sa = scope() === 'all', rows = [...(b.now || []), ...(sa ? b.nowAll || [] : [])].filter((p) => p.out && !p.inactive && !p.allApart), n = rows.length;
+    const perDay = rows.reduce((s, p) => s + (p.costPerDay || 0), 0);   // the same ₹ a day as Out now
+    return tile('Empty right now', inr.format(n), `${sa ? (n === 1 ? 'product' : 'products') : n === 1 ? 'best seller' : 'best sellers'}${n ? `${perDay > 0 ? ` · about ${rs(perDay)} a day` : ''}` : ' · all in stock'}`, { cls: n ? 'bad' : '', href: '#best', id: 'tile-now' });
+  }
+  function monthBar(b, sel) {
+    const ms = monthsOf(b), yr = sel === 'year', i = ms.findIndex((m) => m.key === sel), h = b.headline;
+    const pv = yr ? null : ms[i - 1], nx = yr ? null : ms[i + 1];
+    const label = yr ? (short(b) ? `Since ${dayY(h.from)}` : narrow() ? 'Last 12 months' : `Last 12 months · ${span(h.from, h.through)}`) : barText(ms[i]);
+    return `<div class="monthbar" id="monthbar"><div class="mstep-g"><button class="mstep" data-month="${pv ? pv.key : ''}" ${pv ? '' : 'disabled'} aria-label="Month before">◀</button><span class="mname" id="mname" aria-live="polite">${esc(label)}</span><button class="mstep" data-month="${nx ? nx.key : ''}" ${nx ? '' : 'disabled'} aria-label="Month after">▶</button></div>
+      <button class="y12${yr ? ' on' : ''}" data-month="${yr ? defaultMonth(b) : 'year'}" aria-pressed="${yr}">${short(b) ? 'All months' : '12 months'}</button></div>`;
+  }
+  /** young or loading stores say so in plain words (the reasons the report gives) */
+  const short = (b) => b.span.days < 330;
+  const storeName = (b) => (b.store && b.store.name) || 'The store';   // under 12 months held: "All months", "Since …"
+  function notes(b) {
+    const y = b.year || {}, held = b.span.days, out = [];
+    if (short(b)) out.push(`We only have sales since ${dayY(b.span.from)}. Older months appear after the next Shopify sync.`);
+    else if (y.done === false) out.push('Getting 12 months of sales from Shopify. This page fills in when it’s done.');
+    if (noList(b)) out.push('No best-seller list yet. It needs 60 days of sales. Showing all products.');
+    else if (held < 60) out.push(`A young store: ${inr.format(held)} days of sales so far. ₹ needs 60 days on the shelf, so most empty days carry no ₹ yet.`);
+    return out.map((t) => `<p class="note">${esc(t)}</p>`).join('');
+  }
+  const howSure = (b) => `<details class="how exp" id="how-sure"><summary>How sure are we?</summary>${b.rule ? howNew(b) : `<p>A day is “empty” when the shelf was empty all day: nobody could buy it. Half a day when it ran out or came back that day. Money missed = how fast it sells on days it is in stock × the price people paid × empty days, made busier or quieter for the month. All from Shopify’s own sales and stock reports, so every number can be checked there.</p>`}</details>`;
+
+  /** Past months, newest first: % of sales, missed, ran out, back in (days to refill); a divider where the agency started; the 12 months last. */
+  function pastMonths(b, sel) {
+    const sc = scope(), ms = monthsOf(b).slice().reverse(), h = { ...b.headline, ...b.headline[sc] }, max = Math.max(0.01, ...ms.map((m) => m[sc].pct || 0), h.pct || 0), st = agencyStart();
+    const bar = (x) => `<span class="pbar" aria-hidden="true"><i style="width:${Math.min(100, ((+x || 0) / max) * 100).toFixed(1)}%"></i></span>${x ? pct(x) : '–'}`;
+    const refill = (x) => (x > 0 ? nDays(x) : '–');
+    const startM = st && ms.length ? (st.slice(0, 7) < ms[ms.length - 1].key ? ms[ms.length - 1].key : st.slice(0, 7)) : null;
+    const divider = st ? `<tr class="started"><td colspan="5"><span>We started · ${esc(dayY(st))}</span></td></tr>` : '';
+    const rows = ms.map((m) => `<tr data-month="${m.key}" tabindex="0" class="${m.key === sel ? 'on' : ''}"><td>${esc(partOf(m) ? monthText(m) : `${mShort(m.key)} ${m.key.slice(0, 4)}`)}${m.closed ? '' : ' <small class="muted">so far</small>'}</td><td class="pc">${bar(m[sc].pct)}</td><td class="r"><b class="${m[sc].lost ? 'lostv' : 'muted'}">${m[sc].lost ? money(m[sc].lost) : '–'}</b></td><td class="r m-hide">${m[sc].out || '–'}</td><td class="r m-hide">${refill(m[sc].refill)}</td></tr>${m.key === startM ? divider : ''}`).join('');
+    return `<div class="panel" id="past"><div class="panel-head"><h2>Past months</h2><button class="btn ghost xs" id="csv-months">CSV</button></div>
+      <table class="mtable ptable"><thead><tr><th>Month</th><th>% of sales</th><th class="r">Missed</th><th class="r m-hide">Ran out</th><th class="r m-hide">Back in</th></tr></thead>
+      <tbody>${rows}<tr data-month="year" tabindex="0" class="yr${sel === 'year' ? ' on' : ''}"><td>${short(b) ? 'All months' : '12 months'}</td><td class="pc">${bar(h.pct)}</td><td class="r"><b class="lostv">${money(h.lost)}</b></td><td class="r m-hide">${inr.format(h.ranOut ?? h.bestRanOut ?? 0)}</td><td class="r m-hide">${refill(h.refill)}</td></tr></tbody></table>
+      <p class="muted small">% of sales = missed ÷ what ${sc === 'all' ? 'all products' : 'best sellers'} sold.<span class="m-hide"> Back in = how long a sold-out item usually took to come back.</span></p></div>`;
+  }
+
   function brandView() {
     if (need()) return loading;
     const b = B();
-    if (!b.ok) return notReady(b);
-    const sc = scope(), h = { ...b.headline, ...b.headline[sc], bestRanOut: (b.headline[sc] || {}).ranOut ?? b.headline.bestRanOut }, months = b.months.filter((m) => m.days).map(inScope), sel = S().brandMonth || defaultMonth(b);
-    S().brandMonth = sel;
-    const held = b.span.days;
-    const when = held >= 330 ? 'in the last 12 months' : `since ${dayY(h.from)}`;
-    const y = b.year || {};
-    const stale = b.basis === 'rows' ? `<p class="note">History from ${esc(dayY(b.span.from))}: the days we hold. Shopify’s 12 months are read after the next pull.</p>`
-      : (y.done === false || held < (b.rule ? 300 : 360)) ? `<p class="note">History from ${esc(dayY(b.span.from))}; the full 12 months after the next pull. Months before then are not read yet (not ₹0).${h.bestsellers ? ' Best sellers are ranked on Shopify’s last 26 weeks until then.' : ''}</p>` : '';
-    const all_ = b.products.map((p) => viewOf(b, p)), best = sc === 'all' ? b.products.filter((p) => p.lost > 0 || p.daysOut > 0).sort((a, c) => counted(c) - counted(a) || c.lost - a.lost) : all_.filter((p) => (b.rule ? p.daysOut > 0 : p.best && p.daysOut > 0)).sort((a, c) => counted(c) - counted(a) || c.lost - a.lost);   // website top-ups stay listed (tagged); their days aren't in the totals
-    const top = narrow() ? 8 : sc === 'all' ? 50 : 12, all = S().brandAll ? best.length : Math.min(top, best.length);
-    const ms = months.map((m) => m.key);   // only months held
-    const selM = months.find((m) => m.key === sel);
-    const who = sc === 'all' ? `${inr.format(h.ranOut)} product${h.ranOut === 1 ? '' : 's'}` : `${inr.format(h.bestRanOut)} of ${inr.format(h.bestsellers)} best sellers`;
-    return `
+    if (!b.ok || b.ready === false || !monthsOf(b).length) return notReady(b);
+    const sel = selOf(b);
+    return sel === 'year' ? yearView(b) : monthView(b, monthsOf(b).find((m) => m.key === sel));
+  }
+  function monthView(b, m) {
+    const sc = scope(), x = m[sc] || {}, { paid, none } = monthList(b, m), name = mWord(b, m);
+    const Y = sc === 'all' ? b.headline.all.products : m.listN ?? b.headline.bestsellers, X = x.out ?? paid.length + none.length;
+    const noun = sc === 'all' ? 'products' : 'best sellers';
+    const top = [...paid, ...none].filter((p) => p.mrank && p.mrank <= 10).sort((a, c) => a.mrank - c.mrank);
+    const pv = m.prev;
+    const lim = S().brandAll ? paid.length : Math.min(12, paid.length);
+    const sortBtn = (k, l) => `<button class="${(S().brandSort || 'money') === k ? 'on' : ''}" data-osort="${k}" aria-pressed="${(S().brandSort || 'money') === k}">${l}</button>`;
+    return `${monthBar(b, m.key)}
       <section class="headline brand-h">
-        <h1>${who} ${b.rule ? 'were empty at some point' : 'ran out'} ${when}. We missed ${b.rule ? 'an estimated' : 'about'} <span class="lost">${money(h.lost)}</span>${band(h) ? ` <span class="hsub">between ${band(h)}</span>` : ''}.</h1>
-        <p class="lead"><span class="m-hide">Missed on ${scopeName()}: about <b class="lostv">${money(h.lost)}</b>. That is </span>${pct(h.pct)} of what ${sc === 'all' ? 'the brand' : 'the best sellers'} sold (${money(h.sold)}), ${span(h.from, h.through)}.</p>
-        <p class="muted small m-hide">${sc === 'all' ? `Empty for about ${nDays(h.daysOut / Math.max(1, h.ranOut))} each.` : `Empty for about ${nDays(h.daysOut / Math.max(1, h.bestRanOut))} each. Best sellers = the products that make ${bestShare()}% of sales${b.rule ? ', by each quarter’s list' : ''}.`} Sales up to ${dayY(b.asOf.through)}; ${b.asOf.stockAt ? `stock read ${esc(A.dt(b.asOf.stockAt))}.` : 'stock at that day’s end.'}</p>
-        ${h.late > 0 ? `<p class="late" id="brand-late"><b class="lostv">${money(h.late)}</b> of it came after a product had already been empty for a month and was still not restocked.</p>` : ''}${ruleLines(b, h)}
-        ${narrow() && apartLine(h) ? `<details class="m-apart"><summary>+${money((h.est || 0) + (h.apart || 0))} not counted: see why</summary>${apartLine(h)}</details>` : apartLine(h)}${h.unsure ? `<p class="muted small">${h.unsure} product${h.unsure === 1 ? '' : 's'} left out: Shopify’s stock log doesn’t add up for ${h.unsure === 1 ? 'it' : 'them'}.</p>` : ''}
-        ${stale}
-        <details class="how exp"><summary>How we count, and is it true?</summary>${b.rule ? howNew(b) : `<p>A day is “out” when the shelf was empty all day: nobody could buy it. Half a day when it ran out or came back that day. “Would have sold” = how fast it sells on days it is in stock (last ${(b.settings || {}).paceMonths || 6} months), made busier or quieter for the month (Diwali sells more than June). Money missed = would have sold × the price people paid. All from Shopify’s own sales and stock reports, so every number can be checked there.</p>`}</details>
+        <h1>${Y ? `${inr.format(X)} of ${inr.format(Y)} ${noun} ran out in ${esc(name)}. ${esc(storeName(b))} missed about <span class="lost">${money(x.lost)}</span>.` : `No sales recorded in ${esc(name)} yet.`}</h1>
+        <p class="lead">${pct(x.pct)} of what ${sc === 'all' ? 'all products' : noun} sold (${money(x.sold ?? m.sold)}).</p>
+        ${top.length ? `<p class="top10" id="top10">${top.length} of the top 10 ran out: ${top.map((p) => `<button class="linkbtn nm" data-product="${esc(p.variantId)}">#${p.mrank} ${esc(p.name)}</button>`).join(', ')}.</p>` : ''}
+        ${howSure(b)}${notes(b)}
       </section>
-      <div class="bgrid">
-        <div class="panel"><div class="panel-head"><h2>Sold and missed, each month</h2><span class="muted small"><i class="sw sold"></i> sold${sc === 'all' ? '' : ' (best sellers)'} <i class="sw lost"></i> missed (${scopeName()})${months.some((m) => m.days < 28) ? ' · * part of the month' : ''}</span></div><div id="brand-chart">${chart(months, 600)}</div>
-          ${selM ? `<p class="month-line" id="month-line"><b>${esc(monthText(selM))}</b>: sold ${money(selM.sold)}, missed <b class="lostv">${money(selM.lost)}</b>${bandSmall(selM)}, ${inr.format(selM.bestOut || 0)} ${b.rule ? 'empty' : 'ran out'}. <button class="linkbtn" id="see-list">See list</button></p>` : ''}
-          ${topFive(best)}</div>
-        <div class="panel"><div class="panel-head"><h2>Month by month</h2><button class="btn ghost xs" id="csv-months">Download CSV</button></div>
-          <table class="mtable"><thead><tr><th>Month</th><th class="r">Sold</th><th class="r">Missed, ${scopeName()}</th><th class="r m-hide">Could have been</th><th class="r m-hide">% of sales</th><th class="r">${sc === 'all' ? 'Products' : 'Best sellers'} out</th><th class="r m-hide">Days out</th></tr></thead>
-          <tbody>${months.map((m) => `<tr data-month="${m.key}" tabindex="0" class="${m.key === sel ? 'on' : ''}"><td>${esc(monthText(m))}${m.days < 28 && !partOf(m) ? ` <small class="muted">${m.from === m.to ? day(m.from) : `${+m.from.slice(8, 10)}–${day(m.to)}`}</small>` : ''}</td><td class="r">${money(m.sold)}</td><td class="r">${`<b class="${m.lost ? 'lostv' : 'muted'}">${m.lost ? money(m.lost) : '–'}</b>${bandSmall(m)}`}</td><td class="r m-hide">${money(m.sold + m.lost)}</td><td class="r m-hide">${m.pct ? pct(m.pct) : '–'}</td><td class="r">${m.bestOut || '–'}</td><td class="r m-hide">${m.daysOut ? inr.format(Math.round(m.daysOut)) : '–'}</td></tr>`).join('')}</tbody>
-          <tfoot><tr><td>All of it</td><td class="r">${money(h.sold)}</td><td class="r"><b class="lostv">${money(h.lost)}</b>${bandSmall(h)}</td><td class="r m-hide">${money(h.sold + h.lost)}</td><td class="r m-hide">${pct(h.pct)}</td><td class="r">${sc === 'all' ? h.ranOut : h.bestRanOut}</td><td class="r m-hide">${inr.format(Math.round(h.daysOut))}</td></tr></tfoot></table></div>
+      <div class="tiles3" id="tiles3">
+        ${tile('Missed', money(x.lost), pv ? `${esc(prevText(pv))}: ${rs(pv[sc].lost)}` : '', { cls: x.lost > 0 ? 'bad' : '', id: 'tile-missed' })}
+        ${tile(X > 1 ? `Empty days, all ${inr.format(X)} added up` : 'Empty days', inr.format(Math.round(x.daysOut || 0)), pv ? `${esc(prevText(pv))}: ${inr.format(Math.round(pv[sc].empty))}` : '', { id: 'tile-empty' })}
+        ${nowTile(b)}
       </div>
-      <div class="panel"><div class="panel-head"><h2>Which ${sc === 'all' ? 'products' : 'best sellers'} ran out, and when</h2><span class="muted small">Days the shelf was empty each month. Darker = longer. Tap a month to see the list.</span></div>
-        ${best.length ? `<div class="heat" style="--mcols:${ms.length}"><div class="hrow hhead"><span></span>${ms.map((m) => `<button class="hm${m === sel ? ' on' : ''}" data-month="${m}" title="${esc(monthText(months[ms.indexOf(m)]))}">${shortLabel(m, ms)}</button>`).join('')}<span class="r" title="${esc(span(h.from, h.through))}">Missed</span></div>
-          ${best.slice(0, all).map((p) => `<div class="hrow"><span class="hp" data-product="${esc(p.variantId)}" tabindex="0" role="button">${SW_PROD.cell(p, { size: 32, extra: topUp(p) + offSale(p) })}</span>${ms.map((m) => { const x = p.months && p.months[m]; const d = x ? x.daysOut : 0; return `<span class="hc h${heat(d)}${m === sel ? ' on' : ''}" data-month="${m}" title="${esc(x && d ? `${p.name}: out ${nDays(d)} in ${monthName(m)} (${x.range}). ${rule() && !counted(x) ? whyNone(p, x) : `About ${exact(x.counted ?? x.lost)} missed`}${x.lost > (x.counted ?? x.lost) + 1 ? ` + ${exact(x.lost - x.counted)} not counted` : ''}.` : `${p.name}: in stock all of ${monthName(m)}`)}">${d ? Math.round(d) || '½' : ''}</span>`; }).join('')}<span class="r hv">${rule() && !counted(p) ? '<span class="muted">–</span>' : `<b class="lostv">${money(counted(p))}</b>`}${p.lost > (p.counted ?? p.lost) + 1 ? `<small class="muted" title="Not counted (a guess / warehouse top-up)"> +${rs(p.lost - p.counted)}<span class="ph-only"> not counted</span></small>` : ''}<small class="ph-only"> missed</small></span></div>`).join('')}
-          ${best.length > top ? `<div class="more"><button class="btn ghost" id="brand-all">${S().brandAll ? `Show the top ${top}` : `Show all ${best.length}`}</button></div>` : ''}</div>` : `<p class="muted">No ${scopeName(sc, true)} ran out in these months.</p>`}
-      </div>
-      ${monthDetail(b, sel)}`;
+      <div class="hgrid">
+        <div class="panel" id="olist"><div class="panel-head"><h2>${sc === 'all' ? 'Products' : 'Best sellers'} that ran out in ${esc(name)}</h2><span class="tb"><span class="osort" role="group" aria-label="Sort the list">${sortBtn('money', '₹')}${sortBtn('rank', 'Rank')}</span><button class="btn ghost xs" id="csv-month">CSV</button></span></div>
+          ${paid.length ? `${legend}<div class="olist">${paid.slice(0, lim).map((p) => listRow(b, p, m)).join('')}</div>${paid.length > 12 ? `<div class="more"><button class="btn ghost" id="brand-all">${S().brandAll ? 'Show the first 12' : `Show all ${paid.length}`}</button></div>` : ''}`
+            : `<p class="muted">${none.length ? `No ${scopeName(sc, true)} carries ₹ in ${esc(name)}.` : `No ${scopeName(sc, true)} ran out in ${esc(name)}.`}</p>`}
+          ${zeroLine(none, 'zero-month', paid.length > 0)}</div>
+        ${pastMonths(b, m.key)}
+      </div>`;
   }
-  /** 1.4.6: the first screen names them: the five that cost the most (counted), with days and the latest dates. */
-  function topFive(list) {
-    const five = list.filter((p) => counted(p) > 0).slice(0, 5);
-    if (!five.length) return '';
-    const last = (p) => { const k = Object.keys(p.months || {}).sort().reverse().find((m) => p.months[m].daysOut > 0); return k ? p.months[k].range : ''; };
-    return `<div class="top5"><h3>Cost the most</h3>${five.map((p) => `<div class="t5" data-product="${esc(p.variantId)}" tabindex="0" role="button">${SW_PROD.cell(p, { size: 32, sub: rk(p), extra: (p.best && scope() === 'all' ? '<span class="best">Best seller</span>' : '') + offSale(p) })}<span class="af"><b class="lostv">${money(counted(p))}</b><small>${p.times > 1 ? `${p.times} times, ` : ''}${esc(nDays(p.daysOut))} out · last ${esc(last(p))}</small></span></div>`).join('')}</div>`;
-  }
-  /** The newest month with money missed (else the newest). */
-  const defaultMonth = (b) => { const ms = b.months.filter((m) => m.days).map(inScope); return (ms.slice().reverse().find((m) => m.lost > 0) || ms[ms.length - 1] || {}).key; };
-  function monthRows(b, m, all = scope() === 'all') {
-    return b.products.map((p) => (all ? p : viewOf(b, p))).filter((p) => (all || rule() || p.best) && p.months && p.months[m] && (p.months[m].daysOut > 0 || p.months[m].lost > 0))
-      .map((p) => ({ ...p, id: p.variantId, x: { ...p.months[m], counted: p.months[m].counted ?? p.months[m].lost } })).sort((a, c) => c.x.counted - a.x.counted || c.x.lost - a.x.lost || c.x.daysOut - a.x.daysOut);
-  }
-  const notCounted = (x) => (x.lost > x.counted + 1 ? ` <small class="muted" title="${esc([x.est ? `${exact(x.est)} a guess (hardly sells)` : '', x.apart ? `${exact(x.apart)} warehouse top-up` : ''].filter(Boolean).join(' · '))}">+${rs(x.lost - x.counted)} not counted</small>` : '');
-  function monthDetail(b, m) {
-    if (!m) return '';
-    const mm = b.months.find((x) => x.key === m) || {};
-    const every = monthRows(b, m), cut = narrow() && !S().brandMonthAll && every.length > 10, rows = cut ? every.slice(0, 10) : every, ms = inScope(mm);   // phones: the 10 biggest, then Show all
-    const n = ms.bestOut ?? every.length;
-    const lead = rows.length ? `${monthText(mm)}: ${n} ${scope() === 'all' ? (n === 1 ? 'product' : 'products') : scopeName(scope(), n === 1)} ${b.rule ? 'were empty' : 'ran out'}. We missed about ${rs(ms.lost)}${band(ms) ? ` (${band(ms)})` : ''}.` : `${monthText(mm)}: no ${scopeName(scope(), true)} ran out.`;
-    const cols = [
-      { k: 'name', label: 'Product', f: (p) => SW_PROD.cell(p, { sub: rk(p), extra: topUp(p) + offSale(p) }) },
-      { k: 'range', label: 'Ran out on', f: (p) => `<span class="rng" title="${esc(p.x.range)}">${esc(p.x.range)}</span>`, val: (p) => p.x.dates[0] || '' },
-      { k: 'daysOut', label: 'Days out', r: 1, f: (p) => inr.format(Math.round(p.x.daysOut * 2) / 2), val: (p) => p.x.daysOut },
-      { k: 'units', label: 'Would have sold', r: 1, tip: 'How fast it sells on days it is in stock, for this month', f: (p) => `<span title="${(Math.round(countedUnits(p.x) * 10) / 10).toLocaleString('en-IN')} at ${pace(p.pace.perDay)}">${p.x.counted > 0 ? about(countedUnits(p.x)) : '–'}</span>`, val: (p) => countedUnits(p.x) },
-      { k: 'lost', label: 'Money missed', r: 1, f: (p) => `${lostOf(p, p.x)}${rule() && !p.x.counted ? `<small class="why-sum">${esc(whyNone(p, p.x))}</small>` : ''}${notCounted(p.x)}${sum(p.x.daysOut, p.x.units, p.x.lost, p.x.moneyDays)}`, val: (p) => p.x.counted },
-    ];
-    return `<section class="panel" id="month-detail"><div class="panel-head"><h2>${esc(lead)}</h2>
-        <span class="tb"><button class="btn ghost xs" id="csv-month">Download CSV</button></span></div>
-      <p class="muted small">${scopeName()} · ${mm.from ? span(mm.from, mm.to) : ''} · sold ${money(ms.sold ?? mm.sold ?? 0)} that month.</p>${apartLine(ms)}
-      ${A.table('brandmonth', cols, rows, 'Nothing ran out this month.', (p) => `<header><h3>${A.nameCell(p, false)}</h3><div class="mq">${lostOf(p, p.x)}<small>${rule() && !p.x.counted ? esc(whyNone(p, p.x)) : 'missed'}</small>${notCounted(p.x)}</div></header>
-        <div class="mfacts"><span>Ran out <b>${esc(p.x.range)}</b></span><span><b>${esc(nDays(p.x.daysOut))}</b></span>${p.x.counted > 0 ? `<span>would have sold <b>${units(countedUnits(p.x))}</b></span>` : ''}</div>`)}${cut ? `<div class="more"><button class="btn ghost" id="month-all">Show all ${every.length}</button></div>` : ''}</section>`;
+  function yearView(b) {
+    const sc = scope(), h = { ...b.headline, ...b.headline[sc] }, months = monthsOf(b).map(inScope), ms = months.map((m) => m.key);
+    const A = sc === 'all' ? h.ranOut : h.bestRanOut ?? h.ranOut, Bn = sc === 'all' ? h.products : h.bestsellers, noun = sc === 'all' ? 'products' : 'best sellers';
+    const when = b.span.days >= 330 ? 'in the last 12 months' : `since ${dayY(h.from)}`;
+    const list = b.products.map((p) => viewOf(b, p)).filter((p) => (sc === 'all' || rule() || p.best) && p.daysOut > 0 && !p.allApart);   // rule: viewOf keeps only the months it was on the list
+    const paid = list.filter((p) => counted(p) > 0).sort((a, c) => counted(c) - counted(a) || c.daysOut - a.daysOut), none = list.filter((p) => !(counted(p) > 0)).sort((a, c) => c.daysOut - a.daysOut);
+    const top = S().brandAll ? paid.length : Math.min(narrow() ? 8 : 12, paid.length);
+    return `${monthBar(b, 'year')}
+      <section class="headline brand-h">
+        <h1>${inr.format(A)} of ${inr.format(Bn)} ${noun} ran out ${when}. ${esc(storeName(b))} missed about <span class="lost">${money(h.lost)}</span> (${pct(h.pct)} of ${money(h.sold)} sold).</h1>
+        ${howSure(b)}${notes(b)}
+      </section>
+      <div class="hgrid">
+        <div class="ycol">
+          <div class="panel"><div class="panel-head"><h2>Sold and missed, each month</h2><span class="muted small"><i class="sw sold"></i> sold${sc === 'all' ? '' : ' (best sellers)'} <i class="sw lost"></i> missed${months.some((m) => m.days < 28) ? ' · * part of the month' : ''}${agencyStart() ? ' · <i class="sw st"></i> we started' : ''}</span></div><div id="brand-chart">${chart(months, 600)}</div></div>
+          <div class="panel"><div class="panel-head"><h2>Which ${noun} ran out, and when</h2><span class="muted small">Empty days each month. Darker = longer. Tap a month to open it.</span></div>
+            ${paid.length ? `<div class="heat" style="--mcols:${ms.length}"><div class="hrow hhead"><span></span>${ms.map((k) => `<button class="hm" data-month="${k}" title="${esc(monthText(months[ms.indexOf(k)]))}">${shortLabel(k, ms)}</button>`).join('')}<span class="r" title="${esc(span(h.from, h.through))}">Missed</span></div>
+              ${paid.slice(0, top).map((p) => `<div class="hrow"><span class="hp" data-product="${esc(p.variantId)}" tabindex="0" role="button">${SW_PROD.cell(noSku(p), { size: 32, sub: rankChip(rankOf(p)), extra: topUp(p) + offSale(p) })}</span>${ms.map((k) => { const x = p.months && p.months[k]; const d = x ? x.daysOut : 0; return `<span class="hc h${heat(d)}" data-month="${k}" title="${esc(x && d ? `${p.name}: ${nDays(d)} empty in ${monthName(k)} (${x.range}). ${counted(x) ? `About ${exact(counted(x))} missed` : 'No ₹'}.` : `${p.name}: in stock all of ${monthName(k)}`)}">${d ? Math.round(d) || '½' : ''}</span>`; }).join('')}<span class="r hv"><b class="lostv">${money(counted(p))}</b><small class="ph-only"> missed</small></span></div>`).join('')}
+              ${paid.length > 12 ? `<div class="more"><button class="btn ghost" id="brand-all">${S().brandAll ? 'Show the first 12' : `Show all ${paid.length}`}</button></div>` : ''}</div>` : `<p class="muted">No ${scopeName(sc, true)} carries ₹ in these months.</p>`}
+            ${zeroLine(none, 'zero-year', paid.length > 0)}</div>
+        </div>
+        ${pastMonths(b, 'year')}
+      </div>`;
   }
   function csvMonths() {
-    const b = B();
-    const sc = scope(), w = scopeName(sc);
-    const head = ['Month', 'From', 'To', `Sold ₹ (${w}, net, ex GST)`, `Missed ₹ (${w}, counted)`, '% of sales', `${sc === 'all' ? 'Products' : 'Best sellers'} out`, `Days out (${w})`, 'Of which after the first 30 days empty ₹', 'Not counted: a guess ₹', 'Not counted: warehouse top-up ₹', 'Missed ₹ (all products, every part)'];
-    const rows = b.months.filter((m) => m.days).map((m) => { const x = m[sc]; return [monthText(m), m.from, m.to, x.sold ?? m.sold, x.lost, x.pct, x.out, x.daysOut, x.late || 0, x.est, x.apart, m.lostAll]; });
+    const b = B(), sc = scope(), w = scopeName(sc);
+    const head = ['Month', 'From', 'To', `Sold ₹ (${w}, net, ex GST)`, `Missed ₹ (${w}, counted)`, '% of sales', `${sc === 'all' ? 'Products' : 'Best sellers'} that ran out`, `Empty days (${w})`, 'Days to refill (middle stock-out that came back)'];
+    const rows = monthsOf(b).map((m) => { const x = m[sc]; return [monthText(m), m.from, m.to, x.sold ?? m.sold, x.lost, x.pct, x.out, x.daysOut, x.refill ?? '']; });
     A.saveCsv(`brand-report-months-${sc === 'all' ? 'all-products' : 'best-sellers'}-${b.asOf.through}.csv`, [head, ...rows]);
   }
   function csvMonth() {
-    const b = B(), m = S().brandMonth;
-    const head = ['Month', 'Product', 'SKU', 'Variant ID', 'Best seller', 'Ran out on', 'Out-of-stock dates', 'Days out', 'Would have sold (units, counted)', 'Pace (units a day, in stock)', 'Average price paid ₹', 'Money missed ₹ (counted)', 'Not counted ₹ (a guess / top-up)', ...SW_PROD.CSV_HEAD];
-    const rows = monthRows(b, m).map((p) => [monthText(b.months.find((z) => z.key === m) || { key: m }), p.name, p.sku, p.variantId, p.best ? 'yes' : 'no', p.x.range, p.x.dates.join(' '), p.x.daysOut, Math.round(countedUnits(p.x) * 10) / 10, p.pace.perDay, p.price, p.x.counted, Math.max(0, p.x.lost - p.x.counted), ...SW_PROD.csv(p)]);
-    A.saveCsv(`brand-report-${scope() === 'all' ? 'all-products' : 'best-sellers'}-${m}.csv`, [head, ...rows]);
+    const b = B(), key = selOf(b), m = monthsOf(b).find((z) => z.key === key); if (!m) return;
+    const { paid, none } = monthList(b, m);
+    const head = ['Month', 'Product', 'SKU', 'Variant ID', 'Best seller', 'Rank', 'Empty dates', 'Empty days', 'Money missed ₹', 'No ₹ because', ...SW_PROD.CSV_HEAD];
+    const rows = [...paid, ...none].map((p) => [monthText(m), p.name, p.sku, p.variantId, p.best ? 'yes' : 'no', p.mrank || '', (p.x.dates || []).join(' '), p.x.daysOut, p.x.counted, p.x.counted > 0 ? '' : whyShort(p.x).join(' / '), ...SW_PROD.csv(p)]);
+    A.saveCsv(`brand-report-${scope() === 'all' ? 'all-products' : 'best-sellers'}-${m.key}.csv`, [head, ...rows]);
   }
 
   /* ---------- Best sellers now ---------- */
@@ -253,7 +349,7 @@
     const cols = [
       { k: 'name', label: sa ? 'Product' : 'Best seller', f: (p) => bestCell(p) },
       { k: 'out', label: 'Now', f: nowCell, val: (p) => (p.out ? 1 : 0) },
-      { k: 'daysOutMonth', label: `Days out in ${mShort(m.key)}`, r: 1, f: (p) => (p.daysOutMonth ? `<span title="${esc(p.rangeMonth)}">${inr.format(Math.round(p.daysOutMonth * 2) / 2)}</span>` : '–') },
+      { k: 'daysOutMonth', label: `Empty days in ${mShort(m.key)}`, r: 1, f: (p) => (p.daysOutMonth ? `<span title="${esc(p.rangeMonth)}">${inr.format(Math.round(p.daysOutMonth * 2) / 2)}</span>` : '–') },
       { k: 'lostMonth', label: `Missed in ${mShort(m.key)}`, r: 1, f: (p) => (p.lostMonth ? `<b class="lostv">${money(p.lostMonth)}</b>${sum(p.daysOutMonth, p.unitsMonth, p.missedMonthAll, p.moneyDaysMonth)}` : '–') },
       { k: 'pace', label: 'Sells', r: 1, tip: rule() ? 'Pieces a day when it is in stock, last 12 months' : 'How fast it sells on days it is in stock (last 6 months)', f: (p) => esc(pace(p.pace.perDay)), val: (p) => p.pace.perDay },
       { k: 'times', label: 'Times out, 12 months', r: 1, tip: 'Separate times it ran out in the last 12 months, and in how many months', f: (p) => (p.times ? `${inr.format(p.times)}× <span class="muted">in ${p.monthsOut} month${p.monthsOut === 1 ? '' : 's'}</span>` : '–') },
@@ -302,31 +398,30 @@
 
   /* ---------- events ---------- */
   const refocus = (sel) => document.querySelector(sel)?.focus({ preventScroll: true });   // a redraw must not lose the keyboard's place
-  /** The month's list, its heading clear of the sticky top bar. */
-  function toList() {
-    const el = document.getElementById('month-detail'); if (!el) return;
-    const bar = document.querySelector('.top'), pos = bar ? getComputedStyle(bar).position : '';
-    el.style.scrollMarginTop = `${(pos === 'sticky' || pos === 'fixed' ? bar.offsetHeight : 0) + 12}px`;
-    el.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  /** 4.2.0: show a month (or 'year' = the 12 months); the address keeps it (#brand/2026-10, #brand/12m) without a new history step */
+  function selectMonth(k, focusSel = null) {
+    if (!k) return;
+    S().brandMonth = k; S().brandAll = false;
+    try { const u = new URL(location.href); u.hash = `brand/${k === 'year' ? '12m' : k}`; history.replaceState(history.state, '', u); } catch { /* */ }
+    A.render();
+    if (focusSel) refocus(focusSel);
+    const bar = document.getElementById('monthbar'); if (bar && bar.getBoundingClientRect().top < 0) bar.scrollIntoView({ block: 'start' });
   }
   document.addEventListener('click', (e) => {
     if (!A) return;
-    const t = e.target.closest('[data-month], [data-scope], #csv-months, #csv-month, #brand-all, #month-all, #ads-all, #brand-retry, #see-list, [data-ads-copy], [data-ads-csv]');
+    const t = e.target.closest('[data-month], [data-scope], [data-osort], #csv-months, #csv-month, #brand-all, #ads-all, #brand-retry, [data-ads-copy], [data-ads-csv]');
     if (!t) return;
     if (t.dataset.scope) { setScope(t.dataset.scope); S().limit.brandmonth = 0; S().pick.clear(); const v = t.dataset.scope, back = () => refocus(`[data-scope="${v}"]`); A.render(); back(); Promise.resolve(A.reload()).then(() => { if (!document.activeElement || document.activeElement === document.body) back(); }); return; }
     if (t.id === 'brand-retry') { t.disabled = true; fetchBrand(true).then(() => A.render()); return; }
-    if (t.id === 'see-list') { toList(); return; }
-    if (t.dataset.month) {
-      const onChart = !!t.closest('#brand-chart'), box = onChart ? '#brand-chart .mb' : t.closest('.heat') ? '.heat .hm' : '.mtable tr';
-      S().brandMonth = t.dataset.month; S().limit.brandmonth = 0; A.render();
-      refocus(`${box}[data-month="${t.dataset.month}"]`);
-      if (!(onChart && narrow())) toList();   // phones: a tapped bar shows its numbers under the chart, "See list" goes down
+    if (t.dataset.month !== undefined) {
+      const k = t.dataset.month, step = t.classList.contains('mstep'), y12 = t.classList.contains('y12');
+      selectMonth(k, step ? `.mstep[aria-label="${t.getAttribute('aria-label')}"]:not([disabled])` : y12 ? '.y12' : `.ptable tr[data-month="${k}"]`);
       return;
     }
+    if (t.dataset.osort) { S().brandSort = t.dataset.osort; A.render(); refocus(`[data-osort="${t.dataset.osort}"]`); return; }
     if (t.id === 'csv-months') return csvMonths();
     if (t.id === 'csv-month') return csvMonth();
     if (t.id === 'brand-all') { S().brandAll = !S().brandAll; A.render(); return; }
-    if (t.id === 'month-all') { S().brandMonthAll = true; A.render(); return; }
     if (t.id === 'ads-all') { S().adsAll = true; A.render(); return; }
     if (t.dataset.adsCopy) { const rows = adsOf()[t.dataset.adsCopy] || []; A.copy(rows.map((p) => `${p.sku || p.id}\t${p.name}`).join('\n')); return; }
     if (t.dataset.adsCsv) adsCsv(t.dataset.adsCsv);
@@ -334,9 +429,11 @@
   document.addEventListener('keydown', (e) => {
     if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('[data-month]:not(button)')) { e.preventDefault(); e.target.click(); }
   });
-  /* the chart at its box's real width (no scaling), like the daily chart */
+  /* the chart at its box's real width (no scaling), like the daily chart; 4.2.0: the month bar sticks under the top bar */
   function after(view) {
     if (view !== 'brand' || !B() || !B().ok) return;
+    const mb = document.getElementById('monthbar'), top = document.querySelector('.top');
+    if (mb && top) { const cs = getComputedStyle(top); mb.style.top = `${(cs.position === 'sticky' || cs.position === 'fixed') && top.offsetHeight > 0 ? top.offsetHeight : 0}px`; }
     const box = document.getElementById('brand-chart'), svg = box && box.querySelector('svg');
     if (!svg) return;
     const w = Math.floor(box.clientWidth);
@@ -346,6 +443,6 @@
   window.SW_BRAND = {
     init(ctx) { A = ctx; },
     views: { brand: brandView, best: bestView, ads: adsView },
-    fetch: fetchBrand, reset() { if (A) { A.state.brand = null; } }, after, rs, pace, scopeLine, scope, paintScope,
+    fetch: fetchBrand, reset() { if (A) { A.state.brand = null; } }, after, rs, pace, scopeLine, scope, paintScope, selectMonth,
   };
 })();

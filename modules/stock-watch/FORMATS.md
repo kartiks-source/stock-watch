@@ -179,6 +179,8 @@ Outside `DATA_DIR`, in the app folder: `BUILD_SHA` (optional, SW-056): one line,
 
 ### `store.json` (schema 1)
 
+`settings.agencyStart` (4.2.0, optional): `"YYYY-MM-DD"`, the day the agency took the store on, or `null`. Only drawn on the brand report; no schema bump.
+
 `settings.timeZone` (SW-049): an IANA zone name or a fixed `+05:30`; when missing, the older `tzOffsetMin` (minutes east of UTC) is read instead (330 = `Asia/Kolkata`). No schema bump: the old field still reads.
 
 ```

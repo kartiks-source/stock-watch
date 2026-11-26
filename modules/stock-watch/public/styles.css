@@ -1193,3 +1193,106 @@ html.agency .rail a[data-view="reorder"], html.agency .owner { display: none !im
 .mtable td .band { margin-top: 1px; }
 .headline h1 .hsub { white-space: nowrap; }
 @media (min-width: 760px) { .bgrid .mtable th, .bgrid .mtable td { padding-left: 5px; padding-right: 5px; } }
+
+/* 4.2.0: the home page, month first (public/brand.js): a sticky month bar, the month's headline, three tiles, the products
+   that ran out (a day strip each) beside Past months; the 12 months behind one button */
+.monthbar { position: sticky; top: 60px; z-index: 15; display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--page); padding: 6px 0; margin: -6px 0 -4px; }
+.mstep-g { display: inline-flex; align-items: center; gap: 4px; min-width: 0; background: var(--card); border: 1px solid var(--line-2); border-radius: 10px; padding: 2px; }
+.mstep { border: 0; background: none; width: 36px; height: 34px; border-radius: 8px; color: var(--brand); font-size: 13px; cursor: pointer; flex: none; }
+.mstep:hover:not([disabled]) { background: var(--brand-wash); }
+.mstep[disabled] { color: var(--line-2); cursor: default; }
+.mname { font-weight: 600; font-size: 14.5px; padding: 0 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.y12 { border: 1px solid var(--line-2); background: var(--card); color: var(--ink-2); font-weight: 600; font-size: 13px; border-radius: 10px; padding: 0 14px; height: 40px; cursor: pointer; flex: none; }
+.y12:hover { border-color: var(--brand); color: var(--brand); }
+.y12.on { background: var(--brand); border-color: var(--brand); color: #fff; }
+.brand-h { flex-direction: column; align-items: flex-start; gap: 2px; }
+.brand-h .top10 { margin: 2px 0 0; font-size: 13.5px; color: var(--ink-2); }
+.linkbtn.nm { display: inline; min-height: 0 !important; width: auto; padding: 0; font: inherit; color: var(--brand); background: none; border: 0; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 2px; }
+.tiles3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.tile3 { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 10px 14px; display: flex; flex-direction: column; gap: 1px; min-width: 0; color: var(--ink); text-decoration: none; box-shadow: var(--shadow); }
+.tile3 .tl { font-size: 12.5px; color: var(--soft); font-weight: 600; }
+.tile3 .tv { font-size: 22px; font-weight: 650; letter-spacing: -.02em; line-height: 1.2; }
+.tile3.bad .tv { color: var(--lost); }
+.tile3 small { font-size: 12.5px; color: var(--soft); }
+a.tile3:hover { border-color: var(--brand); }
+.hgrid { display: grid; grid-template-columns: minmax(0, 1.75fr) minmax(300px, 1fr); gap: 14px; align-items: start; }
+.ycol { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+@media (max-width: 1279.98px) { .hgrid { grid-template-columns: minmax(0, 1fr); } }
+.olist { display: flex; flex-direction: column; }
+.orow { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(120px, 1fr) 70px 168px; gap: 12px; align-items: center; padding: 7px 4px; border-top: 1px solid var(--line); cursor: pointer; min-width: 0; }
+.orow:hover, .orow:focus-visible { background: var(--brand-wash2); }
+.oname { min-width: 0; } .oname .prod { max-width: 100%; }
+.odays, .omoney { display: flex; flex-direction: column; align-items: flex-end; text-align: right; line-height: 1.25; }
+.odays b { font-size: 14px; } .odays small { font-size: 11.5px; color: var(--soft); white-space: nowrap; }
+.omoney { min-width: 0; } .omoney b { font-size: 14.5px; } .osum { font-size: 11.5px; color: var(--soft); white-space: normal; line-height: 1.3; }
+.dstrip { display: grid; grid-template-columns: repeat(var(--days, 31), minmax(0, 1fr)); gap: 1px; max-width: 340px; }
+.d { display: inline-block; height: 14px; border-radius: 2px; background: #CFE5F3; }
+.d.e { background: var(--lost); } .d.h { background: #F4B6C2; } .d.o { background: #E3E7ED; } .d.f { background: transparent; box-shadow: inset 0 0 0 1px var(--line-2); }
+.dlegend { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; }
+.dlegend .d { width: 10px; height: 10px; margin-left: 6px; vertical-align: -1px; }
+.dlegend .d:first-child { margin-left: 0; }
+.ochip { display: inline-block; font-size: 11px; font-weight: 600; line-height: 16px; padding: 0 6px; border-radius: 999px; background: #EEF1F5; color: var(--ink-2); white-space: nowrap; }
+.ochip.out { background: var(--lost-soft); color: var(--lost); }
+.ochip.rk2 { background: var(--brand-wash); color: var(--brand-d); }
+.osort { display: inline-flex; border: 1px solid var(--line-2); border-radius: 8px; overflow: hidden; background: var(--card); }
+.osort button { border: 0; background: none; font: inherit; font-weight: 600; color: var(--soft); cursor: pointer; min-height: 28px; padding: 3px 10px; font-size: 12px; }
+.osort button.on { background: var(--brand); color: #fff; }
+.zero { margin: 4px 0 0; line-height: 1.5; }
+.zero .nm { color: var(--soft); }
+.ptable td.pc { white-space: nowrap; }
+.pbar { display: inline-block; width: 46px; height: 8px; border-radius: 4px; background: #EEF1F5; margin-right: 6px; vertical-align: 0; overflow: hidden; }
+.pbar i { display: block; height: 100%; background: var(--lost); border-radius: 4px; }
+.ptable tr.yr td { border-top: 1px solid var(--line-2); font-weight: 600; }
+.ptable tr.started td { padding: 0; cursor: default; }
+.ptable tr.started span { display: block; border-top: 2px dashed var(--brand); color: var(--brand-d); font-size: 11.5px; font-weight: 600; padding: 2px 8px; }
+.ptable tbody tr.started:hover { background: none; }
+.bchart .started line { stroke: var(--brand-d); stroke-width: 1.5; stroke-dasharray: 4 3; }
+.bchart .started text { fill: var(--brand-d); font-weight: 600; font-size: 11px; }
+.sw.st { background: none; border-left: 2px dashed var(--brand-d); border-radius: 0; width: 2px; }
+@media (max-width: 759.98px) {
+  .monthbar { top: 0; margin: 0 -10px; padding: 6px 10px; gap: 6px; }
+  .mstep { width: 44px; height: 44px; }
+  .mname { font-size: 13px; padding: 0 2px; }
+  .y12 { height: 48px; padding: 0 9px; font-size: 12px; }
+  .tiles3 { gap: 6px; }
+  .tile3 { padding: 7px 8px; border-radius: 10px; }
+  .tile3 .tl { font-size: 11px; line-height: 1.2; }
+  .tile3 .tv { font-size: 17px; }
+  .tile3 small { font-size: 11px; line-height: 1.25; }
+  .orow { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "n m" "n d" "s s"; gap: 2px 10px; padding: 8px 2px; }
+  .oname { grid-area: n; } .omoney { grid-area: m; } .ostrip { grid-area: s; align-self: center; margin-top: 4px; } .odays { grid-area: d; flex-direction: row; gap: 4px; align-items: baseline; justify-content: flex-end; }
+  .dstrip { max-width: none; }
+  .d { height: 16px; }
+  .orow .pl2 .plinks { display: none; }
+  .ptable th, .ptable td { padding: 6px 4px; }
+  .osort button { min-height: 44px; }
+}
+.orow .life { display: none; }   /* the list is about the month: active / draft is one tap away in the drawer */
+.orow .pl2 { flex-wrap: wrap; row-gap: 2px; }
+.hp { overflow: hidden; } .hrow .life { display: none; }
+html.agency .scope button { white-space: nowrap; }   /* 4.2.0: "Best sellers" on one line beside the five period buttons */
+@media (max-width: 759.98px) { html.agency .top .rdates { display: none; } html.agency .range button { padding: 5px 4px; } }   /* 4.2.0: five period buttons fit; the dates are in the line under the headline */
+@media (min-width: 760px) and (max-width: 1279.98px) { html.agency .range .wide-only { display: none; } html.agency .range .ph-d { display: inline; } html.agency .range button[data-days="month"] { text-transform: capitalize; } html.agency .range button { padding: 6px 9px; } }   /* 4.2.0: the five period buttons stay in the top bar on a small laptop */
+@media (min-width: 760px) and (max-width: 1099.98px) { html.agency .top .sync-pill span { display: none; } html.agency .top { gap: 10px; } }   /* 4.2.0: the sync dot alone on a small screen */
+/* 4.2.0 critic fixes: the 12-month grid stacks (name over the months) up to 1100 px; the store picker gives way on a tablet;
+   "off the website" is hatched; the rank chip is never cut */
+@media (min-width: 760px) and (max-width: 1099.98px) {
+  .hrow { grid-template-columns: repeat(var(--mcols, 12), minmax(0, 1fr)); row-gap: 4px; }
+  .hrow:not(.hhead) { padding: 6px 0; border-top: 1px solid var(--line); position: relative; }
+  .hrow .hp { grid-row: 1; grid-column: 1 / -1; padding-right: 116px; }
+  .hrow .hv { position: absolute; top: 8px; right: 0; text-align: right; }
+  .hhead > span { display: none; }
+}
+@media (min-width: 761px) and (max-width: 1010px) {
+  .top .brand b { display: none; }
+  .store-pill { min-width: 0; }
+  .store-pill .store-name { max-width: 120px; }
+}
+.d.o { background: repeating-linear-gradient(135deg, #C9D0DA 0 1.5px, #fff 1.5px 4px); box-shadow: inset 0 0 0 1px #C9D0DA; }
+.hrow .pl2, .orow .pl2 { flex-wrap: wrap; row-gap: 2px; }
+.ochip { flex: none; }
+@media (min-width: 760px) and (max-width: 1099.98px) {   /* tablets: the list's rows as two-line cards, like phones (name and ₹, then the day strip full width) */
+  .orow { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "n m" "n d" "s s"; gap: 2px 12px; }
+  .oname { grid-area: n; } .omoney { grid-area: m; } .ostrip { grid-area: s; margin-top: 4px; } .odays { grid-area: d; flex-direction: row; gap: 4px; align-items: baseline; justify-content: flex-end; }
+  .dstrip { max-width: none; }
+}

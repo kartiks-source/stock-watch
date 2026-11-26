@@ -38,37 +38,65 @@ async function open(width, height, url, ready) {
 }
 const sideways = (pg) => pg.evaluate(() => document.documentElement.scrollWidth - innerWidth);
 
-test('1440: the Brand report is home: headline sentence with dates, chart, month table, grid, month list, CSV', opts, async () => {
+/* 4.2.0: month first. The home page opens on this month (last month on the 1st–3rd), one month at a time, Past months beside it */
+test('1440: the Brand report is home, month first: bar, headline, three tiles, the list adds up, Past months, the 12 months, CSV', opts, async () => {
   const pg = await open(1440, 900, '/?store=sammsara-demo', '#view .brand-h h1');
   assert.equal(await pg.getAttribute('#tabs a.on', 'data-view'), 'brand');
   assert.deepEqual(await pg.$$eval('#tabs a .rl', (a) => a.map((x) => x.textContent)), ['Brand report', 'Out now', 'Ads: push / pause', 'Restock list', 'All products']);
-  assert.match(await pg.textContent('.brand-h h1'), /^[\d,]+ (products?|of [\d,]+ best sellers) ran out (in the last 12 months|since \d+ \w{3} \d{4})\. We missed about ₹[\d.,]+( lakh| Cr|k)?\.$/);
-  assert.match(await pg.textContent('.brand-h .lead'), /^Missed on (all products|best sellers): about ₹[\d.,]+( lakh| Cr|k)?\. That is [\d.]+% of what the brand sold \(₹.+\), \d+ \w{3}( \d{4})? – \d+ \w{3} \d{4}\.$/);
-  assert.match(await pg.textContent('.brand-h .small'), /Sales up to \d+ \w{3} \d{4}; stock read/);
-  assert.ok(await pg.isHidden('.top .range'), 'the period buttons step aside: 12 months');
-  assert.ok(await pg.$('#brand-chart svg .mb'), 'month bars');
-  const months = await pg.$$eval('.mtable tbody tr', (r) => r.map((x) => x.dataset.month));
-  assert.ok(months.length >= 2, months.join());
-  /* the month total is the sum of the rows (the page shows the server's numbers) */
-  const j = await (await fetch(`${base}/api/brand?store=sammsara-demo`)).json();
-  assert.equal(j.headline.lost, j.months.reduce((s, m) => s + m.lost, 0));
-  assert.equal(j.headline.all.lost, j.months.reduce((s, m) => s + m.all.lost, 0));
-  /* click a month → its list */
-  await pg.click(`.mtable tbody tr[data-month="${months[1]}"]`);
-  await pg.waitForSelector(`.mtable tbody tr.on[data-month="${months[1]}"]`);
-  assert.match(await pg.textContent('#month-detail h2'), /^\w+ \d{4}: (\d+ (best sellers?|products?) ran out\. We missed about ₹.+\.|no (best seller|product) ran out\.)$/);
-  const row = await pg.$('#month-detail tbody tr');
+  const j = await (await fetch(`${base}/api/brand?store=sammsara-demo`)).json(), ms = j.months.filter((m) => m.days), cur = ms.find((m) => m.key === j.home.defaultMonth);
+  assert.equal(await pg.getAttribute('.scope button.on', 'data-scope'), 'best', 'Best sellers by default');
+  assert.match(await pg.textContent('#mname'), cur.closed ? /^\w+ \d{4}$/ : /^\w+ \d{4} · so far, 1–\d+ \w{3}$/);
+  assert.match(await pg.textContent('.brand-h h1'), /^[\d,]+ of [\d,]+ best sellers ran out in \w+( \d{4})?\. Sammsara \(demo\) missed about ₹[\d.,]+( lakh| Cr|k)?\.$/);   // 4.2.0: the store's name
+  assert.ok((await pg.textContent('.brand-h h1')).startsWith(`${cur.best.out} of ${cur.listN} best sellers`), 'X of Y = the API');
+  assert.match(await pg.textContent('.brand-h .lead'), /^[\d.]+% of what best sellers sold \(₹.+\)\.$/);
+  assert.equal(await pg.textContent('#how-sure > summary'), 'How sure are we?');
+  assert.ok(await pg.isHidden('.top .range'), 'the period buttons step aside');
+  const tl = await pg.$$eval('.tiles3 .tl', (e) => e.map((x) => x.textContent));
+  assert.equal(tl.length, 3); assert.equal(tl[0], 'Missed'); assert.match(tl[1], /^Empty days(, all \d+ added up)?$/); assert.equal(tl[2], 'Empty right now');
+  assert.match(await pg.textContent('#tile-empty .tv'), /^[\d,]+$/, 'empty days: a whole number');
+  assert.ok(!/ · all in stock/.test(await pg.textContent('#tile-now')) || cur.best.out >= 0);
+  if (cur.prev) assert.match(await pg.textContent('#tile-missed small'), /^(\d+–\d+ \w{3}|\w+): ₹/);
+  assert.equal(await pg.getAttribute('#tile-now', 'href'), '#best');
+  assert.equal(await pg.$('#brand-chart'), null, 'no chart in a month');
+  assert.equal(await pg.$('.top5'), null, 'no "Cost the most"');
+  assert.ok(!/Could have been|–₹/.test(await pg.innerText('#view')), 'no "Could have been", no ₹ range');
+  /* the list's ₹ adds up to the headline (rows + Show all) */
+  const money = (x) => +x.replace(/[^\d]/g, '');
+  if (await pg.$('#brand-all')) await pg.click('#brand-all');
+  const rows = await pg.$$eval('#olist .orow .omoney b span', (e) => e.map((x) => x.title));
+  const sum = rows.reduce((s2, x) => s2 + money(x), 0);
+  assert.ok(Math.abs(sum - cur.best.lost) <= rows.length, `list ${sum} = headline ${cur.best.lost}`);
+  const row = await pg.$('#olist .orow');
   if (row) {
-    assert.ok(await row.$('.prod .thumb'), 'picture (or its box) on the left');
-    assert.ok(await row.$('.prod .psku'), 'product code under the name');
-    assert.match(await row.textContent(), /about \d+|less than 1|–/);
+    assert.ok(await row.$('.prod .thumb'), 'picture on the left');
+    assert.equal((await row.$$('.dstrip .d')).length, +cur.to.slice(8, 10) - +cur.from.slice(8, 10) + 1, 'one cell per day of the month so far (days to come are not drawn)');
+    assert.match(await row.innerText(), /empty days?/);
   }
-  assert.ok(await pg.$('.heat .hrow .hc'), 'best seller × month grid');
-  const [dl] = await Promise.all([pg.waitForEvent('download'), pg.click('#csv-months')]);
-  const csv = fs.readFileSync(await dl.path(), 'utf8');
-  assert.match(csv, /^\ufeff?"Month","From","To","Sold ₹ \((all products|best sellers), net, ex GST\)","Missed ₹ \((all products|best sellers), counted\)"/);
+  /* Past months: newest first, the month on screen marked, the 12 months last; a row opens its month and the address keeps it */
+  const past = await pg.$$eval('.ptable tbody tr[data-month]', (r) => r.map((x) => x.dataset.month));
+  assert.deepEqual(past, [...ms.map((m) => m.key).reverse(), 'year']);
+  assert.equal(await pg.getAttribute('.ptable tr.on', 'data-month'), cur.key);
+  const prev = ms[ms.indexOf(cur) - 1];
+  await pg.click(`.ptable tr[data-month="${prev.key}"]`); await pg.waitForSelector(`.ptable tr.on[data-month="${prev.key}"]`);
+  assert.ok(pg.url().endsWith(`#brand/${prev.key}`), pg.url());
+  assert.ok((await pg.textContent('.ptable tr.on td:nth-child(3)')).length > 0);
+  await pg.click('.mstep[aria-label="Month after"]'); await pg.waitForSelector(`.ptable tr.on[data-month="${cur.key}"]`);
+  await pg.click('.mstep[aria-label="Month before"]'); await pg.waitForSelector(`.ptable tr.on[data-month="${prev.key}"]`);
+  await pg.reload(); await pg.waitForSelector(`.ptable tr.on[data-month="${prev.key}"]`);   // the address keeps the month
   const [dl2] = await Promise.all([pg.waitForEvent('download'), pg.click('#csv-month')]);
-  assert.match(fs.readFileSync(await dl2.path(), 'utf8'), /"Out-of-stock dates".*"Shopify admin link","Website link"/);
+  assert.match(fs.readFileSync(await dl2.path(), 'utf8'), /"Empty dates","Empty days","Money missed ₹".*"Shopify admin link","Website link"/);
+  const [dl] = await Promise.all([pg.waitForEvent('download'), pg.click('#csv-months')]);
+  assert.match(fs.readFileSync(await dl.path(), 'utf8'), /^﻿?"Month","From","To","Sold ₹ \(best sellers, net, ex GST\)","Missed ₹ \(best sellers, counted\)".*"Days to refill/);
+  assert.match(await pg.textContent('.ptable thead'), /Back in/);
+  /* the 12 months */
+  await pg.click('.y12'); await pg.waitForSelector('#brand-chart svg .mb');
+  assert.ok(pg.url().endsWith('#brand/12m'));
+  assert.match(await pg.textContent('.brand-h h1'), /^[\d,]+ of [\d,]+ best sellers ran out (in the last 12 months|since \d+ \w{3} \d{4})\. Sammsara \(demo\) missed about ₹[\d.,]+( lakh| Cr|k)? \([\d.]+% of ₹.+ sold\)\.$/);
+  assert.ok(await pg.$('.heat .hrow .hc'), 'best seller × month grid');
+  assert.equal(await pg.getAttribute('.ptable tr.on', 'data-month'), 'year');
+  await pg.click(`.heat .hm[data-month="${prev.key}"]`); await pg.waitForSelector(`.ptable tr.on[data-month="${prev.key}"]`);
+  /* a fresh visit starts on the default */
+  await pg.goto(`${base}/?store=sammsara-demo&f=1#brand`); await pg.waitForSelector(`.ptable tr.on[data-month="${cur.key}"]`);
   for (const w of [1280, 1920]) { await pg.setViewportSize({ width: w, height: 900 }); await pg.waitForTimeout(150); assert.equal(await sideways(pg), 0, `${w}: no sideways scroll`); }
   await pg.setViewportSize({ width: 1440, height: 900 });
   assert.equal(await sideways(pg), 0);
@@ -77,7 +105,7 @@ test('1440: the Brand report is home: headline sentence with dates, chart, month
 
 test('1440: Best sellers now, Ads push / pause, drawer with 12 months on the shelf', opts, async () => {
   const pg = await open(1440, 900, '/?store=sammsara-demo#best', '#view table[data-table="best"] tbody tr');
-  assert.match(await pg.textContent('#view .headline h1'), /^(\d+ of \d+ products are out right now\.|All \d+ products are in stock\.)$/);
+  assert.match(await pg.textContent('#view .headline h1'), /^(\d+ of \d+ (products|best sellers) are out right now\.|All \d+ (products|best sellers) are in stock\.)$/);   // 4.2.0: Best sellers by default
   assert.match(await pg.textContent('#view .headline p'), /This month so far \(\d+ \w{3} – \d+ \w{3} \d{4}\)|Nothing missed this month so far/);
   const first = await pg.textContent('#view table[data-table="best"] tbody tr td:nth-child(2)');
   assert.match(first, /^(Out( since \d+ \w{3})?|In stock · [\d,]+)/);
@@ -117,11 +145,21 @@ test('390: Brand report, Best sellers now and Ads usable on a phone, no sideways
   const pg = await open(390, 844, '/?store=sammsara-demo#brand', '#view .brand-h h1');
   assert.deepEqual(await pg.$$eval('#tabs a .rs', (a) => a.filter((x) => getComputedStyle(x).display !== 'none').map((x) => x.textContent)), ['Report', 'Out now', 'Ads', 'Restock', 'Products']);
   assert.equal(await sideways(pg), 0, 'brand');
-  const m = await pg.$$eval('.mtable tbody tr', (r) => r.map((x) => x.dataset.month));
-  await pg.click(`.mtable tbody tr[data-month="${m[0]}"]`);
-  await pg.waitForSelector(`.mtable tbody tr.on[data-month="${m[0]}"]`);
-  assert.ok(await pg.$('#month-detail'));
+  /* 4.2.0: the month bar sticks; three small tiles in one row; rows are two-line cards with the day strip full width; Past months = Month, %, Missed */
+  const lay = await pg.evaluate(async () => {
+    const t = [...document.querySelectorAll('.tiles3 .tile3')].map((e) => e.getBoundingClientRect()), r = document.querySelector('#olist .orow');
+    const strip = r && r.querySelector('.dstrip').getBoundingClientRect(), name = r && r.querySelector('.oname').getBoundingClientRect();
+    const cols = [...document.querySelectorAll('.ptable thead th')].filter((e) => getComputedStyle(e).display !== 'none').map((e) => e.textContent);
+    window.scrollTo(0, 1200); await new Promise((ok) => setTimeout(ok, 100));
+    return { oneRow: t.length === 3 && new Set(t.map((x) => Math.round(x.top))).size === 1, strip: strip ? strip.width : 0, below: strip ? strip.top >= name.bottom - 1 : true, cols, bar: document.getElementById('monthbar').getBoundingClientRect().top };
+  });
+  assert.ok(lay.oneRow, 'tiles in one row'); assert.ok(lay.below && (lay.strip === 0 || lay.strip > 200), `strip on line 2, wide: ${lay.strip}`);
+  assert.deepEqual(lay.cols, ['Month', '% of sales', 'Missed']); assert.ok(Math.abs(lay.bar) <= 1, `sticky bar at the top: ${lay.bar}`);
+  const m = await pg.$$eval('.ptable tbody tr[data-month]', (r) => r.map((x) => x.dataset.month));
+  await pg.click(`.ptable tbody tr[data-month="${m[1]}"]`);
+  await pg.waitForSelector(`.ptable tbody tr.on[data-month="${m[1]}"]`);
   assert.equal(await sideways(pg), 0, 'brand month');
+  await pg.click('.y12'); await pg.waitForSelector('#brand-chart svg'); assert.equal(await sideways(pg), 0, 'brand 12 months');
   for (const [hash, sel] of [['best', '#view .mcard'], ['ads', '.ads2 .arow']]) {
     await pg.goto(`${base}/?store=sammsara-demo#${hash}`); await pg.waitForSelector(sel);
     assert.equal(await sideways(pg), 0, hash);
@@ -195,42 +233,43 @@ test('1440 + 390: drawer opens at once, fold open by default and remembered, det
 });
 
 /* 1.4.4: Best sellers | All products — All products by default, remembered, ?view=best; the same ₹ on the pages' line */
-test('1440: the switch: All products by default, every part follows, remembered; ?view=best; pages show the same ₹ for the scope', opts, async () => {
+test('1440: the switch: Best sellers by default, every part follows, remembered; ?view=all; pages show the same ₹ for the scope', opts, async () => {
   const pg = await open(1440, 900, '/?store=sammsara-demo#brand', '.brand-h h1');
-  const j = await (await fetch(`${base}/api/brand?store=sammsara-demo`)).json();
-  assert.equal(await pg.getAttribute('.scope button.on', 'data-scope'), 'all', 'All products by default');
-  assert.match(await pg.textContent('.brand-h h1'), /^[\d,]+ products? ran out/);
+  const j = await (await fetch(`${base}/api/brand?store=sammsara-demo`)).json(), cur = j.months.find((m) => m.key === j.home.defaultMonth);
+  assert.equal(await pg.getAttribute('.scope button.on', 'data-scope'), 'best', 'Best sellers by default (4.2.0)');
   const money = (x) => { const v = Math.round(x), a = Math.abs(v); const one = (n) => (n >= 10 ? Math.round(n) : Math.round(n * 10) / 10).toLocaleString('en-IN'); return a >= 1e7 ? `₹${one(a / 1e7)} Cr` : a >= 1e5 ? `₹${one(a / 1e5)} lakh` : a >= 1e3 ? `₹${one(a / 1e3)}k` : `₹${a}`; };
-  assert.ok((await pg.textContent('.brand-h .lead')).includes(money(j.headline.all.lost)), 'headline = all products');
-  assert.match(await pg.textContent('.mtable thead'), /Missed, all products/);
-  await pg.click('.scope button[data-scope="best"]');
-  await pg.waitForSelector('.scope button.on[data-scope="best"]');
   assert.match(await pg.textContent('.brand-h h1'), /^[\d,]+ of [\d,]+ best sellers ran out/);
-  assert.ok((await pg.textContent('.brand-h .lead')).includes(money(j.headline.best.lost)), 'headline = best sellers');
-  assert.match(await pg.textContent('#month-detail .muted.small'), /^best sellers ·/);
-  assert.equal(await pg.evaluate(() => localStorage.getItem('sw-brand-scope')), 'best');
+  assert.ok((await pg.textContent('.brand-h h1')).includes(money(cur.best.lost)), 'headline = best sellers, this month');
+  assert.match(await pg.textContent('#olist h2'), /^Best sellers that ran out in /);
+  await pg.click('.scope button[data-scope="all"]');
+  await pg.waitForSelector('.scope button.on[data-scope="all"]');
+  assert.match(await pg.textContent('.brand-h h1'), /^[\d,]+ of [\d,]+ products ran out/);
+  assert.ok((await pg.textContent('.brand-h h1')).includes(money(cur.all.lost)), 'headline = all products');
+  assert.match(await pg.textContent('#olist h2'), /^Products that ran out in /);
+  assert.equal(await pg.evaluate(() => localStorage.getItem('sw-brand-scope')), 'all');
   await pg.reload(); await pg.waitForSelector('.brand-h h1');
-  assert.equal(await pg.getAttribute('.scope button.on', 'data-scope'), 'best', 'remembered');
+  assert.equal(await pg.getAttribute('.scope button.on', 'data-scope'), 'all', 'remembered');
+  await pg.click('.scope button[data-scope="best"]'); await pg.waitForSelector('.scope button.on[data-scope="best"]');
   /* the pages' line: the same scope, the period's dates */
   await pg.goto(`${base}/?store=sammsara-demo#products`); await pg.waitForSelector('#scope-line');
-  const r = await (await fetch(`${base}/api/report?days=30&store=sammsara-demo`)).json();
+  const r = await (await fetch(`${base}/api/report?days=month&store=sammsara-demo`)).json();
   const bestCounted = r.products.reduce((s, p) => s + (p.abc === 'A' ? p.lostCounted || 0 : 0), 0);
   const line = await pg.textContent('#scope-line');
-  const rb = await (await fetch(`${base}/api/report?days=30&best=1&store=sammsara-demo`)).json();
+  const rb = await (await fetch(`${base}/api/report?days=month&best=1&store=sammsara-demo`)).json();   // 4.2.0: All products opens on This month
   assert.ok(Math.abs(rb.totals.lost - bestCounted) <= rb.products.length, `best=1 total ${rb.totals.lost} = its rows ${bestCounted}`);
   assert.ok(line.includes(`${money(rb.totals.lost)} missed · best sellers`), line);
   assert.match(line, /\d+ \w{3} – \d+ \w{3}$/);
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } }), p2 = await ctx.newPage();
-  await p2.goto(`${base}/?store=sammsara-demo&view=best#brand`); await p2.waitForSelector('.brand-h h1');
-  assert.match(await p2.textContent('.brand-h h1'), /^[\d,]+ of [\d,]+ best sellers ran out/, '?view=best');
+  await p2.goto(`${base}/?store=sammsara-demo&view=all#brand`); await p2.waitForSelector('.brand-h h1');
+  assert.match(await p2.textContent('.brand-h h1'), /^[\d,]+ of [\d,]+ products ran out/, '?view=all');
   await ctx.close();
   assert.equal(await sideways(pg), 0);
   assert.deepEqual(pg.errors, []);
 });
 
-/* 1.4.6 (UI critic, 25 Nov) */
-test('1440: the chart follows the switch (hover too); grid and "Cost the most" sort by counted money; the heading names a month clear of the bar', opts, async () => {
-  const pg = await open(1440, 900, '/?store=sammsara-demo#brand', '.brand-h h1');
+/* 1.4.6 (UI critic, 25 Nov); 4.2.0: the chart and the grid live in the 12 months */
+test('1440: the 12 months: the chart follows the switch (hover too); the grid sorts by money, ₹0 folds into one line; focus stays', opts, async () => {
+  const pg = await open(1440, 900, '/?store=sammsara-demo#brand/12m', '#brand-chart .mb');
   const j = await (await fetch(`${base}/api/brand?store=sammsara-demo`)).json();
   const exact = (x) => `₹${new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(Math.round(x))}`;
   for (const sc of ['all', 'best']) {
@@ -242,15 +281,85 @@ test('1440: the chart follows the switch (hover too); grid and "Cost the most" s
     }
     const cnt = await pg.$$eval('.heat .hrow:not(.hhead) .hv b span', (e) => e.map((x) => +x.title.replace(/[^\d]/g, '')));
     assert.deepEqual(cnt, cnt.slice().sort((a, b) => b - a), `${sc}: grid by counted money`);
-    if (cnt.some((x) => x > 0)) { assert.ok(cnt[0] > 0); assert.ok(await pg.$('.top5 .t5 .lostv'), 'the first screen names them'); }
+    assert.ok(cnt.every((x) => x > 0), `${sc}: no ₹0 rows in the grid`);
+    const zero = await pg.$('#zero-year'); if (zero) assert.match(await zero.textContent(), /^\d+( more)? (was|were) empty but we can’t put a price on (it|them): .+\(.+\)\. Ask the brand if they still sell (it|them)\.$/);
   }
   assert.equal(await pg.evaluate(() => document.activeElement?.dataset.scope), 'best', 'focus stays on the switch');
   const key = j.months.filter((x) => x.days)[0].key;
-  await pg.focus(`.mtable tr[data-month="${key}"]`); await pg.keyboard.press('Enter'); await pg.waitForTimeout(700);
+  await pg.focus(`.ptable tr[data-month="${key}"]`); await pg.keyboard.press('Enter'); await pg.waitForSelector(`.ptable tr.on[data-month="${key}"]`);
   assert.equal(await pg.evaluate(() => document.activeElement?.dataset.month), key, 'focus stays on the month');
-  const pos = await pg.evaluate(() => [document.querySelector('#month-detail h2').getBoundingClientRect().top, document.querySelector('.top').getBoundingClientRect().bottom]);
-  assert.ok(pos[0] >= pos[1], `heading below the bar: ${pos}`);
   assert.deepEqual(pg.errors, []);
+});
+
+/* 4.2.0: the agency's start date (Data → "We started on"): a dashed line on the 12-month chart and a line in Past months; none when unset */
+test('1440: "We started on": set on Data, drawn on the chart and in Past months; cleared, nothing shows', opts, async () => {
+  const j = await (await fetch(`${base}/api/brand?store=sammsara-demo`)).json(), ms = j.months.filter((m) => m.days), mid = ms[Math.floor(ms.length / 2)];
+  const pg = await open(1440, 900, '/?store=sammsara-demo#data', '#f-agencyStart');
+  assert.equal(await pg.inputValue('#f-agencyStart'), '');
+  await pg.fill('#f-agencyStart', `${mid.key}-10`); await pg.click('#save-settings'); await pg.waitForSelector('#toast:not([hidden])');
+  await pg.goto(`${base}/?store=sammsara-demo&s=1#brand/12m`); await pg.waitForSelector('#brand-chart .started line', { state: 'attached' });
+  assert.match(await pg.textContent('#brand-chart .started'), /We started/);
+  assert.match(await pg.textContent('.ptable tr.started'), new RegExp(`We started · 10 \\w{3} ${mid.key.slice(0, 4)}`));
+  const order = await pg.$$eval('.ptable tbody tr', (r) => r.map((x) => x.dataset.month || 'started'));
+  assert.equal(order[order.indexOf('started') - 1], mid.key, 'the line sits under its month (newest first)');
+  await pg.goto(`${base}/?store=sammsara-demo&s=2#data`); await pg.waitForSelector('#f-agencyStart');
+  await pg.fill('#f-agencyStart', ''); await pg.click('#save-settings'); await pg.waitForSelector('#toast:not([hidden])');
+  await pg.goto(`${base}/?store=sammsara-demo&s=3#brand/12m`); await pg.waitForSelector('#brand-chart .mb');
+  assert.equal(await pg.$('#brand-chart .started'), null); assert.equal(await pg.$('.ptable tr.started'), null);
+  assert.deepEqual(pg.errors, []);
+});
+
+/* 4.2.0 (critics): on the 1st–3rd the agency's pages open on Last month, as the home page does; else This month */
+test('1440: All products opens on Last month on the 2nd of a month, on This month on the 10th', opts, async () => {
+  for (const [when, want] of [['2026-12-02T10:00:00+05:30', 'last'], ['2026-12-10T10:00:00+05:30', 'month']]) {
+    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } }), pg = await ctx.newPage(), errs = [];
+    pg.on('pageerror', (e) => errs.push(e.message));
+    await pg.clock.setFixedTime(new Date(when));
+    await pg.goto(`${base}/?store=sammsara-demo#products`); await pg.waitForSelector('.top .range button.on');
+    assert.equal(await pg.getAttribute('.top .range button.on', 'data-days'), want, when);
+    assert.deepEqual(errs, []); await ctx.close();
+  }
+});
+
+/* 4.2.0 (critics): a store with no best-seller list yet shows all products and says why; never "0 of 0 … ₹0" */
+test('1440 + 390: no best-seller list yet: all products, a plain note, never "0 of 0"', opts, async () => {
+  for (const [w, h] of [[1440, 900], [390, 844]]) {
+    const ctx = await browser.newContext({ viewport: { width: w, height: h } }), pg = await ctx.newPage(), errs = [];
+    pg.on('pageerror', (e) => errs.push(e.message));
+    await ctx.addInitScript(() => { try { localStorage.setItem('sw-brand-scope', 'best'); } catch { /* */ } });
+    await pg.route('**/api/brand*', async (x) => { const res = await x.fetch(), j = await res.json(); j.headline.bestsellers = 0; for (const p of j.products) p.best = false; for (const m of j.months) m.listN = 0; await x.fulfill({ response: res, json: j }); });
+    await pg.goto(`${base}/?store=sammsara-demo#brand`); await pg.waitForSelector('.brand-h h1');
+    const t = await pg.innerText('#view');
+    assert.match(t, /No best-seller list yet\. It needs 60 days of sales\. Showing all products\./);
+    assert.match(await pg.textContent('.brand-h h1'), /^[\d,]+ of [1-9][\d,]* products ran out/);
+    assert.ok(!/\b0 of 0\b/.test(t), 'never 0 of 0');
+    assert.equal(await pg.getAttribute('.scope button.on', 'data-scope'), 'all');
+    assert.equal(await sideways(pg), 0); assert.deepEqual(errs, []); await ctx.close();
+  }
+});
+
+/* 4.2.0: All products opens on This month; This month · Last month · 30 days · 90 days · Custom; Last month = the calendar month before */
+test('1440: All products: This month by default; Last month is the month before as a custom range; the same ₹ as the line', opts, async () => {
+  const pg = await open(1440, 900, '/?store=sammsara-demo#products', '#scope-line');
+  assert.deepEqual(await pg.$$eval('.top .range button', (b) => b.map((x) => x.innerText.trim())), ['This month', 'Last month', '30 days', '90 days', 'Custom']);
+  assert.equal(await pg.getAttribute('.top .range button.on', 'data-days'), +new Date(Date.now() + 330 * 6e4).toISOString().slice(8, 10) <= 3 ? 'last' : 'month');
+  const day1 = await pg.evaluate(() => SW_TZ.dayKey(Date.now(), SW_TZ.zoneOf({})).slice(0, 7));
+  assert.match(await pg.textContent('#rdates'), /^1 \w{3}( – \d+ \w{3})?$/);
+  await pg.click('.top .range button[data-days="last"]'); await pg.waitForSelector('.top .range button.on[data-days="last"]');
+  const d = new Date(Date.UTC(+day1.slice(0, 4), +day1.slice(5, 7) - 2, 1)), m = d.toISOString().slice(0, 7), last = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).toISOString().slice(0, 10);
+  const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  assert.equal(await pg.textContent('#rdates'), `1 ${MON[+m.slice(5) - 1]} – ${+last.slice(8)} ${MON[+m.slice(5) - 1]}`);
+  assert.equal(await pg.$('.top .range button.on[data-days="custom"]'), null, 'Last month, not Custom');
+  const r = await (await fetch(`${base}/api/report?days=${m}-01..${last}&best=1&store=sammsara-demo`)).json();
+  assert.equal(r.moneyThrough ?? last, last);
+  const rs = (x) => { const v = Math.round(x), a = Math.abs(v); const one = (n) => (n >= 10 ? Math.round(n) : Math.round(n * 10) / 10).toLocaleString('en-IN'); return a >= 1e7 ? `₹${one(a / 1e7)} Cr` : a >= 1e5 ? `₹${one(a / 1e5)} lakh` : a >= 1e3 ? `₹${one(a / 1e3)}k` : `₹${a}`; };
+  assert.ok((await pg.textContent('#scope-line')).includes(`${rs(r.totals.lost)} missed`));
+  await pg.click('.top .range button[data-days="90"]'); await pg.waitForSelector('.top .range button.on[data-days="90"]');
+  assert.equal(await sideways(pg), 0);
+  const ph = await open(390, 844, '/?store=sammsara-demo#products', '#scope-line');
+  assert.ok(await ph.$$eval('.top .range button', (b) => b.every((x) => x.scrollWidth <= x.clientWidth + 1 && x.getBoundingClientRect().right <= innerWidth)), 'phone: five buttons fit');
+  assert.equal(await sideways(ph), 0);
+  assert.deepEqual([...pg.errors, ...ph.errors], []);
 });
 
 test('1440: a failed /api/brand shows an error and Try again on Ads, never "every product is in stock"', opts, async () => {
@@ -286,7 +395,7 @@ test('1440 and 390: the switch is on every page and every list, number, chart, t
     }
     assert.match(seen.products.best, /^Best sellers/);
     /* the bars themselves move */
-    await pg.goto(`${base}/?store=sammsara-demo&c=${w}#brand`); await pg.waitForSelector('#brand-chart .sold');
+    await pg.goto(`${base}/?store=sammsara-demo&c=${w}#brand/12m`); await pg.waitForSelector('#brand-chart .sold');
     const bars = () => pg.$$eval('#brand-chart .sold', (e) => e.map((x) => x.getAttribute('height')).join());
     await sw('all'); const a = await bars(); await sw('best'); assert.notEqual(await bars(), a, 'the sold bars follow'); await sw('all');
     const lines = async (q) => (await (await fetch(`${base}/api/export/reorder.csv?days=30&filter=all${q}&store=sammsara-demo`)).text()).trim().split('\n').length;
@@ -297,25 +406,28 @@ test('1440 and 390: the switch is on every page and every list, number, chart, t
   }
 });
 
-test('13 months, refilled-a-few-at-a-time and no-longer-on-sale rows, counted + not counted in the drawer (server 1.4.6 shape)', opts, async () => {
+test('13 months (the first in part), refilled-a-few-at-a-time and no-longer-on-sale rows, counted + not counted in the drawer (server 1.4.6 shape)', opts, async () => {
   for (const [w, h] of [[1440, 900], [390, 844]]) {
     const ctx = await browser.newContext({ viewport: { width: w, height: h } }), pg = await ctx.newPage(), errors = [];
     pg.on('pageerror', (e) => errors.push(e.message));
     await pg.route('**/api/brand*', async (x) => {
       const res = await x.fetch(), j = await res.json(), m0 = j.months[j.months.length - 1], ms = [];
-      for (let i = 12; i >= 0; i--) { const d = new Date(Date.UTC(2026, 10 - i, 1)), k = d.toISOString().slice(0, 7), n = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate(); ms.push({ ...m0, key: k, from: i === 12 ? `${k}-25` : `${k}-01`, to: `${k}-${n}`, days: i === 12 ? n - 24 : n }); }
-      j.months = ms; const p = j.products[0]; p.inactive = true; p.daysOut = 5; p.lost = p.counted = 9e6; p.best = false;
+      for (let i = 12; i >= 0; i--) { const d = new Date(Date.UTC(2026, 10 - i, 1)), k = d.toISOString().slice(0, 7), n = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate(); ms.push({ ...m0, key: k, from: i === 12 ? `${k}-25` : `${k}-01`, to: `${k}-${n}`, days: i === 12 ? n - 24 : n, closed: i !== 0 }); }
+      j.months = ms; const p = j.products[0]; p.inactive = true; delete p.allApart; p.daysOut = 5; p.lost = p.counted = 9e6; p.best = false;
       const b = j.now.find((z) => !z.out); Object.assign(b, { allocation: true, orderQty: 0, onOrder: null, daysLeft: 2.1, name: 'Topped Up Table' });
       j.ads.keep = [{ ...j.ads.push[0], stock: 7, name: 'Kept Table' }];
       await x.fulfill({ response: res, json: j });
     });
-    await pg.goto(`${base}/?store=sammsara-demo#brand`); await pg.waitForSelector('#brand-chart .mb');
+    await pg.goto(`${base}/?store=sammsara-demo#brand/12m`); await pg.waitForSelector('#brand-chart .mb');
     assert.equal((await pg.$$('#brand-chart .mb')).length, 13);
-    const rows = await pg.$$eval('.mtable tbody tr td:first-child', (e) => e.map((x) => x.textContent.trim()));
-    assert.equal(rows.length, 13); assert.match(rows[0], /^25–30 Nov 2025$/); assert.match(rows[12], /^November 2026/);
-    assert.match(await pg.textContent('.top5 .t5:first-of-type'), /No longer on sale/);
+    const rows = await pg.$$eval('.ptable tbody tr[data-month]:not(.yr) td:first-child', (e) => e.map((x) => x.textContent.trim()));
+    assert.equal(rows.length, 13); assert.match(rows[12], /^25–30 Nov 2025$/); assert.match(rows[0], /^Nov 2026/);
+    await pg.click('.scope button[data-scope="all"]'); await pg.waitForSelector('.scope button.on[data-scope="all"]');
+    assert.match(await pg.textContent('.heat .hrow:nth-child(2)'), /No longer on sale/);
     assert.equal(await sideways(pg), 0);
-    if (w < 760) { await pg.click('#brand-chart .mb[data-month="2026-08"]', { force: true }); await pg.waitForTimeout(400); assert.match(await pg.textContent('#month-line'), /^August 2026: sold/); assert.ok(await pg.evaluate(() => scrollY < 1500), 'no jump'); }
+    await pg.click('#brand-chart .mb[data-month="2026-08"]', { force: true }); await pg.waitForSelector('.ptable tr.on[data-month="2026-08"]');
+    assert.equal(await pg.textContent('#mname'), 'August 2026');
+    await pg.click('.scope button[data-scope="best"]'); await pg.waitForSelector('.scope button.on[data-scope="best"]');
     await pg.goto(`${base}/?store=sammsara-demo&a=1#best`); await pg.waitForSelector('#scope-line');
     assert.match(await pg.textContent('#view'), /Topped Up Table[\s\S]*?website top-up/); assert.ok(!/Check the warehouse|Enough stock/.test(await pg.textContent('#view')));
     await pg.goto(`${base}/?store=sammsara-demo&a=2#ads`); await pg.waitForSelector('#ads-keep .arow');
