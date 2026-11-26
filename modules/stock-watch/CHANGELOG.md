@@ -3,6 +3,11 @@
 User-facing changes, newest first. Semver: minor when a number's rule changes or a feature lands, patch for fixes. The version in `package.json` matches the top heading. Versions before 0.9.0 were reconstructed from `docs/DEVLOG.md` on 20 Nov 2026 (no tags existed); dates are the DEVLOG dates. Per DEVLOG, nothing from 0.6.0 on has been deployed yet. Since 1.0.0-rc.1, `/health`, `/status` and the page footer show the version and the build's commit (SW-056); `test/docs.test.js` checks the top heading matches `package.json`.
 
 
+## 4.1.0 · 2026-11-26 · Custom period
+
+- The Period picker has Custom: pick a from and a to date (store days, both included, up to 90 days, never past today) and every number on the page uses them.
+- Money missed and sold come from the one rule for exactly those days. Stock and orders are as they stood at the end of the last day.
+
 ## 4.0.3 · 2026-11-26 · busyness to 3 decimals
 
 - "How busy" shows 0.973, not 0.97, so the sum checks out by hand.

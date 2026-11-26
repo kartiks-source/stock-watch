@@ -130,3 +130,14 @@ test('asOf drops rows after the cut', () => {
   const a = P.asOf([{ t: 1 }, { t: 5 }], [{ t: 2 }, { t: 9 }], 5);
   assert.deepEqual(a, { stock: [{ t: 1 }, { t: 5 }], orders: [{ t: 2 }] });
 });
+
+test('4.1.0 Custom: "a..b" gives store days a to b, both included; never past today; at most 90 days', () => {
+  const now = Date.parse('2026-11-26T10:00:00Z'), z = 330;
+  const r = P.range('2026-10-01..2026-10-31', now, z);
+  assert.equal(r.period, 'custom'); assert.equal(r.days, 31); assert.equal(r.to, '2026-10-31');
+  assert.equal(r.from, Date.parse('2026-09-30T18:30:00Z')); assert.equal(r.now, Date.parse('2026-10-31T18:30:00Z'));
+  const back = P.range('2026-10-31..2026-10-01', now, z); assert.equal(back.from, r.from); assert.equal(back.to, '2026-10-31');
+  const late = P.range('2026-11-20..2026-12-31', now, z); assert.equal(late.to, '2026-11-26'); assert.equal(late.now, now);
+  const long = P.range('2026-01-01..2026-11-20', now, z); assert.equal(long.days, 90); assert.equal(long.fromKey, '2026-08-23');
+  assert.equal(P.range('nonsense', now, z).period, 'days');
+});

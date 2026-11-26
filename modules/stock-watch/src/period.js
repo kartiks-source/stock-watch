@@ -19,6 +19,13 @@ function dayStart(t, zone) { return TZ.dayStart(t, zone); }
  */
 function range(daysParam, now, zone) {
   if (String(daysParam) === 'month') return { period: 'month', from: monthStart(now, zone) };
+  const c = /^(\d{4}-\d{2}-\d{2})\.\.(\d{4}-\d{2}-\d{2})$/.exec(String(daysParam || ''));   // 4.1.0: Custom, "2026-10-01..2026-10-31", store days, both ends included
+  if (c) {
+    const today = dayKey(now, zone), at = (k) => TZ.dayStart(Date.parse(`${k}T12:00:00Z`), zone);
+    let [a, b] = c[1] <= c[2] ? [c[1], c[2]] : [c[2], c[1]]; if (b > today) b = today; if (a > b) a = b;
+    const end = Math.min(now, at(b) + 864e5); let from = at(a); if (end - from > 90 * 864e5) { from = at(b) - 89 * 864e5; a = dayKey(from, zone); }
+    return { period: 'custom', from, now: end, days: Math.max(1, Math.round((at(b) + 864e5 - from) / 864e5)), fromKey: a, to: b };
+  }
   const days = Math.max(1, Math.min(90, Math.round(Number(daysParam)) || 30));
   return { period: 'days', days, from: TZ.daysStart(now, days, zone) };
 }

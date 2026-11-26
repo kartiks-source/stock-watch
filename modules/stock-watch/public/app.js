@@ -67,7 +67,9 @@
   const dt = (t) => { if (!t) return '–'; const d = local(t); return `${String(d.getUTCDate()).padStart(2, '0')} ${MON[d.getUTCMonth()]} ${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`; };
   const dayLabel = (k) => { const [, m, d] = k.split('-'); return `${+d} ${MON[+m - 1]}`; };
   const dur = (h) => (h >= 48 ? `${n1(h / 24)} days` : `${n1(h)} h`);
-  const inPeriod = (r = { period: state.days === 'month' ? 'month' : 'days', days: state.days }) => (r.period === 'month' ? 'this month' : `in the last ${r.days} days`);   // "This month" = from the 1st (SW-027)
+  const isCustom = (v = state.days) => String(v).includes('..');
+  const keyShort = (k) => new Date(`${k}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+  const inPeriod = (r = { period: state.days === 'month' ? 'month' : isCustom() ? 'custom' : 'days', days: state.days }) => (r.period === 'month' ? 'this month' : r.period === 'custom' || isCustom() ? `from ${String(state.days).split('..').map(keyShort).join(' to ')}` : `in the last ${r.days} days`);   // "This month" = from the 1st (SW-027)
 
   const STATUS_CLS = { 'Out now': 'out', Critical: 'crit', 'Order now': 'now', 'Order this week': 'week', OK: 'ok', 'Slow seller': 'idle', 'No stock data': 'idle', Inactive: 'idle', 'Top-up from warehouse': 'idle' };
   const narrow = () => window.innerWidth < 760;
@@ -149,7 +151,7 @@
       + (d.lastStock ? `<span>Last stock change: ${dt(d.lastStock)}</span>` : '')
       + (src.err ? `<span class="badge err">Sheet sync: ${esc(src.err)}</span>` : src.lastSync ? `<span>Sheet synced: ${dt(src.lastSync)}</span>` : '')
       + shopifyBadge() + appVersion(r.app);
-    $$('.range button').forEach((b) => b.classList.toggle('on', b.dataset.days === String(state.days)));
+    $$('.range button').forEach((b) => b.classList.toggle('on', b.dataset.days === String(state.days) || (b.dataset.days === 'custom' && isCustom())));
     if ($('#rdates')) { const sp = periodDates(r); $('#rdates').textContent = sp; $('#rdates').title = `Every number on the page covers ${sp}, store time (${zone()}), today so far included: the same dates in Shopify give the same numbers`; }
     if (viewOnly()) { $('#tabs a[data-view="data"]').hidden = true; pill.removeAttribute('href'); }   // view-only: no Data page (SW-029)
   }
@@ -520,7 +522,7 @@
     const big = today.slice().sort((a, b) => b.orderValue - a.orderValue).slice(0, 5);
     return `
       <section class="headline">
-        <h1><span class="h-order">${t.hasCost ? `Order <span class="amberv">${money(t.orderValueNow)}</span> today` : `Order <span class="amberv">${inr.format(t.orderToday)} products</span> today <small class="hsub" title="No unit costs in Shopify: quantity × average price paid">${money(t.orderValueNow)} at selling price</small>`} · </span><span class="h-lost"><span class="lost">${money(t.lost)}</span> sales lost ${r.period === 'month' ? 'this month' : `in ${r.days} days`}</span></h1>
+        <h1><span class="h-order">${t.hasCost ? `Order <span class="amberv">${money(t.orderValueNow)}</span> today` : `Order <span class="amberv">${inr.format(t.orderToday)} products</span> today <small class="hsub" title="No unit costs in Shopify: quantity × average price paid">${money(t.orderValueNow)} at selling price</small>`} · </span><span class="h-lost"><span class="lost">${money(t.lost)}</span> sales lost ${r.period === 'month' ? 'this month' : r.period === 'custom' ? inPeriod(r) : `in ${r.days} days`}</span></h1>
         ${window.SW_DIGEST ? SW_DIGEST.shareMenu() : '<button class="btn ghost hbtn" id="copy-summary" title="Copy a plain-language summary for the client">Copy summary</button>'}
         ${lostSub(t, 'products')}${ydayStrip(r.yesterday)}
       </section>
@@ -1142,7 +1144,12 @@
     const sum = e.target.closest('.plan > summary'); if (sum) { state.planOpen = !sum.parentElement.open; return; }
     const t = e.target.closest('button, [data-product], tr[data-id], .mcard[data-id], th[data-k], [data-go]');
     if (!t) return;
-    if (t.matches('.range button')) { state.days = t.dataset.days === 'month' ? 'month' : +t.dataset.days; await load(); return; }
+    if (t.matches('.range button') && t.dataset.days === 'custom') {   // 4.1.0: show the two dates; "Show" loads them
+      const box = $('#custom-dates'), today = new Date(Date.now() + 330 * 6e4).toISOString().slice(0, 10), [a, b] = isCustom() ? String(state.days).split('..') : [new Date(Date.now() - 29 * 864e5 + 330 * 6e4).toISOString().slice(0, 10), today];
+      box.hidden = !box.hidden; $('#cd-from').value = a; $('#cd-to').value = b; $('#cd-from').max = today; $('#cd-to').max = today; if (!box.hidden) $('#cd-from').focus(); return;
+    }
+    if (t.id === 'cd-go') { const a = $('#cd-from').value, b = $('#cd-to').value; if (!a || !b) { toast('Pick both dates'); return; } const [x, y] = a <= b ? [a, b] : [b, a]; if ((Date.parse(y) - Date.parse(x)) / 864e5 > 89) toast('Up to 90 days: showing the last 90 days to the end date'); state.days = `${x}..${y}`; $('#custom-dates').hidden = true; await load(); return; }
+    if (t.matches('.range button')) { state.days = t.dataset.days === 'month' ? 'month' : +t.dataset.days; $('#custom-dates').hidden = true; await load(); return; }
     if (t.dataset.go) { const v = t.dataset.go; state.filter[v] = t.dataset.filter; if (location.hash === `#${v}`) { state.limit[v] = 0; render(); } else location.hash = v; return; }   // same page (the §4c line under a headline): no hashchange, so render here
     if (t.dataset.more) { const id = t.dataset.more; state.limit[id] = t.dataset.all ? 1e9 : (state.limit[id] || PAGE) + PAGE; render(); return; }
     if (t.dataset.filterReorder) { state.filter.reorder = t.dataset.filterReorder; state.limit.reorder = 0; render(); return; }
