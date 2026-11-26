@@ -35,7 +35,7 @@ function dailyOf(t, x) {
   }
   DAILY.set(x, m); return m;
 }
-const WHY = { unsure: 'Shopify’s stock record doesn’t add up, or it sells at 0', gift: 'a gift line', 'started-empty': 'already empty when our record begins', 'few-days': 'under 30 shelf days before, or nothing sold on the last 60' };
+const WHY = { unsure: 'Shopify’s stock record doesn’t add up, or it sells at 0', gift: 'a gift line', 'started-empty': 'already empty when our record begins', 'few-days': 'fewer than 60 days on the shelf in the 90 days before, or nothing sold' };
 /** ₹ a day a row that is out now keeps missing (0 when it carries no ₹, or it has been out over 60 days). */
 function costNow(t, x) {
   if (!x.out) return 0;
