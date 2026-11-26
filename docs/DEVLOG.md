@@ -5,10 +5,10 @@ Shared copy for the team: https://claude.ai/artifact/27Q6x8r3rpZHYaNzhjW2Zq
 
 ## 2026-11-26 · stock-watch 4.3.0
 
-Rule 4.3 (branch `brand-factor`, not merged or deployed): the fixed 0.74 off the best-seller list (M.K.SLOW) is replaced by a factor measured per brand on its own normal months (src/model.js `factors`): stretches from every 20th Full day, the Full days of the next 30 calendar days, guess = speed × busy × price, real = net sold; per group (that quarter's list) raw = real ÷ guess, shrunk toward 1 by 100 stretches, within 0.5–1.5; under 100 stretches or 10 products → 1. Applied to both groups (units, lost, laterLost, the tests' guesses), stored on each part (`adj`, `grp`) and with each locked month (`factor`); the RULE label 4.3 re-locks every month once. "How sure are we?" and the product panel show the working.
+Rule 4.3 (branch `brand-factor`, not merged or deployed): the fixed 0.74 off the best-seller list (M.K.SLOW) is replaced by a factor measured per brand on its own normal months (src/model.js `factors`): 30-day checks that never overlap and hold nothing out (none within 30 days after a refill), guess = speed × busy × price, real = net sold; per group (that quarter's list) raw = real ÷ guess, shrunk toward 1 by 100 checks, within 0.5–1.5; under 100 checks or 10 products → 1. After a critic: checks made non-overlapping and limited to normal months, the drawer explains a locked month with its own factor, the shrink is shown so it can be redone by hand. Applied to both groups (units, lost, laterLost, the tests' guesses), stored on each part (`adj`, `grp`) and with each locked month (`factor`); the RULE label 4.3 re-locks every month once. "How sure are we?" and the product panel show the working.
 
 Open:
-- grouping by each stretch's quarter list (as written) gives a different factor from grouping by today's list on the local snapshot; the coordinator's pre-check figures match the latter;
+- grouping by each quarter's list kept on purpose (the money's own grouping, no hindsight); today's list would give a different factor;
 - the five critics have not been run on 4.3.
 
 ## 2026-11-26 · stock-watch 4.2.0

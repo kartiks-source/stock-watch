@@ -1,10 +1,10 @@
 'use strict';
 /* 4.3: the brand's own factor (src/model.js factors) in place of the fixed 0.74, on made-up stores: steady sellers ≈ 1, fading
-   slow sellers clearly under 1, too little history → 1 (flagged), a wild store is capped (flagged), and a locked month keeps the
-   factor it was locked with. */
+   slow sellers clearly under 1, too little history → 1 (flagged), a wild store is capped (flagged), 30-day checks that never overlap
+   and hold nothing out, a locked month keeps (and is explained with) the factor it was locked with, and the page's sum is the factor. */
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const T = require('../src/truth'), M = require('../src/model');
+const T = require('../src/truth'), M = require('../src/model'), S = require('../src/screen');
 const { keyPlus } = require('../src/agency');
 const FROM = '2025-11-01', N = 390, TO = keyPlus(FROM, N - 1), DAY = (i) => keyPlus(FROM, i);
 const opts = { dayOf: (t) => new Date(t).toISOString().slice(0, 10) };
@@ -39,7 +39,19 @@ test('steady sellers: both factors come out about 1 (nothing to correct)', () =>
     assert.equal(f[k].flag, null, k); assert.ok(f[k].n >= 100 && f[k].p >= 10, `${k}: ${f[k].n} stretches, ${f[k].p} products`);
     assert.ok(Math.abs(f[k].f - 1) < 0.03, `${k} ${f[k].f}`); assert.equal(f[k].f, Math.round(((f[k].n * f[k].raw + 100) / (f[k].n + 100)) * 1e4) / 1e4);
   }
-  assert.deepEqual(M.factors(F, bestIds(F)), f, 'the same data, the same factors (every 20th Full day)');
+  assert.deepEqual(M.factors(F, bestIds(F)), f, 'the same data, the same factors');
+});
+
+test('30-day checks never overlap, hold nothing out, never start within 30 days of a refill; their ₹ never exceed what was sold', () => {
+  const one = (gaps) => { const F = facts([{ id: '200', price: 300, sell: () => 1, gaps }]); return M.factors(F, () => false).other; };
+  const clean = one([]);
+  assert.ok(clean.n <= Math.ceil(N / 30) && clean.n >= Math.floor((N - 90) / 30) - 1, `one row, ${clean.n} checks`);
+  assert.ok(clean.real <= N * 300, 'each day counted at most once');
+  const out = one([[IXd('2026-05-10'), IXd('2026-05-14')]]);
+  assert.ok(out.n <= clean.n - 2, `a gap takes out the check it falls in and the one just after the refill: ${clean.n} → ${out.n}`);
+  const F = facts([...many(14, 100, 1000, (i, k) => ((i + k) % 2 ? 1 : 0)), ...many(14, 200, 300, (i, k) => ((i + k) % 3 === 0 ? 1 : 0))]), f = M.factors(F, bestIds(F));
+  const sold = F.rows.reduce((q, r) => q + r.net.reduce((a, b) => a + b, 0), 0);
+  assert.ok(f.best.real + f.other.real <= sold, 'never more than the brand sold');
 });
 
 test('fading slow sellers: the rest come out clearly under 1; best sellers stay about 1', () => {
@@ -79,4 +91,26 @@ test('lock: a closed month keeps the factor it was locked with when later data c
   assert.deepEqual(aug(b).factor, aug(a).factor, 'August keeps its factor'); assert.equal(part(b, '2026-08').adj, part(a, '2026-08').adj); assert.equal(aug(b).all.lost, aug(a).all.lost);
   assert.equal(part(b, '2026-11').adj, b.factor[part(b, '2026-11').grp].f, 'November (open) uses today’s');
   for (const t of [a, b]) assert.ok(t.months.every((m) => m.factor && m.factor.best && m.factor.other));
+  /* the panel explains each month with its own factor */
+  const prof = S.profile({ ok: true, months: b.months.map((m) => ({ key: m.key })), pace: {} }, b, '300'), parts = prof.work.gaps.flatMap((g) => g.parts);
+  const pa = parts.find((p) => p.month === '2026-08'), pn = parts.find((p) => p.month === '2026-11');
+  assert.deepEqual(pa.factor, aug(a).factor, 'August: the factor it was locked with'); assert.equal(pa.adj, pa.factor[pa.grp].f);
+  assert.deepEqual(pn.factor, b.factor, 'November: today’s'); assert.equal(pn.adj, b.factor[pn.grp].f);
+});
+
+/* the page's working ("(n × raw + 100) ÷ (n + 100) = × f") is the stored factor, worked out again by hand */
+test('the shrink on the page reproduces the stored factor; too little history says so', () => {
+  const vm = require('node:vm'), fs = require('node:fs'), path = require('node:path');
+  const noop = () => {}, el = { addEventListener: noop, getElementById: () => null, querySelector: () => null };
+  const ctx = { window: {}, document: el, matchMedia: () => ({ matches: false }), localStorage: { getItem: () => null, setItem: noop }, location: { search: '', href: 'http://x/' }, history: { replaceState: noop }, URLSearchParams, URL, Intl, console };
+  ctx.window = ctx; vm.createContext(ctx); vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'public', 'brand.js'), 'utf8'), ctx);
+  ctx.SW_BRAND.init({ esc: (x) => String(x), state: {} });
+  const F = facts([...many(14, 100, 100000, (i, k) => ((i + k) % 2 ? 1 : 0)), ...many(14, 200, 300, (i, k) => 5 * 2 ** (-(i + k) / 200))]), f = M.factors(F, bestIds(F));
+  const html = ctx.SW_BRAND.factorText(f, 'other'), m = html.replace(/<[^>]+>/g, '').match(/\(([\d,]+) × (\d+\.\d+) \+ 100\) ÷ ([\d,]+) = × (\d+\.\d+)/), n = (x) => +x.replace(/,/g, '');
+  assert.ok(m, html); assert.equal(n(m[1]), f.other.n); assert.equal(n(m[3]), f.other.n + 100);
+  assert.ok(Math.abs((n(m[1]) * +m[2] + 100) / n(m[3]) - +m[4]) <= 0.0011, `the sum on the page checks by hand: ${m[0]}`); assert.equal(+m[4], Math.round(f.other.f * 1000) / 1000, 'and is the factor used');
+  assert.match(html.replace(/<[^>]+>/g, ''), / 30-day checks with nothing out, we guessed ₹[\d.,]+( lakh| crore)?; they really sold ₹/);
+  assert.match(ctx.SW_BRAND.factorText({ other: { f: 1, raw: 0.8, n: 40, p: 4, real: 1, guess: 1, flag: 'few' } }, 'other'), /not enough history to check yet: no correction/);
+  assert.match(ctx.SW_BRAND.factorText({ best: { f: 1.002, raw: 1.003, n: 400, p: 40, real: 1e6, guess: 1e6, flag: null } }, 'best'), /Already right, no correction\./);
+  assert.match(ctx.SW_BRAND.factorText({ other: { f: 0.5, raw: 0.13, n: 230, p: 14, real: 1e5, guess: 8e5, flag: 'clip' } }, 'other'), /capped at 0\.5 \/ 1\.5: check the data: × 0\.500/);
 });

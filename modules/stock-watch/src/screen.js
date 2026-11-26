@@ -226,7 +226,7 @@ function profile(prof, t, id) {
   const x = t.ok && t.ready !== false ? t.rows.find((r) => r.id === String(id)) : null;
   if (!prof || !prof.ok || !x) return prof;
   const gaps = new Map();
-  for (const m of t.months) for (const p of (x.months[m.key] || { parts: [] }).parts) { const g = gaps.get(p.start) || { start: p.start, from: p.from, to: p.to, days: 0, lost: 0, later: 0, parts: [], best: !!p.best }; g.to = p.to; g.days += p.empty; g.parts.push({ ...p, month: m.key, closed: m.closed }); g.lost += p.lost || 0; g.later += p.laterLost || 0; gaps.set(p.start, g); }
+  for (const m of t.months) for (const p of (x.months[m.key] || { parts: [] }).parts) { const g = gaps.get(p.start) || { start: p.start, from: p.from, to: p.to, days: 0, lost: 0, later: 0, parts: [], best: !!p.best }; g.to = p.to; g.days += p.empty; g.parts.push({ ...p, month: m.key, closed: m.closed, factor: m.factor /* 4.3: a locked month is explained with its own factor */ }); g.lost += p.lost || 0; g.later += p.laterLost || 0; gaps.set(p.start, g); }
   const list = [...gaps.values()].sort((a, b) => a.start < b.start ? -1 : 1);
   const longest = list.slice().sort((a, b) => b.days - a.days)[0];
   for (const m of prof.months) {

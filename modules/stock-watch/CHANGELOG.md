@@ -5,9 +5,9 @@ User-facing changes, newest first. Semver: minor when a number's rule changes or
 
 ## 4.3.0 · 2026-11-26 · each brand's own correction
 
-- Money missed no longer takes a fixed 0.74 off products that aren't best sellers. Each brand gets its own correction, for best sellers and for the rest, measured on its normal months: what the rule would have guessed on stretches when nothing ran out, against what really sold.
+- Money missed no longer takes a fixed 0.74 off products that aren't best sellers. Each brand gets its own correction, for best sellers and for the rest, measured on its normal months: what the rule would have guessed on 30-day checks when nothing ran out (never overlapping, never just after a refill), against what really sold.
 - A brand with little history leans toward no correction; one with too little gets none ("not enough history to check yet"). A correction under 0.5 or over 1.5 is capped and says "check the data".
-- "How sure are we?" and the product panel show the working: how many months were checked, the ₹ guessed and the ₹ really sold, and the correction that follows.
+- "How sure are we?" and the product panel show the working: how many 30-day checks, the ₹ guessed and the ₹ really sold, and the sum that gives the correction, so it can be redone by hand. A closed month is explained with the correction it was locked with.
 - Months already closed are worked out again once under the new rule (4.3) and then locked with the correction they had; the current month uses today's.
 
 ## 4.2.0 · 2026-11-26 · the home page, month first

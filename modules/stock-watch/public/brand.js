@@ -79,11 +79,12 @@
   const lakhs = (z) => (z.guess >= 1e7 ? [1e7, 'crore'] : z.guess >= 1e5 ? [1e5, 'lakh'] : [1, '']);
   function factorLine(z, who) {
     if (!z) return '';
-    const [u, w] = lakhs(z), v = (x) => (w ? (x / u).toFixed(2) : inr.format(Math.round(x))), m = (x) => `₹${v(x)}${w ? ` ${w}` : ''}`;
-    if (z.flag === 'few') return `<p class="fx"><b>${who}:</b> not enough history to check yet: no correction${z.n ? ` (${inr.format(z.n)} months of ${inr.format(z.p)} products so far; it needs 100 months and 10 products)` : ''}.</p>`;
-    const head = `<b>${who}:</b> in ${inr.format(z.n)} months we already knew, we guessed ${m(z.guess)}; they really sold ${m(z.real)}.`;
+    const [u, w] = lakhs(z), v = (x) => (w ? (x / u).toFixed(2) : inr.format(Math.round(x))), m = (x) => `₹${v(x)}${w ? ` ${w}` : ''}`, d3 = (x) => (Math.round(x * 1000) / 1000).toFixed(3);
+    if (z.flag === 'few') return `<p class="fx"><b>${who}:</b> not enough history to check yet: no correction${z.n || z.p ? ` (${inr.format(z.n)} 30-day check${z.n === 1 ? '' : 's'} of ${inr.format(z.p)} product${z.p === 1 ? '' : 's'} so far; it needs 100 checks and 10 products)` : ''}.</p>`;
+    const head = `<b>${who}:</b> in ${inr.format(z.n)} 30-day checks with nothing out, we guessed ${m(z.guess)}; they really sold ${m(z.real)}.`;
     if (Math.abs(z.f - 1) <= 0.005) return `<p class="fx">${head} Already right, no correction.</p>`;
-    return `<p class="fx">${head} ${v(z.real)} ÷ ${v(z.guess)} = ${(Math.round(z.raw * 100) / 100).toFixed(2)}, leaning toward 1 for how many months we checked: × ${(Math.round(z.f * 100) / 100).toFixed(2)}.${z.flag === 'clip' ? ' Capped at 0.5 / 1.5: check the data.' : ''}</p>`;
+    const lean = (z.n * z.raw + 100) / (z.n + 100);
+    return `<p class="fx">${head} ${v(z.real)} ÷ ${v(z.guess)} = ${d3(z.raw)} · leaning toward 1 for how many checks: (${inr.format(z.n)} × ${d3(z.raw)} + 100) ÷ ${inr.format(z.n + 100)} = ${z.flag === 'clip' ? `${d3(lean)}, capped at 0.5 / 1.5: check the data: × ${d3(z.f)}` : `× ${d3(z.f)}`}.</p>`;
   }
   const factorText = (fx, only = null) => (fx ? (only ? factorLine(fx[only], only === 'best' ? 'Best sellers' : 'Products off the best-seller list') : factorLine(fx.best, 'Best sellers') + factorLine(fx.other, 'Products off the best-seller list')) : '');
   const testText = (t) => (t ? `${t.off >= 0 ? '+' : '−'}${pct(Math.abs(t.off) * 100)} (95% interval ${t.low >= 0 ? '+' : '−'}${pct(Math.abs(t.low) * 100)} to ${t.high >= 0 ? '+' : '−'}${pct(Math.abs(t.high) * 100)}; ${inr.format(t.n)} tries, ${inr.format(t.products)} products)` : 'too few to test');

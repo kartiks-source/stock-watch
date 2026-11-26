@@ -9,8 +9,8 @@
  * Chosen 26 Nov 2026 over 3.0 after three critics (data, demand, tests) and placebo, comeback and replay tests (RULE.md, CHANGELOG).
  */
 const LOOK = 90, MIN_DAYS = 60, YEAR = 365, LONG = 60;
-/* 4.3: the brand's own factor (replaces the fixed 0.74): on its normal in-stock stretches, what really sold ÷ what the rule guessed */
-const STEP = 20, SPAN = 30, MIN_FULL = 10, MIN_N = 100, MIN_P = 10, PRIOR = 100, CLIP = [0.5, 1.5];
+/* 4.3: the brand's own factor (replaces the fixed 0.74): on its normal in-stock 30-day checks, what really sold ÷ what the rule guessed */
+const SPAN = 30, MIN_FULL = 10, MIN_N = 100, MIN_P = 10, PRIOR = 100, CLIP = [0.5, 1.5];
 const NOISE = 0.22, MODEL_SD = 0.055, SIMS = 2000, REPLAYS = 40, SEED = 20261125, LAST = 60;
 /** A fixed random sequence: the same data always gives the same range. */
 function rng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
@@ -77,22 +77,34 @@ function price(F) {
 }
 
 /**
- * 4.3: the brand's factor for best sellers and for the rest, measured on its own normal months. Each usable row gives a stretch from
- * every 20th Full day t (sd[0], sd[20], …): the Full days of the 30 calendar days from t (10+ of them), guess = speed known before t ×
- * how busy × price on each, real = what it sold on them. Grouped by bestAt(row, t) (that quarter's list). Per group: raw = Σ real ÷
- * Σ guess; under 100 stretches or 10 products → 1 ("few"); else (n × raw + 100) ÷ (n + 100), within 0.5–1.5 ("clip" when cut).
- * → { best: { f, raw, n, p, real, guess, flag }, other: { … } }
+ * 4.3: the brand's factor for best sellers and for the rest, measured on its own normal months (nothing out). Each usable row gives
+ * 30-day checks that never overlap: the first starts on its first Full day, each next one on the first Full day at least 30 days after
+ * the last start. A check counts when its 30 calendar days hold no Empty or Half day, it starts more than 30 days after a gap ended,
+ * 10+ of its days are Full and a speed is known before it: guess = speed × how busy × price on its Full days, real = what it sold on
+ * them. Grouped by bestAt(row, t) (that quarter's list). Per group: raw = Σ real ÷ Σ guess; under 100 checks or 10 products → 1
+ * ("few"); else (n × raw + 100) ÷ (n + 100), within 0.5–1.5 ("clip" when cut).  → { best: { f, raw, n, p, real, guess, flag }, other }
  */
 function factors(F, bestAt) {
   const g = { best: { real: 0, guess: 0, n: 0, p: new Set() }, other: { real: 0, guess: 0, n: 0, p: new Set() } };
   for (const r of F.rows) {
-    if (!usableRow(r)) continue;
-    for (let j = 0; j < r.sd.length; j += STEP) {
-      const t = r.sd[j], s = speed(F, r, t); if (!s) continue;
-      const end = Math.min(F.n - 1, t + SPAN - 1); let full = 0, guess = 0, real = 0;
-      for (let i = t; i <= end; i++) if (r.st[i] === 2) { full++; guess += s.perDay * busy(F, r, s, i) * s.price; real += r.net[i]; }
-      if (full < MIN_FULL) continue;
-      const z = g[bestAt(r, t) ? 'best' : 'other']; z.real += real; z.guess += guess; z.n++; z.p.add(r.productId || r.id);
+    if (!usableRow(r) || !r.sd.length) continue;
+    const ends = r.gaps.map((x) => x.b);   // last day of each gap (the day it came back, or the record's end)
+    for (let j = 0; j < r.sd.length;) {
+      const t = r.sd[j], end = Math.min(F.n - 1, t + SPAN - 1);
+      let next = j; while (next < r.sd.length && r.sd[next] < t + SPAN) next++;   // the next check: the first Full day 30+ days on
+      const use = (() => {
+        if (t + SPAN - 1 > F.n - 1) return false;   // a check needs its whole 30 days
+        for (let i = t; i <= end; i++) if (r.st[i] === 0 || r.st[i] === 1) return false;   // nothing ran out in it
+        if (ends.some((b) => b < t && t - b <= SPAN)) return false;   // not just after a refill
+        return true;
+      })();
+      const s = use ? speed(F, r, t) : null;
+      if (s) {
+        let full = 0, guess = 0, real = 0;
+        for (let i = t; i <= end; i++) if (r.st[i] === 2) { full++; guess += s.perDay * busy(F, r, s, i) * s.price; real += r.net[i]; }
+        if (full >= MIN_FULL) { const z = g[bestAt(r, t) ? 'best' : 'other']; z.real += real; z.guess += guess; z.n++; z.p.add(r.productId || r.id); }
+      }
+      j = next;
     }
   }
   const out = {};
@@ -154,4 +166,4 @@ function ranger(groups) {
     return { low: Math.min(point, pct(z, 0.05), pct(c, 0.05)), high: Math.max(point, pct(z, 0.95)) };   // real comebacks are the real event: the low end is never above what they alone say
   };
 }
-module.exports = { prepare, speed, busy, guess, price, tests, bias, ranger, byMonth, factors, K: { LOOK, MIN_DAYS, LONG, STEP, SPAN, MIN_FULL, MIN_N, MIN_P, PRIOR, CLIP } };
+module.exports = { prepare, speed, busy, guess, price, tests, bias, ranger, byMonth, factors, K: { LOOK, MIN_DAYS, LONG, SPAN, MIN_FULL, MIN_N, MIN_P, PRIOR, CLIP } };
