@@ -8,7 +8,7 @@
  *           comebacks (days 4–30 after a gap). The range comes from how far these were off, by product, never from a formula alone.
  * Chosen 26 Nov 2026 over 3.0 after three critics (data, demand, tests) and placebo, comeback and replay tests (RULE.md, CHANGELOG).
  */
-const LOOK = 90, MIN_DAYS = 60, YEAR = 365, LONG = 60;
+const LOOK = 90, MIN_DAYS = 60, MIN_UNITS = 3, YEAR = 365, LONG = 60;   // 4.4: 3+ pieces sold in the window; under 60 in-stock days in the 90: the last 60 in-stock days within 365
 /* 4.3: the brand's own factor (replaces the fixed 0.74): on its normal in-stock 30-day checks, what really sold ÷ what the rule guessed */
 const SPAN = 30, MIN_FULL = 10, MIN_N = 100, MIN_P = 10, PRIOR = 100, CLIP = [0.5, 1.5];
 const NOISE = 0.22, MODEL_SD = 0.055, SIMS = 2000, REPLAYS = 40, SEED = 20261125, LAST = 60;
@@ -36,13 +36,19 @@ const usableRow = (r) => !r.always && !r.unsure && !r.gift;
 /** The speed known before day t (its Full days in the 90 days before), or null. */
 function speed(F, r, t) {
   t = Math.min(t, F.n); if (r.spMemo.has(t)) return r.spMemo.get(t);
-  let out = null; const a = Math.max(0, t - LOOK), d = r.fd[t] - r.fd[a], u = r.fu[t] - r.fu[a], n = r.fn[t] - r.fn[a];
-  if (usableRow(r) && d >= MIN_DAYS && u >= 1 && n > 0) {
+  let out = null; let a = Math.max(0, t - LOOK), d = r.fd[t] - r.fd[a], u = r.fu[t] - r.fu[a], n = r.fn[t] - r.fn[a], fb = false;
+  if (usableRow(r) && d < MIN_DAYS) {   // 4.4: sold out too often lately: its last 60 in-stock days within a year
+    const hi = r.upto[t], lo = Math.max(r.upto[Math.max(0, t - YEAR)], hi - MIN_DAYS);
+    if (hi - lo >= MIN_DAYS) { a = r.sd[lo]; d = r.fd[t] - r.fd[a]; u = r.fu[t] - r.fu[a]; n = r.fn[t] - r.fn[a]; fb = true; }
+  }
+  if (usableRow(r) && d >= MIN_DAYS && u >= MIN_UNITS && n > 0) {
     const y0 = Math.max(0, t - YEAR), lo = r.upto[a], hi = r.upto[t];
-    out = { perDay: u / d, units: u, days: d, from: r.sd[lo], to: r.sd[hi - 1], price: n / u, base: (r.fs[t] - r.fs[a]) / d, yearUnits: r.fu[t] - r.fu[y0], yearDays: r.fd[t] - r.fd[y0], yearFrom: r.sd[r.upto[y0]] };
+    out = { perDay: u / d, units: u, days: d, from: r.sd[lo], to: r.sd[hi - 1], price: n / u, base: (r.fs[t] - r.fs[a]) / d, yearUnits: r.fu[t] - r.fu[y0], yearDays: r.fd[t] - r.fd[y0], yearFrom: r.sd[r.upto[y0]], ...(fb ? { fb: true } : {}) };
   }
   r.spMemo.set(t, out); return out;
 }
+/** 4.4: why no speed: under 60 in-stock days within the year, or under 3 pieces sold. */
+function noReason(F, r, t) { const hi = r.upto[Math.min(t, F.n)], lo = r.upto[Math.max(0, t - YEAR)]; return hi - lo < MIN_DAYS ? 'few-days' : 'few-sales'; }
 /** How busy the shop was on day i against the speed's days (1 = a normal day). */
 const busy = (F, r, s, i) => (s.base > 0 ? F.shopOf(r, i) / s.base : 1);
 /** Days s..e cut per calendar month. */
@@ -57,7 +63,7 @@ function guess(F, r, a, b, o) { const s = speed(F, r, o); let t = 0; for (let i 
 function price(F) {
   for (const r of F.rows) for (const g of r.gaps) {
     const sib = F.rows.filter((p) => p !== r && p.productId === r.productId), s = speed(F, r, g.a);
-    g.ref = s; g.no = r.unsure || r.always ? 'unsure' : r.gift ? 'gift' : g.before ? 'started-empty' : !s ? 'few-days' : null; g.parts = [];
+    g.ref = s; g.no = r.unsure || r.always ? 'unsure' : r.gift ? 'gift' : g.before ? 'started-empty' : !s ? noReason(F, r, g.a) : null; g.parts = [];
     for (const [a, e] of byMonth(F, g.a, g.b)) {
       const part = { month: F.keys[a].slice(0, 7), s: a, e, empty: 0, first: 0, later: 0, sib: 0, sold: 0, units: 0, laterUnits: 0, bz: 0, bd: 0 };
       for (let i = a; i <= e; i++) {
@@ -166,4 +172,4 @@ function ranger(groups) {
     return { low: Math.min(point, pct(z, 0.05), pct(c, 0.05)), high: Math.max(point, pct(z, 0.95)) };   // real comebacks are the real event: the low end is never above what they alone say
   };
 }
-module.exports = { prepare, speed, busy, guess, price, tests, bias, ranger, byMonth, factors, K: { LOOK, MIN_DAYS, LONG, SPAN, MIN_FULL, MIN_N, MIN_P, PRIOR, CLIP } };
+module.exports = { prepare, speed, busy, guess, price, tests, bias, ranger, byMonth, factors, K: { LOOK, MIN_DAYS, MIN_UNITS, LONG, SPAN, MIN_FULL, MIN_N, MIN_P, PRIOR, CLIP } };

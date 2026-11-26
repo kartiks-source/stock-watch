@@ -55,7 +55,7 @@ test('the first day on the website is not a day it ran out', () => {
 });
 test('no recent sales or under 60 shelf days in the last 90: days only, with the reason', () => {
   const r = run([...steady(), { id: '1', price: 2000, sell: (i) => (i < 60 ? 1 : 0), gaps: [gap('2026-08-05', '2026-08-15')] }, { id: '2', price: 2000, sell: () => 1, createdAt: Date.parse('2026-07-20T05:00:00Z'), gaps: [gap('2026-08-05', '2026-08-15')] }]);
-  for (const id of ['1', '2']) { const x = r.rows.find((z) => z.id === id), p = x.months['2026-08'].parts[0]; assert.equal(p.no, 'few-days'); assert.equal(x.lost, 0); assert.equal(x.empty, 10); }
+  for (const [id, why] of [['1', 'few-sales'], ['2', 'few-days']]) { const x = r.rows.find((z) => z.id === id), p = x.months['2026-08'].parts[0]; assert.equal(p.no, why); assert.equal(x.lost, 0); assert.equal(x.empty, 10); }   // 4.4: no sales lately = too few sales; new = too little history
 });
 test('after 60 empty days: shown, never in the total', () => {
   const r = run([...steady(), { id: '1', price: 2000, sell: (i) => (i % 2 ? 1 : 0), gaps: [gap('2026-06-01', '2026-11-30')] }]);
@@ -121,3 +121,11 @@ test('the 80% is of everything Shopify sold, drafts too', () => {
   assert.ok(T.report(s.y, s.cat, s.opts).best.n < before);
 });
 
+
+test('4.4: sold out too often in the 90 days: its last 60 in-stock days within the year; under 3 pieces: no ₹', () => {
+  const r = run([...steady(), { id: '1', price: 2000, sell: (i) => (i % 2 ? 1 : 0), gaps: [gap('2026-06-01', '2026-07-20'), gap('2026-08-05', '2026-08-15')] },
+    { id: '2', price: 2000, sell: (i) => (i % 60 === 0 ? 1 : 0), gaps: [gap('2026-08-05', '2026-08-15')] }]);
+  const p = r.rows.find((z) => z.id === '1').months['2026-08'].parts[0];
+  assert.ok(p.lost > 0, 'priced from older in-stock days'); assert.equal(p.fb, 1); assert.equal(p.ref[2], 60); near(p.speed, 0.5, 0.05);
+  const q = r.rows.find((z) => z.id === '2').months['2026-08'].parts[0]; assert.equal(q.no, 'few-sales');
+});

@@ -24,7 +24,7 @@ The variants making the first 80% of all Shopify net sales (drafts count too) in
     missed = speed × busy × price × days empty × factor        (the brand's factor for best sellers, or for the rest: that quarter's list)
     could have sold = sold + missed
 
-- **Speed**: net pieces ÷ Full days, over its Full days in the 90 calendar days before the gap. Needs 60+ such days, 1+ piece and net sales above 0.
+- **Speed**: net pieces ÷ Full days, over its Full days in the 90 calendar days before the gap. Needs 60+ such days, **3+ pieces** and net sales above 0. Fewer than 60 Full days in those 90 (it sold out too often lately): its **last 60 Full days within the 365** before the gap instead (4.4). Still under 60: "too little history"; under 3 pieces: "too few sales".
 - **Price**: net sales ÷ pieces on those same days. So speed × price = the ₹ it makes a Full day.
 - **Busy**: the shop's net sales that day, this variant's own taken out, ÷ the same on the speed's days. Not under 0.
 - **Days empty**: an Empty day 1, less what it still sold that day (never under 0). The Half day it ran out ½ (what it sold before it ran out does not come off). The Half day it came back 0. Another variant of the same product Full that day: 0.

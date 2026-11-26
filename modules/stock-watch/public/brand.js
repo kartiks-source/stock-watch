@@ -178,7 +178,7 @@
   const prevText = (p) => (p.whole && p.from.slice(8) === '01' ? MONTH[+p.key.slice(5, 7) - 1] : dates(p.from, p.to));
   const daysNum = (x) => (Math.round((+x || 0) * 2) / 2).toLocaleString('en-IN');
   const agencyStart = () => { const s = (S().settings || {}).agencyStart; return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null; };
-  const WHY_SHORT = { later: 'out over 60 days', 'few-days': 'too new to know their sales', 'started-empty': 'already empty when our record began', gift: 'a gift line', unsure: 'Shopify’s stock record doesn’t add up', sib: 'another size was in stock' };
+  const WHY_SHORT = { later: 'out over 60 days', 'few-days': 'too new to know their sales', 'few-sales': 'too few sales to estimate', 'started-empty': 'already empty when our record began', gift: 'a gift line', unsure: 'Shopify’s stock record doesn’t add up', sib: 'another size was in stock' };
   const whyShort = (x) => (x.why && x.why.length ? x.why.map((k) => WHY_SHORT[k] || k) : x.later > 0 ? [WHY_SHORT.later] : x.est ? ['they hardly sell'] : x.apart ? ['topped up from the warehouse'] : ['too new to know their sales']);
   /** 4.2.0: a month that was only website top-ups (src/agency.js: its ₹ all apart) is not "ran out", as in the server's count */
   const topUpOnly = (c) => (c.apart || 0) > 0 && c.apart >= (c.lost || 0) - 1;
