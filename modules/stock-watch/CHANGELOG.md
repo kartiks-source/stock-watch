@@ -5,15 +5,17 @@ User-facing changes, newest first. Semver: minor when a number's rule changes or
 
 ## 4.2.0 · 2026-11-26 · the home page, month first
 
-- The Brand report opens on this month so far ("November 2026 · so far, 1–24 Nov"). On the 1st to the 3rd it opens on last month, which is not closed yet. ◀ ▶ step a month; "12 months" shows the year. The address keeps the month (`#brand/2026-10`, `#brand/12m`).
-- Best sellers is the default view. The headline: "X of Y best sellers ran out in <month>. We missed about ₹Z", the share of what they sold, and which of the top 10 ran out.
-- Three tiles: Missed and Empty days, each beside the same dates of the month before, and Empty right now (best sellers out now and about ₹ a day, linking to Out now).
-- The month's list: one row per product with a day strip (in stock, empty, part day, off the website), empty days, ₹ and "N days × ₹A a day". Sort by ₹ or rank. Products empty with no ₹ fold into one grey line with the reason.
-- Past months beside it: % of sales, missed, ran out, days to refill (the middle stock-out that came back that month). The 12 months: headline, the month chart and the best seller × month grid.
+- The Brand report opens on this month so far ("November 2026 · so far, 1–24 Nov"). On the 1st to the 3rd it opens on last month, which is not closed yet. ◀ ▶ step a month; "12 months" shows the year ("All months" and "Since …" while we hold less than a year). The address keeps the month (`#brand/2026-10`, `#brand/12m`).
+- Best sellers is the default view. The headline: "X of Y best sellers ran out in <month>. <Store> missed about ₹Z", the share of what they sold, and which of the top 10 ran out. A store with no best-seller list yet shows all products and says why.
+- Three tiles: Missed and Empty days (all products added up, a whole number), each beside the same dates of the month before (none when that month is held only in part), and Empty right now with the same ₹ a day as Out now.
+- The month's list: one row per product with "#22 seller", a day strip for the days so far (in stock, empty, out part of the day, off the website hatched), empty days and ₹. Under the ₹: "₹A a day × N days", or "₹A a day × ½ of 1 day counted" when only some days can be priced. Sort by ₹ or rank. Products we can't put a price on fold into one grey line with the reason.
+- Past months beside it: % of sales, missed, ran out, back in (how long a sold-out item usually took to come back, filed under the month it came back). The 12 months: headline, the month chart and the best seller × month grid.
 - Data → "We started on" (optional, per store): a dashed line on the 12-month chart and a line in Past months.
-- All products opens on This month. Period buttons: This month · Last month · 30 days · 90 days · Custom. Best sellers there use each month's own list, so the ₹ matches the home page for the same dates.
+- All products opens on This month (Last month on the 1st–3rd). Period buttons: This month · Last month · 30 days · 90 days · Custom. On Shopify stores its ₹ matches the home page for the same dates and view; best sellers use each month's own list. Its money reads like the home page (₹16k, ₹1.1 lakh).
+- Custom and Last month stop on their last day everywhere: the group view and the daily rows included.
+- "₹ a day" now is one number on every page; off the best-seller list × 0.74, as its ₹.
 - No ₹ ranges on the brand page or the product panel: "about ₹X". "Could have been", "Cost the most" and the chart under a single month are gone.
-- Money missed is unchanged: same rule, same ₹.
+- Money missed per month and per product is unchanged: same rule, same ₹. Demo, Flow, Sheet and CSV stores build the home page from the rows held, so there it can differ from All products.
 
 ## 4.1.0 · 2026-11-26 · Custom period
 

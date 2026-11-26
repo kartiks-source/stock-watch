@@ -147,7 +147,7 @@ function report(y, catalog, opts = {}) {
     rows.push({ id: r.id, productId: r.productId, name: r.c.product, variant: r.c.variant || '', sku: r.c.sku || '', active: r.active, always: r.always || undefined, unsure: r.unsure || undefined, best: !!b, rank: b ? b.rank : null, pieces, sold: Math.round(sold), price: pieces > 0 ? Math.round(sold / pieces) : null, lastSold: last,
       stock: r.level[F.n - 1], out: !!out, since: out ? (out.before && out.a === 0 ? null : F.keys[out.a]) : null, emptyNow: out ? out.empty : 0,
       empty: sum(Tm.map(([, c]) => c.empty)), times: gaps.length, months: Object.fromEntries(Tm.map(([m, c]) => [m, { empty: c.empty, best: c.best, rank: c.rank ?? null, lost: Math.round(c.lost), later: Math.round(c.later), parts: c.parts }])),
-      ends: gaps.filter((x) => x.ended === 'back' && !x.before).map((x) => [F.keys[x.b], x.empty]),   // 4.2.0: stock-outs that came back: last day, empty days (days to refill)
+      ends: gaps.filter((x) => x.ended === 'back' && !x.before).map((x) => [F.keys[r.st[x.b] === 0 && x.b + 1 < F.n ? x.b + 1 : x.b], x.empty]),   // filed under the day it came back   // 4.2.0: stock-outs that came back: last day, empty days (days to refill)
       speed: speedNow(F, r), lost: Math.round(sum(Tm.map(([, c]) => c.lost))), lostBest: Math.round(sum(Tm.filter(([, c]) => c.best).map(([, c]) => c.lost))), later: Math.round(sum(Tm.map(([, c]) => c.later))), low: rg.low ?? undefined, high: rg.high ?? undefined,
       strip: [...r.st.subarray(first)].map((v) => (v === -1 ? '-' : v === 2 ? '2' : String(v))).join('') });
   }

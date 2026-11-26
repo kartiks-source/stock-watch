@@ -55,10 +55,11 @@ function defaultMonth(today, keys) {
 const median = (a) => { if (!a.length) return null; const s = a.slice().sort((x, y) => x - y), h = s.length >> 1; return r2(s.length % 2 ? s[h] : (s[h - 1] + s[h]) / 2); };
 /** The dates of the month before to compare with: the same days so far for a month still open, else the whole month. */
 function prevRange(m, p) {
-  if (!p) return null;
-  if (m.closed) return { from: p.from, to: p.to, whole: true };
-  const to = `${p.key}-${String(Math.min(+m.to.slice(8, 10), +lastDayOf(p.key).slice(8, 10))).padStart(2, '0')}`;
-  return { from: p.from > `${p.key}-01` ? p.from : `${p.key}-01`, to: to < p.to ? to : p.to, whole: to >= p.to && p.from <= `${p.key}-01` };
+  if (!p || p.from > `${p.key}-01` || m.from > `${m.key}-01`) return null;   // a month held in part (the first of the record): nothing fair to compare
+  if (m.closed || m.to === lastDayOf(m.key)) return { from: p.from, to: p.to, whole: true };   // a whole month: the whole month before
+  const to = `${p.key}-${String(Math.min(+m.to.slice(8, 10), +lastDayOf(p.key).slice(8, 10))).padStart(2, '0')}`, end = to < p.to ? to : p.to;
+  if (end < p.from) return null;
+  return { from: p.from, to: end, whole: end === lastDayOf(p.key) };
 }
 /** Days to refill: the median empty days of the stock-outs that came back in each month. ends = [[last day, empty days]]. */
 function refills(months, list) {
@@ -68,17 +69,11 @@ function refills(months, list) {
   const every = (k) => [...at.values()].flatMap((z) => z[k]);
   return { best: { refill: median(every('best')), refills: every('best').length }, all: { refill: median(every('all')), refills: every('all').length } };   // the 12 months
 }
-/** ₹ a full day of an out-now row (speed × price before the gap, × 0.74 off the list); 0 past 60 empty days or with no ₹. */
-function dayValue(t, x) {
-  if (!x.out) return 0;
-  const m = t.months[t.months.length - 1], c = x.months[m.key], p = c && c.parts[c.parts.length - 1];
-  return p && p.speed > 0 && p.price > 0 && p.to === m.to && Date.parse(m.to) - Date.parse(p.start) < 59 * DAY ? Math.round(p.speed * p.price * (p.slow || 1)) : 0;
-}
 /** ₹ a day a row that is out now keeps missing (0 when it carries no ₹, or it has been out over 60 days). */
 function costNow(t, x) {
   if (!x.out) return 0;
   const m = t.months[t.months.length - 1], c = x.months[m.key], p = c && c.parts[c.parts.length - 1];
-  return p && p.lost > 0 && p.to === m.to && Date.parse(m.to) - Date.parse(p.start) < 59 * DAY ? Math.round(p.perDay * p.price) : 0;
+  return p && p.lost > 0 && p.to === m.to && Date.parse(m.to) - Date.parse(p.start) < 59 * DAY ? Math.round(p.perDay * p.price * (p.slow || 1)) : 0;   // 4.2.0: × 0.74 off the list, as its ₹
 }
 function cell(t, x, m) {
   const c = x.months[m.key]; if (!c) return null;
@@ -125,7 +120,7 @@ function brand(t, { stockOf = null, today = null } = {}) {
   const now = t.rows.map((x, i) => ({ x, p: ps[i] })).filter(({ x }) => x.active).map(({ x, p }) => {
     const c = p.months[last.key];
     const live = stockOf ? stockOf(x.id) : null;
-    return { ...p, months: undefined, id: x.id, out: x.out, outVariants: x.out ? 1 : 0, variantsLive: 1, outSince: null, outFromDay: x.out ? x.since || t.span.held : null, stock: live != null ? live : Math.max(0, x.stock), daysOutMonth: c ? c.daysOut : 0, rangeMonth: c ? c.range : '', lostMonth: c ? c.lost : 0, unitsMonth: c ? c.units : 0, missedMonthAll: c ? c.lost : 0, moneyDaysMonth: c ? c.moneyDays : 0, no: c ? c.no : null, costPerDay: costNow(t, x), dayValue: dayValue(t, x) };
+    return { ...p, months: undefined, id: x.id, out: x.out, outVariants: x.out ? 1 : 0, variantsLive: 1, outSince: null, outFromDay: x.out ? x.since || t.span.held : null, stock: live != null ? live : Math.max(0, x.stock), daysOutMonth: c ? c.daysOut : 0, rangeMonth: c ? c.range : '', lostMonth: c ? c.lost : 0, unitsMonth: c ? c.units : 0, missedMonthAll: c ? c.lost : 0, moneyDaysMonth: c ? c.moneyDays : 0, no: c ? c.no : null, costPerDay: costNow(t, x) };
   }).sort((a, b) => (b.out - a.out) || (b.lostMonth - a.lostMonth) || (b.sold - a.sold));
   const keys = months.map((m) => m.key);
   return { ok: true, rule: t.rule, home: { defaultMonth: defaultMonth(today || t.span.to, keys), today, stripFrom: t.span.from }, span: { from: t.span.from, through: t.span.to, days: sum(t.months.map((m) => m.days)) }, window: { from: t.span.from, through: t.span.to }, asOf: { through: t.span.to }, settings: { bestShare: 0.8, paceMonths: 0 }, months, headline, products: ps, proof: t.proof, bestList: t.best, countsNow: t.now,
@@ -151,7 +146,7 @@ function home(r, details = {}, today = null) {
       if (st[i] !== '0' && st[i] !== '1') continue;
       let b = i, e = 0; while (b + 1 < st.length && (st[b + 1] === '0' || st[b + 1] === '1')) b++;
       for (let j = i; j <= b; j++) e += st[j] === '0' ? 1 : 0.5;
-      if (st[b + 1] === '2' && i > 0 && st[i - 1] !== '-') ends.push([keys[b], e]);
+      if (st[b + 1] === '2' && i > 0 && st[i - 1] !== '-') ends.push([st[b] === '0' ? keys[b + 1] : keys[b], e]);   // filed under the day it came back
       last = { a: i, b }; i = b;
     }
     const now = !!last && last.b === st.length - 1 && st[st.length - 1] === '0';
@@ -217,6 +212,7 @@ function period(rep, t, { from, to, y = null, only = false, bestSet = null }) { 
   if (sl) { const [u, v] = only ? [sum(rep.products.map((p) => p.unitsSold || 0)), sum(rep.products.map((p) => p.sold || 0))] : soldOf(sl.all); Object.assign(T, { sold: Math.round(v), unitsSold: u }); }
   if (T.sold + L > 0) T.lostPct = r2(L / (T.sold + L) * 100);
   const perDay = new Map(); for (const x of t.rows) if (!only || (bestSet ? bestSet.has(x.id) : x.best)) for (const [k, z] of dailyOf(t, x, !!only)) perDay.set(k, (perDay.get(k) || 0) + z[0]);
+  if (rep.daily) rep.daily = rep.daily.filter((d) => !d.day || d.day <= to);   // 4.2.0: a Custom period / Last month ends on its own last day, so the days add up to the total
   for (const d of rep.daily || []) { const v = perDay.get(d.day) || 0; d.lost = Math.round(v); if (sl) { const [u, w] = [Number((sl.all[d.day] || [])[0]) || 0, Number((sl.all[d.day] || [])[1]) || 0]; if (d.day <= to) { d.sold = Math.round(w); d.units = u; } } }
   for (const s of rep.stockouts || []) { s.lost = 0; s.lostCounted = 0; }
   if (rep.yesterday) rep.yesterday.lost = Math.round(perDay.get(rep.yesterday.day) || 0);
@@ -247,4 +243,4 @@ function profile(prof, t, id) {
   return prof;
 }
 
-module.exports = { brand, ads, products, period, between, profile, emptyDays, costNow, WHY, WHY_SHORT, home, defaultMonth, prevRange, median, dayValue, GRACE };
+module.exports = { brand, ads, products, period, between, profile, emptyDays, costNow, WHY, WHY_SHORT, home, defaultMonth, prevRange, median, GRACE };

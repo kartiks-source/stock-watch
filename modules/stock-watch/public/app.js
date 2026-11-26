@@ -43,6 +43,7 @@
   /* ---------- formatting ---------- */
   const inr = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
   const money = (x) => {
+    if (AGENCY && window.SW_BRAND) return SW_BRAND.rs(x);   // 4.2.0: the agency's pages say ₹ one way: ₹16k, ₹1.1 lakh (the home page's)
     const v = Math.round(+x || 0), a = Math.abs(v);
     if (a >= 1e7) return `₹${(v / 1e7).toFixed(2)} Cr`;
     if (a >= 1e5) return `₹${(v / 1e5).toFixed(2)} L`;
@@ -75,6 +76,9 @@
     return `${m}-01..${new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).toISOString().slice(0, 10)}`;
   }
   const isLast = (v = state.days) => String(v) === lastMonth();
+  /* 4.2.0: the agency's pages open on This month; on the 1st–3rd on Last month, as the home page does (a month closes 3 days after it ends) */
+  const defaultDays = (today = todayKey()) => (+today.slice(8, 10) <= 3 ? lastMonth(today) : 'month');
+  if (AGENCY) state.days = defaultDays();
   const keyShort = (k) => new Date(`${k}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' });
   const inPeriod = (r = { period: state.days === 'month' ? 'month' : isCustom() ? 'custom' : 'days', days: state.days }) => (r.period === 'month' ? 'this month' : r.period === 'custom' || isCustom() ? `from ${String(state.days).split('..').map(keyShort).join(' to ')}` : `in the last ${r.days} days`);   // "This month" = from the 1st (SW-027)
 

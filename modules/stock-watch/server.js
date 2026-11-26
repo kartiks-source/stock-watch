@@ -328,9 +328,10 @@ function truthOf(d, shop = null) {
   return t;
 }
 /** A period report with its money from the one rule (Shopify stores only). */
-function oneMoney(d, r, only = false) {
+function oneMoney(d, r, only = false, span = null) {
   const t = truthOf(d); if (!t.on || !r) return r;
   const dayOf = (x) => TZ.dayKey(x, TZ.zoneOf(d.settings));
+  if (span && span.to) r.toKey = span.to;   // 4.2.0: the period's own last day comes from the period, so no route can forget it
   const end = t.ok ? t.span.to : dayOf(Date.now()), to = r.toKey && r.toKey < end ? r.toKey : end;   // 4.1.0: a Custom period ends on its own last day
   return screen.period(r, t, { y: brandInputs(d).y, only, from: dayOf(r.from), to, bestSet: only ? bestIdsFor(d, dayOf(r.from), to) : null });
 }
@@ -685,7 +686,7 @@ async function storeApi(req, res, url, role, id) {
   const v1 = apiv1.handle(req, url, () => {   // SW-050: /api/v1/summary, /api/v1/rows; the same report as /api/report
     const S = settingsFor(url, d.settings), trial = Object.keys(LIMITS).some((k) => S[k] !== d.settings[k]);
     const r = helpers.enrich(engine.report(d.stock, d.orders, S, reportOpts()), { decisions: decide.all(), rates: trial ? savedRates() : null });
-    r.period = periodKind; if (span.to) r.toKey = span.to; r.yesterday = period.yesterdayFor(d.stock, d.orders, S, r, reportOpts()); return oneMoney(d, r);
+    r.period = periodKind; if (span.to) r.toKey = span.to; r.yesterday = period.yesterdayFor(d.stock, d.orders, S, r, reportOpts()); return oneMoney(d, r, false, span);
   }, { store: here, freshness, source: d.source });
   if (v1) return send(res, v1.code, v1.body);
   const sp = await suppliers.handle(req, url, readBody, {   // SW-040: Data → Suppliers (writes: admin only, gated above)
@@ -710,7 +711,7 @@ async function storeApi(req, res, url, role, id) {
     r.period = periodKind; if (span.to) r.toKey = span.to; r.yesterday = period.yesterdayFor(d.stock, d.orders, S, r, reportOpts());   // SW-027
     links.annotateReport(r, d.catalog, shopLinks());   // 1.4.0: image + links on every product row
     status.annotate(r.products, d.catalog);
-    oneMoney(d, r, onlyBest);   // 2.0.0: money from the one rule, full days only
+    oneMoney(d, r, onlyBest, span);   // 2.0.0: money from the one rule, full days only
     r.rev = cache.rev();
     return r;
   });
@@ -788,7 +789,7 @@ async function storeApi(req, res, url, role, id) {
     if (!lens) return send(res, 200, { ok: true, lenses: groups.lensesFor(cat), catalog: catalog.info(cat) });
     if (!groups.LENSES.includes(lens)) return fail(res, 400, 'Unknown group');
     const r = engine.report(d.stock, d.orders, settingsFor(url, d.settings), reportOpts());
-    return send(res, 200, { ok: true, ...groups.build(oneMoney(d, r, onlyBest).products, cat, lens, { showAll: url.searchParams.get('all') === '1' }), catalog: catalog.info(cat) });
+    return send(res, 200, { ok: true, ...groups.build(oneMoney(d, r, onlyBest, span).products, cat, lens, { showAll: url.searchParams.get('all') === '1' }), catalog: catalog.info(cat) });
   }
   if (p === '/api/settings' && req.method === 'GET') return send(res, 200, { ok: true, store: here, settings: publicSettings(d.settings, role), role, changes: role === access.ADMIN ? audit.recent(d, 50) : [], lastPlanChange: audit.lastOf(d, PLAN_KEYS), runs: runs.list(d), source: d.source, lastSync: d.lastSync, lastSyncError: d.lastSyncError, shopify: shopifyStatus(), ops: opsState(d) });
   if (p === '/api/shopify/sync' && req.method === 'POST') {

@@ -7,9 +7,11 @@ Shared copy for the team: https://claude.ai/artifact/27Q6x8r3rpZHYaNzhjW2Zq
 
 Home page month first (branch `home-month-first`, not merged or deployed): opens on this month (last month on the 1st–3rd, GRACE), sticky ◀ ▶ / 12 months bar, month in the hash, Best sellers by default, three tiles with the same dates of the month before, the month's list with a day strip and a ₹0 fold line, Past months with days to refill, the 12 months behind one button, optional "We started on" per store. All products opens on This month with Last month and 90 days. API shaping only (src/screen.js, src/truth.js non-money fields); the money rule and every ₹ unchanged. Best sellers on a period now use each month's own quarter list, so All products and the home page agree for past quarters.
 
+Critics (logic, UI, cross-module) then reviewed it; fixed on the branch: Custom/Last month groups and daily rows stop on the period's last day (oneMoney takes it from the period), one ₹ a day (costNow, × 0.74 off the list) on the tile, Out now and All products, no comparison against a month held in part, refills filed under the day it came back, top-up months counted the same everywhere, All products opens on Last month on the 1st–3rd, no-list and young-store states, copy (Back in, the grey line, store name), day strip (no future days, hatched off-website), rank "#22 seller", 768 px layout, the agency's ₹ format on All products.
+
 Open:
-- five critics not yet run on this cycle;
-- the demo (rows-held) build has no per-day ₹, so the "month before" ₹ there is the month spread evenly over its empty days;
+- the mobile critic not yet run on this cycle;
+- demo, Flow, Sheet and CSV stores: the home page comes from the rows held (no per-day ₹; the month before = the month spread evenly), so it can differ from All products;
 - "Y" in "X of Y products" (All view) = products with sales or a stock-out in the 12 months, not those on sale that month.
 
 ## 2026-11-26 · stock-watch 4.0.0
