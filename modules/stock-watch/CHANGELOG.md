@@ -3,6 +3,10 @@
 User-facing changes, newest first. Semver: minor when a number's rule changes or a feature lands, patch for fixes. The version in `package.json` matches the top heading. Versions before 0.9.0 were reconstructed from `docs/DEVLOG.md` on 20 Nov 2026 (no tags existed); dates are the DEVLOG dates. Per DEVLOG, nothing from 0.6.0 on has been deployed yet. Since 1.0.0-rc.1, `/health`, `/status` and the page footer show the version and the build's commit (SW-056); `test/docs.test.js` checks the top heading matches `package.json`.
 
 
+## 4.0.3 · 2026-11-26 · busyness to 3 decimals
+
+- "How busy" shows 0.973, not 0.97, so the sum checks out by hand.
+
 ## 4.0.2 · 2026-11-26 · days counted are whole and halves
 
 - "Days counted" now reads 0.5 or 4.5, not 0.52: the shop's busyness is averaged over the days that count. The money is unchanged.
