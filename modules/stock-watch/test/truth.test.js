@@ -129,3 +129,9 @@ test('4.4: sold out too often in the 90 days: its last 60 in-stock days within t
   assert.ok(p.lost > 0, 'priced from older in-stock days'); assert.equal(p.fb, 1); assert.equal(p.ref[2], 60); near(p.speed, 0.5, 0.05);
   const q = r.rows.find((z) => z.id === '2').months['2026-08'].parts[0]; assert.equal(q.no, 'few-sales');
 });
+
+test('4.4: a product off the best-seller list with under 60 in-stock days in the 90 gets no fallback and reads "too little history"', () => {
+  const r = run([...steady(), { id: '7', price: 300, sell: (i) => (i % 9 === 0 ? 1 : 0), gaps: [gap('2026-06-01', '2026-07-20'), gap('2026-08-05', '2026-08-15')] }]);
+  const x = r.rows.find((z) => z.id === '7'), p = x.months['2026-08'].parts[0];
+  assert.equal(x.best, false); assert.equal(p.no, 'few-days'); assert.equal(p.fb, undefined); assert.equal(p.lost, undefined);
+});

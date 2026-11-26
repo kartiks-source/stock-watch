@@ -4,7 +4,7 @@ Newest first. Date · module · what changed and why · anything open.
 Shared copy for the team: https://claude.ai/artifact/27Q6x8r3rpZHYaNzhjW2Zq
 
 
-## 2026-11-27 · stock-watch 4.4.0
+## 2026-11-26 · stock-watch 4.4.0
 
 Products that sell out often now get a number. Before, a product needed 60 in-stock days in the 90 before a stock-out, so the most frequently sold-out best sellers were priced at nothing. Now it falls back to its last 60 in-stock days within the year. It also needs at least 3 pieces sold. A read-only data and logic check came first: totals reconcile at every level, sales match the store totals, no stock record is broken, and an outside tool rebuilt November within ₹30. Tests on pretend stock-outs: these cases ran about 14% low, like the rule overall.
 

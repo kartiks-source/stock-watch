@@ -3,7 +3,7 @@
  * 2.0.0: one engine for every number on the screen (LOGIC.md §1–§9 of v2). Pure: year.json + catalog in, numbers out.
  *
  *   FACTS     what Shopify recorded: sold, price paid, stock at each day's end, the days a shelf was empty.
- *   ESTIMATE  lost = ₹ a Full day (last 90 days) x how busy the shop was x days empty x the brand's factor (src/model.js factors, 4.3)
+ *   ESTIMATE  lost = ₹ a Full day (last 90 days; a best seller out too often: its last 60 in stock within the year) x how busy the shop was x days empty x the brand's factor (src/model.js factors, 4.3)
  *             Days past the 60th of a gap: shown, never added. The day it ran out counts ½, the day it came back 0.
  *   PROOF     replayed stock-outs and real comebacks against what really sold (src/model.js tests); the range comes from them.
  *

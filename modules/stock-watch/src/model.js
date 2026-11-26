@@ -33,7 +33,7 @@ function prepare(F) {
   return F;
 }
 const usableRow = (r) => !r.always && !r.unsure && !r.gift;
-/** The speed known before day t (its Full days in the 90 days before), or null. */
+/** The speed known before day t (its Full days in the 90 days before; a best seller out too often: its last 60 within the year), or null. */
 function speed(F, r, t, minUnits = MIN_UNITS, allowFb = true) {   // minUnits 1: the selling pace now (days of stock), not the money
   t = Math.min(t, F.n); const mk = minUnits === MIN_UNITS && allowFb ? t : `${t}|${minUnits}|${allowFb ? 1 : 0}`; if (r.spMemo.has(mk)) return r.spMemo.get(mk);
   let out = null; let a = Math.max(0, t - LOOK), d = r.fd[t] - r.fd[a], u = r.fu[t] - r.fu[a], n = r.fn[t] - r.fn[a], fb = false;
@@ -48,7 +48,12 @@ function speed(F, r, t, minUnits = MIN_UNITS, allowFb = true) {   // minUnits 1:
   r.spMemo.set(mk, out); return out;
 }
 /** 4.4: why no speed: under 60 in-stock days within the year, or under 3 pieces sold. */
-function noReason(F, r, t) { const hi = r.upto[Math.min(t, F.n)], lo = r.upto[Math.max(0, t - YEAR)]; return hi - lo < MIN_DAYS ? 'few-days' : 'few-sales'; }
+function noReason(F, r, t) {   // follows speed(): which test did it fail?
+  t = Math.min(t, F.n); const a = Math.max(0, t - LOOK), d = r.fd[t] - r.fd[a], u = r.fu[t] - r.fu[a];
+  if (d >= MIN_DAYS) return 'few-sales';
+  if (u >= 1 && (!F.bestAt || F.bestAt(r, t))) { const hi = r.upto[t], lo = r.upto[Math.max(0, t - YEAR)]; return hi - lo < MIN_DAYS ? 'few-days' : 'few-sales'; }
+  return 'few-days';
+}
 /** How busy the shop was on day i against the speed's days (1 = a normal day). */
 const busy = (F, r, s, i) => (s.base > 0 ? F.shopOf(r, i) / s.base : 1);
 /** Days s..e cut per calendar month. */
