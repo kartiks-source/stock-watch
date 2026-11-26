@@ -1,7 +1,7 @@
 'use strict';
 /*
  * 4.0: the prediction behind "money missed" (RULE.md). 4.3: × the brand's own factor (factors), measured on its normal months. Pure: works on the facts of src/truth.js. F.shop[i] = the shop's net ₹ on day i.
- *   speed   net pieces a Full day over the Full days in the 90 calendar days before the gap. Needs 60+ such days and 1+ piece.
+ *   speed   net pieces a Full day over the Full days in the 90 calendar days before the gap. Needs 60+ such days and 3+ pieces; a best seller with fewer (but a sale lately) uses its last 60 in-stock days within the year.
  *   busy    the shop's net ₹ that day (this row's own taken out) ÷ the same on the speed's days. Carries Diwali, sales and quiet days.
  *   price   net ₹ ÷ pieces on the speed's days. So speed × price = ₹ a Full day.
  *   tests   replayed stock-outs (a pretend opening stock, real sales until it is gone, the real next days are the truth) and real
@@ -34,18 +34,18 @@ function prepare(F) {
 }
 const usableRow = (r) => !r.always && !r.unsure && !r.gift;
 /** The speed known before day t (its Full days in the 90 days before), or null. */
-function speed(F, r, t) {
-  t = Math.min(t, F.n); if (r.spMemo.has(t)) return r.spMemo.get(t);
+function speed(F, r, t, minUnits = MIN_UNITS, allowFb = true) {   // minUnits 1: the selling pace now (days of stock), not the money
+  t = Math.min(t, F.n); const mk = minUnits === MIN_UNITS && allowFb ? t : `${t}|${minUnits}|${allowFb ? 1 : 0}`; if (r.spMemo.has(mk)) return r.spMemo.get(mk);
   let out = null; let a = Math.max(0, t - LOOK), d = r.fd[t] - r.fd[a], u = r.fu[t] - r.fu[a], n = r.fn[t] - r.fn[a], fb = false;
-  if (usableRow(r) && d < MIN_DAYS) {   // 4.4: sold out too often lately: its last 60 in-stock days within a year
+  if (allowFb && usableRow(r) && d < MIN_DAYS && u >= 1 && (!F.bestAt || F.bestAt(r, t))) {   // 4.4: a best seller sold out too often lately (but selling): its last 60 in-stock days within a year
     const hi = r.upto[t], lo = Math.max(r.upto[Math.max(0, t - YEAR)], hi - MIN_DAYS);
     if (hi - lo >= MIN_DAYS) { a = r.sd[lo]; d = r.fd[t] - r.fd[a]; u = r.fu[t] - r.fu[a]; n = r.fn[t] - r.fn[a]; fb = true; }
   }
-  if (usableRow(r) && d >= MIN_DAYS && u >= MIN_UNITS && n > 0) {
+  if (usableRow(r) && d >= MIN_DAYS && u >= minUnits && n > 0) {
     const y0 = Math.max(0, t - YEAR), lo = r.upto[a], hi = r.upto[t];
     out = { perDay: u / d, units: u, days: d, from: r.sd[lo], to: r.sd[hi - 1], price: n / u, base: (r.fs[t] - r.fs[a]) / d, yearUnits: r.fu[t] - r.fu[y0], yearDays: r.fd[t] - r.fd[y0], yearFrom: r.sd[r.upto[y0]], ...(fb ? { fb: true } : {}) };
   }
-  r.spMemo.set(t, out); return out;
+  r.spMemo.set(mk, out); return out;
 }
 /** 4.4: why no speed: under 60 in-stock days within the year, or under 3 pieces sold. */
 function noReason(F, r, t) { const hi = r.upto[Math.min(t, F.n)], lo = r.upto[Math.max(0, t - YEAR)]; return hi - lo < MIN_DAYS ? 'few-days' : 'few-sales'; }

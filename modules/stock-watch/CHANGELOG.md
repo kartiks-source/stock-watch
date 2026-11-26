@@ -5,9 +5,10 @@ User-facing changes, newest first. Semver: minor when a number's rule changes or
 
 ## 4.4.0 · 2026-11-27 · products that sell out often get a number; too few sales get none
 
-- **Out of stock too often lately.** If a product had fewer than 60 in-stock days in the 90 days before a stock-out, it now uses its last 60 in-stock days within the year. Before, these stock-outs got no ₹, so the best sellers that sold out most often were left out. On pretend stock-outs these cases came out about 14% low, like the rule as a whole, and the method's own tests did not change.
+- **Best sellers out of stock too often lately.** If a best seller had fewer than 60 in-stock days in the 90 days before a stock-out (and still sold in them), it now uses its last 60 in-stock days within the year. Before, these stock-outs got no ₹, so the best sellers that sold out most often were left out. With the trim, these cases came out about 19% low on pretend stock-outs (a wide range, 12 products), so they lean cautious. Other products don't get the fallback: for them it came out about 30% high.
 - **At least 3 pieces sold** in the days used. Fewer than that gets no ₹ ("too few sales to estimate"); estimates on 1–2 sales were wrong by about 113%.
 - The product page says when older in-stock days were used.
+- Days of stock left (the selling pace now) still needs only 1 piece sold, so reorder screens are unchanged.
 - Rule label 4.4: every month is worked out again and locked again.
 
 ## 4.3.1 · 2026-11-26 · the pace before the ₹ a day

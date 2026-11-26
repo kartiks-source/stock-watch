@@ -85,7 +85,7 @@ const r2 = (x) => Math.round(x * 100) / 100, r4 = (x) => Math.round(x * 1e4) / 1
 
 /** Speed when in stock: the last 12 months plain, and what it sells now (the model's weighted average). */
 function speedNow(F, r) {
-  const a = Math.max(0, F.n - YEAR_DAYS), y = win(r, a, F.n - 1), s = M.speed(F, r, F.n);
+  const a = Math.max(0, F.n - YEAR_DAYS), y = win(r, a, F.n - 1), s = M.speed(F, r, F.n, 1, false);   // 4.4: the pace now keeps the 1-piece minimum (days of stock); money needs 3
   return y.d ? { perDay: r4(Math.max(0, y.u) / y.d), units: y.u, days: y.d, from: F.keys[a], to: F.keys[F.n - 1], now: r4(s ? s.perDay : 0), nowUnits: s ? s.units : 0, nowDays: s ? s.days : 0 } : null;
 }
 const biasOut = (b) => (b ? { off: r4(b.off), low: r4(b.low), high: r4(b.high), n: b.n, products: b.products } : null);
@@ -97,7 +97,7 @@ const biasOut = (b) => (b ? { off: r4(b.off), low: r4(b.low), high: r4(b.high), 
 function report(y, catalog, opts = {}) {
   const F = facts(y, catalog, opts); if (!F) return { ok: false, reason: !y || !y.anchor ? 'none' : 'short' };
   const led = opts.ledger && opts.ledger.rule === RULE ? opts.ledger : { rule: RULE, lists: {}, months: {} };
-  sums(F); F.shop = F.keys.map((k) => Number(((y.sales && y.sales.all) || {})[k]?.[1]) || 0); M.prepare(F); M.price(F);
+  sums(F); F.shop = F.keys.map((k) => Number(((y.sales && y.sales.all) || {})[k]?.[1]) || 0); M.prepare(F);
   const lastM = F.keys[F.n - 1].slice(0, 7), monthKeys = []; for (let k = MONTHS - 1; k >= 0; k--) { const m = monthBack(lastM, k); if (F.keys[0] <= `${m}-01`) monthKeys.push(m); }
   if (!monthKeys.length) return { ok: false, reason: 'short', from: F.keys[0] };
   const lock = { lists: {}, months: {} }, lists = {}, q = quarterStart(F.keys[F.n - 1]);
@@ -106,6 +106,8 @@ function report(y, catalog, opts = {}) {
     if (!lists[k]) { let L = led.lists[k]; if (!L) { L = bestOf(F, y, k); lock.lists[k] = L; } lists[k] = { ...L, map: new Map(L.rows.map(([id, rank, sold]) => [id, { rank, sold }])) }; }
     return lists[k];
   };
+  F.bestAt = (r, t) => listOf(F.keys[Math.min(t, F.n - 1)]).map.has(r.id);   // 4.4: the older-days fallback is for best sellers only
+  M.price(F);
   const cur = listOf(F.keys[F.n - 1]), best = cur.map;
   const FX = M.factors(F, (r, t) => listOf(F.keys[t]).map.has(r.id));   // 4.3: the brand's factors, from today's data (open months use them)
   const T = M.tests(F); for (const t of T) { t.best = listOf(F.keys[t.o]).map.has(t.id); t.guess *= FX[t.best ? 'best' : 'other'].f; }   // the same factor the money gets
