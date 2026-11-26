@@ -146,7 +146,7 @@
     const steps = (z) => { const k = z.slow || 1, A = z.speed * z.price, T = A * z.ref[2], B = A * z.busy, N = z.perDay > 0 ? z.units / k / z.perDay : 0;
       return `<ol class="why-steps"><li><b>On the shelf it made ${ex(A)} a day.</b><span>${ex(T)} in its ${z.ref[2]} days in stock just before (${esc(span(z.ref[0], z.ref[1]))}): ${ex(T)} ÷ ${z.ref[2]} = ${ex(A)}.</span></li>
         <li><b>${busyLine(z.busy)}.</b><span>${ex(A)} × ${x2(z.busy)} = ${ex(B)} a day.</span></li>
-        <li><b>Days counted: ${x2(N)}.</b><span>Empty all day = 1, the day it ran out = ½, the day it came back = 0, less anything it still sold.</span></li>
+        <li><b>Days counted: ${x2(N)}.</b><span>Empty all day = 1, the day it ran out = ½, the day it came back = 0${z.counted != null && z.counted - N > 0.01 ? `: ${x2(z.counted)} days, less ${x2(z.counted - N)} days’ worth it still sold on them` : ''}.</span></li>
         ${z.slow ? `<li><b>Not a best seller: × ${z.slow}.</b><span>Products like this sell about a quarter less than their last 90 days say, even when nothing runs out.</span></li>` : ''}
         <li><b>${ex(B)} × ${x2(N)}${z.slow ? ` × ${z.slow}` : ''} = ${ex(z.lost)}.</b></li></ol>`; };
     const part = (z) => `<li><b>${mon(z.month)}: ${days(z.empty)}${z.lost > 0 ? `, ${ex(z.lost)}` : ''}</b><span>${z.lost == null ? esc(none(z)) : `${z.first > 0 ? steps(z) : ''}${z.laterLost > 0 ? ` ${x2(z.later)} days came after 60 empty days: ${ex(z.laterLost)} if people still wanted it, not added.` : ''}${z.sib ? ` ${x2(z.sib)} days left out: another size or colour was in stock.` : ''}${z.closed ? ' Locked.' : ' So far: can still move.'}`}</span></li>`;

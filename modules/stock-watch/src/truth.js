@@ -13,7 +13,7 @@ const A = require('./agency');
 const { keyPlus, spanOf, dayKeys, lifeOf, days: daysOf } = A;
 
 const M = require('./model');
-const RULE = '4.0';
+const RULE = '4.0.1';   // 4.0.1: same money as 4.0; busy is averaged over the days that count
 const YEAR_DAYS = 365, WINDOW = 365, BEST_SHARE = 0.8, MIN_RANGE = 5, MIN_PRICE = 100, LIST_DAYS = 60;   // under ₹100 = a gift line, not merchandise
 
 const sum = (a) => a.reduce((s, x) => s + x, 0);
@@ -123,7 +123,7 @@ function report(y, catalog, opts = {}) {
       for (const r of F.rows) for (const g of r.gaps) for (const p of g.parts) {
         if (p.month !== m) continue; const s = g.ref;
         const bs = list.map.has(r.id), k = bs ? 1 : M.K.SLOW;
-        parts.push({ id: r.id, start: F.keys[g.a], from: F.keys[p.s], to: F.keys[p.e], empty: p.empty, ...(bs ? { best: 1 } : {}), ...(g.no ? { no: g.no } : { first: p.first, later: p.later, sold: p.sold || undefined, sib: p.sib || undefined, speed: r4(s.perDay), ref: [F.keys[s.from], F.keys[s.to], s.days, s.units, s.yearDays, s.yearUnits], busy: r4(p.busy), ...(bs ? {} : { slow: k }), perDay: r4(p.perDay), price: r2(s.price), units: r4(p.units * k), lost: r2(p.lost * k), laterLost: r2(p.laterLost * k) }) });
+        parts.push({ id: r.id, start: F.keys[g.a], from: F.keys[p.s], to: F.keys[p.e], empty: p.empty, ...(bs ? { best: 1 } : {}), ...(g.no ? { no: g.no } : { first: p.first, later: p.later, sold: p.sold || undefined, sib: p.sib || undefined, speed: r4(s.perDay), ref: [F.keys[s.from], F.keys[s.to], s.days, s.units, s.yearDays, s.yearUnits], busy: r4(p.busy), counted: r2(p.counted), ...(bs ? {} : { slow: k }), perDay: r4(p.perDay), price: r2(s.price), units: r4(p.units * k), lost: r2(p.lost * k), laterLost: r2(p.laterLost * k) }) });
       }
       L = { at: opts.now || null, best: rgOf(parts.filter((p) => p.best)), all: rgOf(parts), parts };
       if (over) lock.months[m] = L;
