@@ -90,7 +90,7 @@
   const testText = (t) => (t ? `${t.off >= 0 ? '+' : '−'}${pct(Math.abs(t.off) * 100)} (95% interval ${t.low >= 0 ? '+' : '−'}${pct(Math.abs(t.low) * 100)} to ${t.high >= 0 ? '+' : '−'}${pct(Math.abs(t.high) * 100)}; ${inr.format(t.n)} tries, ${inr.format(t.products)} products)` : 'too few to test');
   const howNew = (b) => `<p><b>Empty day:</b> the shelf was empty all day. The day it ran out counts ½, the day it came back 0. From Shopify’s own stock log.</p>
         <p><b>Money missed</b> = what it makes a day in stock × how busy the shop was that day × empty days × this brand’s own correction (below).</p>
-        <p><b>A day in stock:</b> its real sales (after discounts and returns) on its in-stock days in the 90 days before it ran out, ÷ those days. It needs 60 of them.</p>
+        <p><b>A day in stock:</b> its real sales (after discounts and returns) on its in-stock days in the 90 days before it ran out, ÷ those days. It needs 60 of them; if it was out too much for that, its last 60 days in stock in the 12 months before. It also needs at least 3 sold.</p>
         <p><b>How busy:</b> the shop’s sales that day ÷ its sales on those same days, this product left out. That carries Diwali, sales and quiet days.</p>
         <p><b>The correction, checked on this brand:</b> every product’s normal months, when nothing ran out, guessed the same way and set against what really sold.</p>${factorText(b.factor)}
         <p><b>Is it true?</b> We tested it two ways. Real comebacks, guess against real: best sellers ${testText(b.proof.best.back)}; other products ${testText(b.proof.other.back)}. Replayed stock-outs (real sales hidden after a pretend run-out): best sellers ${testText(b.proof.best.replay)}; others ${testText(b.proof.other.replay)}.</p>
@@ -178,7 +178,7 @@
   const prevText = (p) => (p.whole && p.from.slice(8) === '01' ? MONTH[+p.key.slice(5, 7) - 1] : dates(p.from, p.to));
   const daysNum = (x) => (Math.round((+x || 0) * 2) / 2).toLocaleString('en-IN');
   const agencyStart = () => { const s = (S().settings || {}).agencyStart; return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null; };
-  const WHY_SHORT = { later: 'out over 60 days', 'few-days': 'too new to know their sales', 'few-sales': 'too few sales to estimate', 'started-empty': 'already empty when our record began', gift: 'a gift line', unsure: 'Shopify’s stock record doesn’t add up', sib: 'another size was in stock' };
+  const WHY_SHORT = { later: 'out over 60 days', 'few-days': 'too few days in stock to know their sales', 'few-sales': 'too few sales to estimate', 'started-empty': 'already empty when our record began', gift: 'a gift line', unsure: 'Shopify’s stock record doesn’t add up', sib: 'another size was in stock' };
   const whyShort = (x) => (x.why && x.why.length ? x.why.map((k) => WHY_SHORT[k] || k) : x.later > 0 ? [WHY_SHORT.later] : x.est ? ['they hardly sell'] : x.apart ? ['topped up from the warehouse'] : ['too new to know their sales']);
   /** 4.2.0: a month that was only website top-ups (src/agency.js: its ₹ all apart) is not "ran out", as in the server's count */
   const topUpOnly = (c) => (c.apart || 0) > 0 && c.apart >= (c.lost || 0) - 1;
@@ -231,7 +231,7 @@
   function zeroLine(rows, id, more = true) {
     if (!rows.length) return '';
     const why = [...new Set(rows.flatMap((p) => (p.x ? whyShort(p.x) : Object.values(p.months || {}).filter((x) => x.daysOut > 0).flatMap(whyShort))))], show = rows.slice(0, 6);
-    return `<p class="zero muted small" id="${id}">${inr.format(rows.length)}${more ? ' more' : ''} ${rows.length === 1 ? 'was' : 'were'} empty but we can’t put a price on ${rows.length === 1 ? 'it' : 'them'}: ${show.map((p) => `<button class="linkbtn nm" data-product="${esc(p.variantId)}">${esc(p.name)}</button>`).join(', ')}${rows.length > show.length ? '…' : ''} (${esc(why.join(', or '))}). Ask the brand if they still sell ${rows.length === 1 ? 'it' : 'them'}.</p>`;
+    return `<p class="zero muted small" id="${id}">${inr.format(rows.length)}${more ? ' more' : ''} ${rows.length === 1 ? 'was' : 'were'} empty but we can’t put a price on ${rows.length === 1 ? 'it' : 'them'}: ${show.map((p) => `<button class="linkbtn nm" data-product="${esc(p.variantId)}">${esc(p.name)}</button>`).join(', ')}${rows.length > show.length ? '…' : ''} (${esc(why.join(', or '))}).${why.includes(WHY_SHORT.later) ? ` Ask the brand if they still sell ${rows.length === 1 ? 'it' : 'them'}.` : ''}</p>`;
   }
   const tile = (label, value, sub, { cls = '', href = '', id = '' } = {}) => `<${href ? `a href="${href}"` : 'div'} class="tile3 ${cls}"${id ? ` id="${id}"` : ''}><span class="tl">${label}</span><b class="tv">${value}</b>${sub ? `<small>${sub}</small>` : ''}</${href ? 'a' : 'div'}>`;
   /** best sellers (or products) out right now and what one more day costs (the Out now page's ₹ a day) */
