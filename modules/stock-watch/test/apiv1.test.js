@@ -66,6 +66,13 @@ function near(x, y, where) {
     else assert.deepEqual(x[k], y[k], `${where} ${k}`);
   }
 }
+/** The same, all the way down (groups carry money per group too). */
+function deepNear(x, y, where) {
+  if (typeof y === 'number' && typeof x === 'number') return assert.ok(Math.abs(x - y) <= Math.max(2, Math.abs(y) * 0.001), `${where}: ${x} vs ${y}`);
+  if (!y || typeof y !== 'object' || !x || typeof x !== 'object') return assert.deepEqual(x, y, where);
+  assert.equal(Array.isArray(x), Array.isArray(y), where); assert.deepEqual(Object.keys(x).sort(), Object.keys(y).sort(), where);
+  for (const k of Object.keys(y)) deepNear(x[k], y[k], `${where}.${k}`);
+}
 const strip = (j) => { const { generatedAt, from, ops, catalog, ...rest } = j; return rest; };   // time-stamped on each call; ops = live disk % (SW-055); catalog = snapshot status that can refresh between two calls on a slow runner
 
 test('every GET route answers the same at /api and /api/v1 (old paths stay)', async () => {
@@ -75,7 +82,7 @@ test('every GET route answers the same at /api and /api/v1 (old paths stay)', as
     assert.equal(a.status, 200, p); assert.equal(b.status, 200, `v1 ${p}`);
     if (p.startsWith('/api/report')) { near(b.totals, a.totals, p); continue; }   // the report holds "now" (days left move)
     if (p.startsWith('/api/product/')) { assert.deepEqual(b.product.id, a.product.id, p); assert.equal(b.timeline.length, a.timeline.length); continue; }   // timeline ends at "now"
-    assert.deepEqual(strip(b), strip(a), p);
+    deepNear(strip(b), strip(a), p);   // groups hold ₹ lost: an open stock-out moves it by a rupee between two calls
   }
   for (const p of ['/api/export/reorder.csv', '/api/digest.txt', '/api/export/backup.json']) {
     const b = await req(p.replace('/api/', '/api/v1/'));
