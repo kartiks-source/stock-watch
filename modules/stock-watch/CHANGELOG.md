@@ -3,6 +3,14 @@
 User-facing changes, newest first. Semver: minor when a number's rule changes or a feature lands, patch for fixes. The version in `package.json` matches the top heading. Versions before 0.9.0 were reconstructed from `docs/DEVLOG.md` on 20 Nov 2026 (no tags existed); dates are the DEVLOG dates. Per DEVLOG, nothing from 0.6.0 on has been deployed yet. Since 1.0.0-rc.1, `/health`, `/status` and the page footer show the version and the build's commit (SW-056); `test/docs.test.js` checks the top heading matches `package.json`.
 
 
+## 4.4.0 · 2026-11-26 · products that sell out often get a number; too few sales get none
+
+- **Best sellers out of stock too often lately.** If a best seller had fewer than 60 in-stock days in the 90 days before a stock-out (and still sold in them), it now uses its last 60 in-stock days within the year. Before, these stock-outs got no ₹, so the best sellers that sold out most often were left out. With the trim, these cases came out about 19% low on pretend stock-outs (a wide range, 12 products), so they lean cautious. Other products don't get the fallback: for them it came out about 30% high.
+- **At least 3 pieces sold** in the days used. Fewer than that gets no ₹ ("too few sales to estimate"); estimates on 1–2 sales were wrong by about 113%.
+- The product page says when older in-stock days were used.
+- Days of stock left (the selling pace now) still needs only 1 piece sold, so reorder screens are unchanged.
+- Rule label 4.4: every month is worked out again and locked again.
+
 ## 4.3.1 · 2026-11-26 · the pace before the ₹ a day
 
 - On a product's "Why this number", step 1 now says how often it sells before the ₹ a day, so a high-priced product with a small daily figure makes sense. Example: "It sells about 1 piece every 8.1 days, at ₹4,219 each on average. That averages ₹519 a day."

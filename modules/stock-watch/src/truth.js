@@ -3,7 +3,7 @@
  * 2.0.0: one engine for every number on the screen (LOGIC.md §1–§9 of v2). Pure: year.json + catalog in, numbers out.
  *
  *   FACTS     what Shopify recorded: sold, price paid, stock at each day's end, the days a shelf was empty.
- *   ESTIMATE  lost = ₹ a Full day (last 90 days) x how busy the shop was x days empty x the brand's factor (src/model.js factors, 4.3)
+ *   ESTIMATE  lost = ₹ a Full day (last 90 days; a best seller out too often: its last 60 in stock within the year) x how busy the shop was x days empty x the brand's factor (src/model.js factors, 4.3)
  *             Days past the 60th of a gap: shown, never added. The day it ran out counts ½, the day it came back 0.
  *   PROOF     replayed stock-outs and real comebacks against what really sold (src/model.js tests); the range comes from them.
  *
@@ -13,7 +13,7 @@ const A = require('./agency');
 const { keyPlus, spanOf, dayKeys, lifeOf, days: daysOf } = A;
 
 const M = require('./model');
-const RULE = '4.3';   // 4.3: × the brand's own factor (best sellers and the rest), measured on its normal months, in place of 0.74
+const RULE = '4.4';   // 4.4: 3+ pieces in the window; sold out too often lately: its last 60 in-stock days within the year. 4.3: × the brand's own factor
 const YEAR_DAYS = 365, WINDOW = 365, BEST_SHARE = 0.8, MIN_RANGE = 5, MIN_PRICE = 100, LIST_DAYS = 60;   // under ₹100 = a gift line, not merchandise
 
 const sum = (a) => a.reduce((s, x) => s + x, 0);
@@ -85,7 +85,7 @@ const r2 = (x) => Math.round(x * 100) / 100, r4 = (x) => Math.round(x * 1e4) / 1
 
 /** Speed when in stock: the last 12 months plain, and what it sells now (the model's weighted average). */
 function speedNow(F, r) {
-  const a = Math.max(0, F.n - YEAR_DAYS), y = win(r, a, F.n - 1), s = M.speed(F, r, F.n);
+  const a = Math.max(0, F.n - YEAR_DAYS), y = win(r, a, F.n - 1), s = M.speed(F, r, F.n, 1, false);   // 4.4: the pace now keeps the 1-piece minimum (days of stock); money needs 3
   return y.d ? { perDay: r4(Math.max(0, y.u) / y.d), units: y.u, days: y.d, from: F.keys[a], to: F.keys[F.n - 1], now: r4(s ? s.perDay : 0), nowUnits: s ? s.units : 0, nowDays: s ? s.days : 0 } : null;
 }
 const biasOut = (b) => (b ? { off: r4(b.off), low: r4(b.low), high: r4(b.high), n: b.n, products: b.products } : null);
@@ -97,7 +97,7 @@ const biasOut = (b) => (b ? { off: r4(b.off), low: r4(b.low), high: r4(b.high), 
 function report(y, catalog, opts = {}) {
   const F = facts(y, catalog, opts); if (!F) return { ok: false, reason: !y || !y.anchor ? 'none' : 'short' };
   const led = opts.ledger && opts.ledger.rule === RULE ? opts.ledger : { rule: RULE, lists: {}, months: {} };
-  sums(F); F.shop = F.keys.map((k) => Number(((y.sales && y.sales.all) || {})[k]?.[1]) || 0); M.prepare(F); M.price(F);
+  sums(F); F.shop = F.keys.map((k) => Number(((y.sales && y.sales.all) || {})[k]?.[1]) || 0); M.prepare(F);
   const lastM = F.keys[F.n - 1].slice(0, 7), monthKeys = []; for (let k = MONTHS - 1; k >= 0; k--) { const m = monthBack(lastM, k); if (F.keys[0] <= `${m}-01`) monthKeys.push(m); }
   if (!monthKeys.length) return { ok: false, reason: 'short', from: F.keys[0] };
   const lock = { lists: {}, months: {} }, lists = {}, q = quarterStart(F.keys[F.n - 1]);
@@ -106,6 +106,8 @@ function report(y, catalog, opts = {}) {
     if (!lists[k]) { let L = led.lists[k]; if (!L) { L = bestOf(F, y, k); lock.lists[k] = L; } lists[k] = { ...L, map: new Map(L.rows.map(([id, rank, sold]) => [id, { rank, sold }])) }; }
     return lists[k];
   };
+  F.bestAt = (r, t) => listOf(F.keys[Math.min(t, F.n - 1)]).map.has(r.id);   // 4.4: the older-days fallback is for best sellers only
+  M.price(F);
   const cur = listOf(F.keys[F.n - 1]), best = cur.map;
   const FX = M.factors(F, (r, t) => listOf(F.keys[t]).map.has(r.id));   // 4.3: the brand's factors, from today's data (open months use them)
   const T = M.tests(F); for (const t of T) { t.best = listOf(F.keys[t.o]).map.has(t.id); t.guess *= FX[t.best ? 'best' : 'other'].f; }   // the same factor the money gets
@@ -124,7 +126,7 @@ function report(y, catalog, opts = {}) {
       for (const r of F.rows) for (const g of r.gaps) for (const p of g.parts) {
         if (p.month !== m) continue; const s = g.ref;
         const bs = list.map.has(r.id), grp = bs ? 'best' : 'other', k = FX[grp].f;
-        parts.push({ id: r.id, start: F.keys[g.a], from: F.keys[p.s], to: F.keys[p.e], empty: p.empty, ...(bs ? { best: 1 } : {}), ...(g.no ? { no: g.no } : { first: p.first, later: p.later, sold: p.sold || undefined, sib: p.sib || undefined, speed: r4(s.perDay), ref: [F.keys[s.from], F.keys[s.to], s.days, s.units, s.yearDays, s.yearUnits], busy: r4(p.busy), counted: r2(p.counted), adj: k, grp, perDay: r4(p.perDay), price: r2(s.price), units: r4(p.units * k), lost: r2(p.lost * k), laterLost: r2(p.laterLost * k) }) });
+        parts.push({ id: r.id, start: F.keys[g.a], from: F.keys[p.s], to: F.keys[p.e], empty: p.empty, ...(bs ? { best: 1 } : {}), ...(g.no ? { no: g.no } : { first: p.first, later: p.later, sold: p.sold || undefined, sib: p.sib || undefined, speed: r4(s.perDay), ref: [F.keys[s.from], F.keys[s.to], s.days, s.units, s.yearDays, s.yearUnits], ...(s.fb ? { fb: 1 } : {}), busy: r4(p.busy), counted: r2(p.counted), adj: k, grp, perDay: r4(p.perDay), price: r2(s.price), units: r4(p.units * k), lost: r2(p.lost * k), laterLost: r2(p.laterLost * k) }) });
       }
       L = { at: opts.now || null, factor: FX, best: rgOf(parts.filter((p) => p.best)), all: rgOf(parts), parts };   // 4.3: a locked month keeps the factor it was locked with
       if (over) lock.months[m] = L;

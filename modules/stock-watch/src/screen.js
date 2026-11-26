@@ -37,9 +37,9 @@ function dailyOf(t, x, best = false) {   // 4.2.0: best = only the months it was
   }
   W.set(x, m); return m;
 }
-const WHY = { unsure: 'Shopify’s stock record doesn’t add up, or it sells at 0', gift: 'a gift line', 'started-empty': 'already empty when our record begins', 'few-days': 'fewer than 60 days on the shelf in the 90 days before, or nothing sold' };
+const WHY = { unsure: 'Shopify’s stock record doesn’t add up, or it sells at 0', gift: 'a gift line', 'started-empty': 'already empty when our record begins', 'few-sales': 'it sold fewer than 3 in its days in stock before, too few to estimate', 'few-days': 'fewer than 60 days in stock in the 90 days before (best sellers: in the 12 months before)' };
 /** 4.2.0: why a month carries no ₹, in a few words for the home page's grey line */
-const WHY_SHORT = { later: 'out 60+ days', 'few-days': 'too little history', 'started-empty': 'empty when our record began', gift: 'gift line', unsure: 'stock record doesn’t add up', sib: 'another size was in stock' };
+const WHY_SHORT = { later: 'out 60+ days', 'few-days': 'too little history', 'few-sales': 'too few sales', 'started-empty': 'empty when our record began', gift: 'gift line', unsure: 'stock record doesn’t add up', sib: 'another size was in stock' };
 
 /* ---------- 4.2.0: the home page, month first ---------- */
 const GRACE = 3;   // a month closes 3 days after it ends (src/truth.js GRACE)

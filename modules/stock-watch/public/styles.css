@@ -1298,3 +1298,5 @@ html.agency .scope button { white-space: nowrap; }   /* 4.2.0: "Best sellers" on
 }
 
 #how-sure { scroll-margin-top: 140px; }   /* 4.3.1: the sticky month bar must not cover it on phones */
+
+.why-steps .why-steps li > b { display: block; color: var(--ink); }   /* 4.4: a step's heading on its own line, even inside a stock-out's line */

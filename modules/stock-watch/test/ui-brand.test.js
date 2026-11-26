@@ -282,7 +282,7 @@ test('1440: the 12 months: the chart follows the switch (hover too); the grid so
     const cnt = await pg.$$eval('.heat .hrow:not(.hhead) .hv b span', (e) => e.map((x) => +x.title.replace(/[^\d]/g, '')));
     assert.deepEqual(cnt, cnt.slice().sort((a, b) => b - a), `${sc}: grid by counted money`);
     assert.ok(cnt.every((x) => x > 0), `${sc}: no ₹0 rows in the grid`);
-    const zero = await pg.$('#zero-year'); if (zero) assert.match(await zero.textContent(), /^\d+( more)? (was|were) empty but we can’t put a price on (it|them): .+\(.+\)\. Ask the brand if they still sell (it|them)\.$/);
+    const zero = await pg.$('#zero-year'); if (zero) assert.match(await zero.textContent(), /^\d+( more)? (was|were) empty but we can’t put a price on (it|them): .+\(.+\)\.( Ask the brand if they still sell (it|them)\.)?$/);
   }
   assert.equal(await pg.evaluate(() => document.activeElement?.dataset.scope), 'best', 'focus stays on the switch');
   const key = j.months.filter((x) => x.days)[0].key;
