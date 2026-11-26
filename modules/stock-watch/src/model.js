@@ -62,12 +62,12 @@ function price(F) {
         const d = r.st[i] === 0 ? 1 : 0.5; part.empty += d;
         if (sib.some((p) => p.st[i] === 2)) { part.sib += d; continue; }
         const late = i - g.a >= LONG; part[late ? 'later' : 'first'] += d; if (g.no) continue;
-        const sold = Math.max(0, r.u[i]), b = busy(F, r, s, i), x = s.perDay * b; if (!late) { part.sold += sold; part.bz += b * d; part.bd += d; }
-        const half = r.st[i] === 1, back = half && r.level[i] > 0;
+        const sold = Math.max(0, r.u[i]), b = busy(F, r, s, i), x = s.perDay * b, half = r.st[i] === 1, back = half && r.level[i] > 0, c = back ? 0 : d;   // c: how much of the day counts
+        if (!late) { part.sold += sold; part.bz += b * c; part.bd += c; }
         const v = !half ? Math.max(0, Math.min(d * x, x - sold)) : back ? 0 : 0.5 * x;
         part[late ? 'laterUnits' : 'units'] += v;
       }
-      if (!g.no) Object.assign(part, { busy: part.bd > 0 ? part.bz / part.bd : 1, perDay: s.perDay * (part.bd > 0 ? part.bz / part.bd : 1), lost: part.units * s.price, laterLost: part.laterUnits * s.price });
+      if (!g.no) Object.assign(part, { counted: part.bd, busy: part.bd > 0 ? part.bz / part.bd : 1, perDay: s.perDay * (part.bd > 0 ? part.bz / part.bd : 1), lost: part.units * s.price, laterLost: part.laterUnits * s.price });
       delete part.bz; delete part.bd; g.parts.push(part);
     }
   }
