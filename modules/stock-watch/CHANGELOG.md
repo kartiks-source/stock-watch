@@ -2,6 +2,15 @@
 
 User-facing changes, newest first. Semver: minor when a number's rule changes or a feature lands, patch for fixes. The version in `package.json` matches the top heading. Versions before 0.9.0 were reconstructed from `docs/DEVLOG.md` on 20 Nov 2026 (no tags existed); dates are the DEVLOG dates. Per DEVLOG, nothing from 0.6.0 on has been deployed yet. Since 1.0.0-rc.1, `/health`, `/status` and the page footer show the version and the build's commit (SW-056); `test/docs.test.js` checks the top heading matches `package.json`.
 
+
+## 4.0.0 · 2026-11-26 · a simpler money-missed rule
+
+The money-missed rule is simpler: what a product makes a day in stock (its last 90 days) × how busy the shop was that day × days empty. Products off the best-seller list × 0.74.
+
+- Dropped: weighted speed, like-for-like products and speed tiers, the 3-day gap before a stock-out.
+- Changed: 60 in-stock days needed (was 30). The day it ran out counts ½ with nothing taken off. The day it came back counts 0.
+- Why: checked by three separate critics and on placebo, comeback and replay tests (RULE.md). Best sellers moved from 13–17% under to within ±7%.
+- Every month is worked out again under 4.0; the 3.0 ledger is kept apart, as before.
 ## 3.0.1 · 2026-11-25 · faster first load
 
 - All products opens fast after a data update. Same numbers.

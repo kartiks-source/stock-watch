@@ -1,6 +1,6 @@
 {
   "name": "catalys-stockout-watch",
-  "version": "3.0.1",
+  "version": "4.0.0",
   "private": true,
   "description": "Stock-out Watch: reorder before best sellers run out, see the sales and profit lost to stock-outs and the cash in overstock. Reads Shopify read-only, or Flow / Sheet / CSV.",
   "main": "server.js",

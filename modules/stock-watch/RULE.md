@@ -1,6 +1,6 @@
-# The rule (3.0)
+# The rule (4.0)
 
-One rule makes every number on the screen. Nothing else may add, hide or change a number. Changing anything here = a new rule number, run hidden beside this one for a full quarter before it may replace it.
+One rule makes every number on the screen. Nothing else may add, hide or change a number. Changing anything here = a new rule number. (4.0 replaced 3.0 at once on 26 Nov 2026, on the agency's call, after the tests below; the usual quarter beside the old rule was skipped.)
 
 ## Facts (what Shopify recorded)
 
@@ -21,18 +21,19 @@ The variants making the first 80% of all Shopify net sales (drafts count too) in
 
 ## Money missed and could have sold (estimates, every product)
 
-    missed = speed × like-for-like × price × days empty
+    missed = speed × busy × price × days empty        (× 0.74 for a product off that quarter's best-seller list)
     could have sold = sold + missed
 
-- **Speed**: weighted average of net pieces per Full day, newer days counting more (half-life 60 Full days), up to the 4th day before the gap. Not under 0. Needs 30+ Full days in the 365 days before and 1+ piece on the last 60 Full days.
-- **Like-for-like**: for the gap's days in one calendar month (under 14 days widened to 14 from the first, moved back if past the last full day): every other product (not the same product) Full on 80%+ of them, with its own speed frozen on the same day. Weight 1 ÷ (1 + 0.5 × its guess). All = (Σ weight × sold + 2) ÷ (Σ weight × guess + 2). Its speed tier (pieces per 60 days: under 3, 3–8, 8–20, 20–60, 60+) = (Σ weight × sold + 8 × all) ÷ (Σ weight × guess + 8). The tier's is used, 0.25 to 4.
-- **Price**: net sales ÷ pieces on its last 60 Full days before the gap.
-- **Days empty**: 1 for an Empty day, ½ for a Half day. What it sold that day comes off: the smaller of (days × speed) and (speed − sold), never under 0. Another variant of the same product Full that day: 0.
-- **After 60 days empty** (from the gap's first day): shown, never added. Too few gaps that long ended to test it.
-- **No ₹** (days still shown): too little history, no recent sales, already empty when the record began, sells at 0, gift line.
+- **Speed**: net pieces ÷ Full days, over its Full days in the 90 calendar days before the gap. Needs 60+ such days, 1+ piece and net sales above 0.
+- **Price**: net sales ÷ pieces on those same days. So speed × price = the ₹ it makes a Full day.
+- **Busy**: the shop's net sales that day, this variant's own taken out, ÷ the same on the speed's days. Not under 0.
+- **Days empty**: an Empty day 1, less what it still sold that day (never under 0). The Half day it ran out ½ (what it sold before it ran out does not come off). The Half day it came back 0. Another variant of the same product Full that day: 0.
+- **× 0.74 off the list**: on 1,741 normal in-stock periods (nothing ran out), products off the best-seller list sold 0.74 of what their last 90 days said; best sellers 1.00. Tests below get the same 0.74.
+- **After 60 days empty** (from the gap's first day): shown, never added.
+- **No ₹** (days still shown): under 60 Full days in the 90 before, no recent sales, already empty when the record began, sells at 0, gift line.
 - **Range** (90%): how far the tests below were off, by product (2,000 resamples), best sellers and others apart, a random mix of replays and comebacks, with counting noise (by product) and ±5.5% for the choice of model. The low end is never above what real comebacks alone say. Under 5 entries: no range.
 
-Why this model: 19 models (plain averages, weighted averages, intermittent-demand, Bayesian, Poisson regression, boosted trees, the 2.0 rule) × 3 ways to use other products, scored on windows that began by Sep 2026 (some run into October); the simplest of the ones that can't be told apart. The half-life anywhere from 30 to 180 days, and the 14, 0.5, 2 and 8, move the total under 3% either way (a half-life of 15: +5%).
+Why this rule (26 Nov 2026): plain to explain, and it beat 3.0 on best sellers (comebacks −13% → +7%, replays −17% → −6%, placebo +0%). Three separate critics (data, demand, tests) checked every step; what they changed: 60 days not 30 (short histories ran +79% high), the run-out day ½ with nothing taken off (it sells 2.7–3.5× a normal day before it empties), the comeback day 0, × 0.74 off the list. 90 days not 365: per product the miss doubles over a year (14% → 31%). Busy by day, week or month: the same within 1%.
 
 ## Proof (on the page, worked out again with new data)
 
@@ -48,7 +49,8 @@ A month is locked 3 days after it ends: empty days, speed, like-for-like, price,
 ## Limits (said on the screen)
 
 - A missed sale can't be seen. The test proves how well the guess works on products that were in stock, not the missed sales themselves.
-- Someone may have bought another product instead. That isn't taken off.
+- Someone may have bought another product instead, or bought it later. That isn't taken off; daily sales can't tell.
+- It is net sales (after discounts and returns, no GST, no shipping), not profit.
 - Our record begins on the first day Shopify's two reports both hold; gaps in the first weeks carry no ₹.
 - Money on products that are not back yet can't be checked against a comeback; the page says how much that is.
-- The range held 86–88% of the time when the method was checked blind (before this code was written, in a separate build), not the 90% it aims at. One product: 88%, checked on the same data, so not blind.
+- The range is not yet checked blind for this rule.

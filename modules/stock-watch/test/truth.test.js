@@ -29,31 +29,31 @@ const steady = (n = 12, f = () => 1, start = 100) => Array.from({ length: n }, (
 const run = (rows, o) => { const s = shop(rows, o); return T.report(s.y, s.cat, s.opts); };
 const gap = (a, b) => [IX(a), IX(b)];
 
-test('missed = speed × like-for-like × price × days empty; a half day is half; every product; could have sold = sold + missed', () => {
+test('missed = speed × how busy the shop was × price × days empty; ran out ½, came back 0; off the list × 0.74; could have sold = sold + missed', () => {
   const r = run([...steady(), { id: '1', price: 2000, sell: (i) => (i % 2 ? 1 : 0), gaps: [gap('2026-08-05', '2026-08-15')] }, { id: '2', price: 300, sell: (i) => (i % 5 === 0 ? 1 : 0), gaps: [gap('2026-08-05', '2026-08-15')] }]);
   const x = r.rows.find((z) => z.id === '1'), p = x.months['2026-08'].parts[0], o = r.rows.find((z) => z.id === '2');
-  assert.equal(p.empty, 10); assert.equal(p.first, 10);   // 5 Aug ran out (½), 6–14 empty, 15 Aug back (½)
-  near(p.perDay, 0.5, 0.02); near(p.like, 1, 0.05); assert.equal(p.price, 2000); near(p.lost, 10 * p.perDay * 2000, 1);
-  assert.equal(p.ref[1], '2026-08-01', 'three days left out before the gap'); assert.equal(p.ref[2], 60);
-  assert.equal(o.best, false); assert.ok(o.lost > 0); near(o.months['2026-08'].parts[0].perDay, 0.2, 0.02);
-  assert.equal(r.year.all.lost, x.lost + o.lost); assert.equal(r.year.best.lost, x.lost); assert.equal(r.year.all.could, r.year.sold + r.year.all.lost);
+  assert.equal(p.empty, 10); assert.equal(p.first, 10);   // 5 Aug ran out (½), 6–14 empty, 15 Aug back (½, counts 0)
+  near(p.speed, 0.5, 0.02); near(p.busy, 1, 0.05); assert.equal(p.price, 2000); near(p.units, 9.5 * p.speed * p.busy, 0.15); near(p.lost, p.units * 2000, 1);
+  assert.equal(p.ref[1], '2026-08-04', 'the 90 days end the day before it ran out'); assert.equal(p.ref[2], 90);
+  const q = o.months['2026-08'].parts[0]; assert.equal(o.best, false); assert.equal(q.slow, 0.74); assert.ok(o.lost > 0); near(q.speed, 0.2, 0.02); near(q.lost, q.units * 300, 1);
+  near(r.year.all.lost, x.lost + o.lost, 1); assert.equal(r.year.best.lost, x.lost); assert.equal(r.year.all.could, r.year.sold + r.year.all.lost);
   assert.equal(x.low, undefined, 'one entry: no range');
 });
-test('newer days count more: a product that slowed down is guessed near its new speed', () => {
+test('only the last 90 days count: a product that slowed down is guessed at its new speed', () => {
   const cut = IX('2026-04-05'), f = (rows) => run([...steady(), ...rows]).rows.find((z) => z.id === '1').months['2026-08'].parts[0];
   const p = f([{ id: '1', price: 2000, sell: (i) => (i < cut ? 1 : i % 4 === 0 ? 1 : 0), gaps: [gap('2026-08-05', '2026-08-15')] }]);   // 118 full days at ¼, about 2 half-lives
-  near(p.speed, 0.25 + 0.75 * 0.25, 0.04);
+  near(p.speed, 0.25, 0.03);
 });
-test('like-for-like: a month that ran twice as fast for like products doubles the guess; a gift line never counts', () => {
+test('busy: a month the shop sold twice as much doubles the guess; a gift line is never a best seller', () => {
   const r = run([...steady(12, (i) => (DAY(i).slice(0, 7) === '2026-08' ? 2 : 1)), { id: '1', price: 2000, sell: (i) => (i % 2 ? 1 : 0), gaps: [gap('2026-08-01', '2026-08-31')] }, { id: '9', price: 10, sell: () => 40 }]);
-  const p = r.rows.find((z) => z.id === '1').months['2026-08'].parts[0]; near(p.like, 1.85, 0.15); assert.equal(p.likeN, 12);
+  const p = r.rows.find((z) => z.id === '1').months['2026-08'].parts[0]; near(p.busy, 12400 / 6400, 0.08); assert.equal(r.rows.find((z) => z.id === '9').best, false);
 });
 test('the first day on the website is not a day it ran out', () => {
   const day = IX('2026-06-10');
   const r = run([...steady(), { id: '1', price: 2000, sell: (i) => (i > day && i % 2 ? 1 : 0), createdAt: Date.parse('2026-06-10T05:00:00Z'), gaps: [[0, day]] }]);
   const x = r.rows.find((z) => z.id === '1'); assert.equal(x.times, 0); assert.equal(x.empty, 0);
 });
-test('no recent sales or under 30 shelf days: days only, with the reason', () => {
+test('no recent sales or under 60 shelf days in the last 90: days only, with the reason', () => {
   const r = run([...steady(), { id: '1', price: 2000, sell: (i) => (i < 60 ? 1 : 0), gaps: [gap('2026-08-05', '2026-08-15')] }, { id: '2', price: 2000, sell: () => 1, createdAt: Date.parse('2026-07-20T05:00:00Z'), gaps: [gap('2026-08-05', '2026-08-15')] }]);
   for (const id of ['1', '2']) { const x = r.rows.find((z) => z.id === id), p = x.months['2026-08'].parts[0]; assert.equal(p.no, 'few-days'); assert.equal(x.lost, 0); assert.equal(x.empty, 10); }
 });
@@ -108,11 +108,11 @@ test('screens: every page adds up to the same ₹ (months, products, the period,
   assert.ok(!b.ads.push.some((p) => p.pace * 7 < 1), 'ads never push what sells under one a week');
 });
 
-test('what it sold on an empty or half day comes off that day', () => {
+test('the day it ran out counts ½ whatever sold before; an empty day that still sold comes off; the day it came back is 0', () => {
   const s = shop([...steady(), { id: '1', price: 2000, sell: () => 1, gaps: [gap('2026-08-05', '2026-08-15')] }]);
-  s.y.sales.by['1']['2026-08-05'] = [3, 6000, 0, 6000]; s.y.sales.by['1']['2026-08-10'] = [2, 4000, 0, 4000]; s.y.moves.by['1']['2026-08-10'] = -2; s.y.moves.by['1']['2026-08-15'] += 2;
+  s.y.sales.by['1']['2026-08-05'] = [3, 6000, 0, 6000]; s.y.sales.by['1']['2026-08-10'] = [2, 4000, 0, 4000]; for (const [k, u] of [['2026-08-05', 3], ['2026-08-10', 2]]) { s.y.sales.all[k][0] += u; s.y.sales.all[k][1] += u * 2000; } s.y.moves.by['1']['2026-08-10'] = -2; s.y.moves.by['1']['2026-08-15'] += 2;
   const p = T.report(s.y, s.cat, s.opts).rows.find((z) => z.id === '1').months['2026-08'].parts[0];
-  near(p.units, 8 * p.perDay + 0.5 * p.perDay, 0.02);   // 10 Aug and the run-out day sold more than it normally does: nothing missed
+  near(p.units, 8 * p.speed + 0.5 * p.speed, 0.05);   // 6–14 Aug less 10 Aug (it sold 2) + ½ for 5 Aug; 15 Aug back: 0
 });
 test('the 80% is of everything Shopify sold, drafts too', () => {
   const s = shop([...steady(), { id: '1', price: 2000, sell: (i) => (i % 2 ? 1 : 0) }]), big = {};
