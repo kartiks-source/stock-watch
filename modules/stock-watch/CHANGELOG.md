@@ -3,6 +3,11 @@
 User-facing changes, newest first. Semver: minor when a number's rule changes or a feature lands, patch for fixes. The version in `package.json` matches the top heading. Versions before 0.9.0 were reconstructed from `docs/DEVLOG.md` on 20 Nov 2026 (no tags existed); dates are the DEVLOG dates. Per DEVLOG, nothing from 0.6.0 on has been deployed yet. Since 1.0.0-rc.1, `/health`, `/status` and the page footer show the version and the build's commit (SW-056); `test/docs.test.js` checks the top heading matches `package.json`.
 
 
+## 4.3.1 · 2026-11-26 · the pace before the ₹ a day
+
+- On a product's "Why this number", step 1 now says how often it sells before the ₹ a day, so a high-priced product with a small daily figure makes sense. Example: "It sells about 1 piece every 8.1 days, at ₹4,219 each on average. That averages ₹519 a day."
+- On phones, "How sure are we?" is no longer hidden under the month bar when you jump to it.
+
 ## 4.3.0 · 2026-11-26 · each brand's own correction
 
 - Money missed no longer takes a fixed 0.74 off products that aren't best sellers. Each brand gets its own correction, for best sellers and for the rest, measured on its normal months: what the rule would have guessed on 30-day checks when nothing ran out (never overlapping, never just after a refill), against what really sold.

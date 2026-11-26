@@ -1296,3 +1296,5 @@ html.agency .scope button { white-space: nowrap; }   /* 4.2.0: "Best sellers" on
   .oname { grid-area: n; } .omoney { grid-area: m; } .ostrip { grid-area: s; margin-top: 4px; } .odays { grid-area: d; flex-direction: row; gap: 4px; align-items: baseline; justify-content: flex-end; }
   .dstrip { max-width: none; }
 }
+
+#how-sure { scroll-margin-top: 140px; }   /* 4.3.1: the sticky month bar must not cover it on phones */
