@@ -3,6 +3,12 @@
 User-facing changes, newest first. Semver: minor when a number's rule changes or a feature lands, patch for fixes. The version in `package.json` matches the top heading. Versions before 0.9.0 were reconstructed from `docs/DEVLOG.md` on 20 Nov 2026 (no tags existed); dates are the DEVLOG dates. Per DEVLOG, nothing from 0.6.0 on has been deployed yet. Since 1.0.0-rc.1, `/health`, `/status` and the page footer show the version and the build's commit (SW-056); `test/docs.test.js` checks the top heading matches `package.json`.
 
 
+## 4.0.1 · 2026-11-26 · "Why this number" in four plain steps
+
+- Each stock-out on a product page now reads: ₹ it made a day on the shelf (a division), how busy the shop was, the days counted, and one multiplication.
+- "1 empty days" is now "1 empty day".
+- The "no ₹" reason says 60 days, as the rule does.
+
 ## 4.0.0 · 2026-11-26 · a simpler money-missed rule
 
 The money-missed rule is simpler: what a product makes a day in stock (its last 90 days) × how busy the shop was that day × days empty. Products off the best-seller list × 0.74.
