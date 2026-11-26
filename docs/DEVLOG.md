@@ -3,6 +3,14 @@
 Newest first. Date · module · what changed and why · anything open.
 Shared copy for the team: https://claude.ai/artifact/27Q6x8r3rpZHYaNzhjW2Zq
 
+## 2026-11-26 · stock-watch 4.3.0
+
+Rule 4.3 (branch `brand-factor`, not merged or deployed): the fixed 0.74 off the best-seller list (M.K.SLOW) is replaced by a factor measured per brand on its own normal months (src/model.js `factors`): 30-day checks that never overlap and hold nothing out (none within 30 days after a refill), guess = speed × busy × price, real = net sold; per group (that quarter's list) raw = real ÷ guess, shrunk toward 1 by 100 checks, within 0.5–1.5; under 100 checks or 10 products → 1. After a critic: checks made non-overlapping and limited to normal months, the drawer explains a locked month with its own factor, the shrink is shown so it can be redone by hand. Applied to both groups (units, lost, laterLost, the tests' guesses), stored on each part (`adj`, `grp`) and with each locked month (`factor`); the RULE label 4.3 re-locks every month once. "How sure are we?" and the product panel show the working.
+
+Open:
+- grouping by each quarter's list kept on purpose (the money's own grouping, no hindsight); today's list would give a different factor;
+- the five critics have not been run on 4.3.
+
 ## 2026-11-26 · stock-watch 4.2.0
 
 Home page month first (branch `home-month-first`, not merged or deployed): opens on this month (last month on the 1st–3rd, GRACE), sticky ◀ ▶ / 12 months bar, month in the hash, Best sellers by default, three tiles with the same dates of the month before, the month's list with a day strip and a ₹0 fold line, Past months with days to refill, the 12 months behind one button, optional "We started on" per store. All products opens on This month with Last month and 90 days. API shaping only (src/screen.js, src/truth.js non-money fields); the money rule and every ₹ unchanged. Best sellers on a period now use each month's own quarter list, so All products and the home page agree for past quarters.

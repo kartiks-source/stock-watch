@@ -154,7 +154,7 @@ ADMIN_PASSWORD=x SHOPIFY_STORE=brand SHOPIFY_CLIENT_ID=… SHOPIFY_CLIENT_SECRET
 - 1.1.1 UI + mobile fixes (DEVLOG 2026-11-20): `totals.stockouts` without not-selling (+ `stockoutsNotSelling`, episode `notSelling`), sale inside a stock-out moves its start (`engine.afterLastSale`), row `historyFrom` (drawer hatch / Data list / "Out since before"), `gift` (out of budget rank), Order today sorted by ₹/day, no-cost headline by count, weekly panel flows only, slow sellers out of Biggest losses, phone CSS (M5–M10), Suppliers count = listed products. Not deployed.
 - Returns % per product (SW-064, branch `feature/returns`, LOGIC §9e): order lines keep `ordered`; Products column Returns % + High returns chip (15%+, 5+ units), drawer Returned line, totals; one 60-day re-read (`shopify.orderFields`). Demo VERSION sammsara-8. `test/ui-helpers.test.js` still expects 6 Products chips (now 7 with High returns): left for the integrator (another branch edits that file). Not deployed.
 
-- 4.2.0 home month first (branch `home-month-first`, DEVLOG 2026-11-26): not merged, not deployed; five critics still to run.
+- 4.2.0 home month first: merged and live. 4.3.0 brand factor (branch `brand-factor`, RULE.md, LOGIC §32): the fixed 0.74 → each brand's own factor (`src/model.js` factors, tests `test/factor.test.js`); not merged, not deployed.
 - 1.4.0 agency proof (branch `feature/agency-proof`, DEVLOG 2026-11-24): Brand report, Best sellers now, Ads, pictures + links, 12 months from ShopifyQL, seasonal pace (also for long stock-outs' ₹ lost on every page). Checked live on Sammsara (read-only). Not pushed, not deployed; critic round still to run.
 
 ## Next
