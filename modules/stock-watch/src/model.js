@@ -1,85 +1,74 @@
 'use strict';
 /*
- * 3.0: the prediction behind "money missed" (RULE.md). Pure: works on the facts of src/truth.js.
- *   speed   weighted average of net pieces a full-shelf day, newer days count more (half-life 60 full-shelf days), up to the 4th day
- *           before the gap. Needs 30+ full days in the year before and 1+ piece on the last 60.
- *   like    how products that sell at a like speed and were in stock on the same days did against their own speed (frozen on the same
- *           day); small groups lean on everyone's.
+ * 4.0: the prediction behind "money missed" (RULE.md). Pure: works on the facts of src/truth.js. F.shop[i] = the shop's net ₹ on day i.
+ *   speed   net pieces a Full day over the Full days in the 90 calendar days before the gap. Needs 60+ such days and 1+ piece.
+ *   busy    the shop's net ₹ that day (this row's own taken out) ÷ the same on the speed's days. Carries Diwali, sales and quiet days.
+ *   price   net ₹ ÷ pieces on the speed's days. So speed × price = ₹ a Full day.
  *   tests   replayed stock-outs (a pretend opening stock, real sales until it is gone, the real next days are the truth) and real
  *           comebacks (days 4–30 after a gap). The range comes from how far these were off, by product, never from a formula alone.
- * Chosen among 19 models on windows that began by Sep 2026 (some run into October); Oct and Nov 2026 were looked at after the choice.
+ * Chosen 26 Nov 2026 over 3.0 after three critics (data, demand, tests) and placebo, comeback and replay tests (RULE.md, CHANGELOG).
  */
-const HALF = 60, GUARD = 3, YEAR = 365, LAST = 60, MIN_DAYS = 30, SHARE = 0.8, WINDOW = 14, K_ALL = 2, K_TIER = 8, PHI = 0.5, CLIP = [0.25, 4], LONG = 60;
-const TIERS = [3, 8, 20, 60];          // pieces per 60 full-shelf days
-const NOISE = 0.22, MODEL_SD = 0.055, SIMS = 2000, REPLAYS = 40, SEED = 20261125;
-const DECAY = 0.5 ** (1 / HALF);
-
+const LOOK = 90, MIN_DAYS = 60, YEAR = 365, LONG = 60, SLOW = 0.74;   // SLOW: products off the best-seller list sell 26% under their last 90 days even with nothing out (placebo test)
+const NOISE = 0.22, MODEL_SD = 0.055, SIMS = 2000, REPLAYS = 40, SEED = 20261125, LAST = 60;
 /** A fixed random sequence: the same data always gives the same range. */
 function rng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 const normal = (rnd) => Math.sqrt(-2 * Math.log(1 - rnd())) * Math.cos(2 * Math.PI * rnd());
-const tier = (v) => { const x = v * 60; let k = 0; while (k < TIERS.length && x >= TIERS[k]) k++; return k; };
-const usable = (r) => !r.always && !r.unsure && !r.gift;
 
-/** Speed of every row on every day: r.sp[t] = { speed, …} worked out on demand. Prepares the running sums. */
+/** Running sums of every row (Full days only), and the shop less this row. */
 function prepare(F) {
+  const shop = F.shop || F.keys.map(() => 0);
   for (const r of F.rows) {
-    const days = [], cu = [0], cn = [0], ew = [0], ewd = [0];
-    if (usable(r)) for (let i = 0; i < F.n; i++) if (r.st[i] === 2) { days.push(i); cu.push(cu[cu.length - 1] + r.u[i]); cn.push(cn[cn.length - 1] + r.net[i]); ew.push(ew[ew.length - 1] * DECAY + r.u[i]); ewd.push(ewd[ewd.length - 1] * DECAY + 1); }
-    r.sd = days; r.scu = cu; r.scn = cn; r.ew = ew; r.ewd = ewd; r.upto = new Int32Array(F.n + 1 + GUARD); let j = 0; for (let t = 0; t < r.upto.length; t++) { while (j < days.length && days[j] < t) j++; r.upto[t] = j; }
-    r.fu = new Float64Array(F.n + 1); r.fd = new Float64Array(F.n + 1); r.fn = new Float64Array(F.n + 1);
-    for (let i = 0; i < F.n; i++) { const full = r.st[i] === 2 && usable(r); r.fu[i + 1] = r.fu[i] + (full ? r.u[i] : 0); r.fd[i + 1] = r.fd[i] + (full ? 1 : 0); r.fn[i + 1] = r.fn[i] + (full ? r.net[i] : 0); }
+    const ok = usableRow(r), days = [], scu = [0];
+    r.fu = new Float64Array(F.n + 1); r.fd = new Float64Array(F.n + 1); r.fn = new Float64Array(F.n + 1); r.fs = new Float64Array(F.n + 1);
+    for (let i = 0; i < F.n; i++) {
+      const full = ok && r.st[i] === 2; if (full) { days.push(i); scu.push(scu[scu.length - 1] + r.u[i]); }
+      r.fu[i + 1] = r.fu[i] + (full ? r.u[i] : 0); r.fd[i + 1] = r.fd[i] + (full ? 1 : 0); r.fn[i + 1] = r.fn[i] + (full ? r.net[i] : 0); r.fs[i + 1] = r.fs[i] + (full ? Math.max(0, shop[i] - r.net[i]) : 0);
+    }
+    r.sd = days; r.scu = scu; r.upto = new Int32Array(F.n + 2); let j = 0; for (let t = 0; t < r.upto.length; t++) { while (j < days.length && days[j] < t) j++; r.upto[t] = j; }
     r.spMemo = new Map();
   }
-  F.likeMemo = new Map();
+  F.shopOf = (r, i) => Math.max(0, shop[i] - r.net[i]);
   return F;
 }
-/** The speed known before day t, or null. */
+const usableRow = (r) => !r.always && !r.unsure && !r.gift;
+/** The speed known before day t (its Full days in the 90 days before), or null. */
 function speed(F, r, t) {
-  if (r.spMemo.has(t)) return r.spMemo.get(t);
-  let out = null; const j = r.upto[Math.max(0, t - GUARD)], lo = r.upto[Math.max(0, t - YEAR)], a = Math.max(0, j - LAST);
-  if (j - lo >= MIN_DAYS) { const u = r.scu[j] - r.scu[a]; if (u >= 1) out = { perDay: Math.max(0, r.ew[j]) / r.ewd[j], units: u, days: j - a, from: r.sd[a], to: r.sd[j - 1], price: (r.scn[j] - r.scn[a]) / u, yearUnits: r.scu[j] - r.scu[lo], yearDays: j - lo, yearFrom: r.sd[lo] }; }
+  t = Math.min(t, F.n); if (r.spMemo.has(t)) return r.spMemo.get(t);
+  let out = null; const a = Math.max(0, t - LOOK), d = r.fd[t] - r.fd[a], u = r.fu[t] - r.fu[a], n = r.fn[t] - r.fn[a];
+  if (usableRow(r) && d >= MIN_DAYS && u >= 1 && n > 0) {
+    const y0 = Math.max(0, t - YEAR), lo = r.upto[a], hi = r.upto[t];
+    out = { perDay: u / d, units: u, days: d, from: r.sd[lo], to: r.sd[hi - 1], price: n / u, base: (r.fs[t] - r.fs[a]) / d, yearUnits: r.fu[t] - r.fu[y0], yearDays: r.fd[t] - r.fd[y0], yearFrom: r.sd[r.upto[y0]] };
+  }
   r.spMemo.set(t, out); return out;
 }
-/** Like-for-like on days a..b against speeds known before day o. → { x, n, real, forecast } */
-function like(F, r, a, b, o) {
-  if (b - a < WINDOW - 1) { b = Math.min(F.n - 1, a + WINDOW - 1); a = Math.max(0, b - WINDOW + 1); }
-  const key = `${a}|${b}|${o}`; let L = F.likeMemo.get(key);
-  if (!L) {
-    L = { rows: [], R: 0, G: 0, tr: [0, 0, 0, 0, 0], tg: [0, 0, 0, 0, 0], tn: [0, 0, 0, 0, 0] };
-    for (const p of F.rows) {
-      const d = p.fd[b + 1] - p.fd[a]; if (d < SHARE * (b - a + 1)) continue;
-      const s = speed(F, p, o); if (!s) continue;
-      const g = s.perDay * d, w = 1 / (1 + PHI * g), x = { pid: p.productId, r: w * (p.fu[b + 1] - p.fu[a]), g: w * g, k: tier(s.perDay) };
-      L.rows.push(x); L.R += x.r; L.G += x.g; L.tr[x.k] += x.r; L.tg[x.k] += x.g; L.tn[x.k]++;
-    }
-    F.likeMemo.set(key, L);
-  }
-  const s = speed(F, r, o), k = tier(s ? s.perDay : 0); let R = L.R, G = L.G, tr = L.tr[k], tg = L.tg[k], n = L.tn[k];
-  for (const x of L.rows) if (x.pid === r.productId) { R -= x.r; G -= x.g; if (x.k === k) { tr -= x.r; tg -= x.g; n--; } }
-  const all = (R + K_ALL) / (G + K_ALL), x = Math.min(CLIP[1], Math.max(CLIP[0], (tr + K_TIER * all) / (tg + K_TIER)));
-  return { x, n, all };
-}
+/** How busy the shop was on day i against the speed's days (1 = a normal day). */
+const busy = (F, r, s, i) => (s.base > 0 ? F.shopOf(r, i) / s.base : 1);
 /** Days s..e cut per calendar month. */
 function byMonth(F, a, b) { const out = []; for (let i = a; i <= b;) { let e = i; while (e < b && F.keys[e + 1].slice(0, 7) === F.keys[i].slice(0, 7)) e++; out.push([i, e]); i = e + 1; } return out; }
-/** Pieces the model expects on the full days of a..b, speed known before day o. */
-function guess(F, r, a, b, o) { const s = speed(F, r, o); let t = 0; for (const [x, e] of byMonth(F, a, b)) t += s.perDay * like(F, r, x, e, o).x * (r.fd[e + 1] - r.fd[x]); return t; }
+/** Pieces the model expects on the Full days of a..b, speed known before day o. */
+function guess(F, r, a, b, o) { const s = speed(F, r, o); let t = 0; for (let i = a; i <= b; i++) if (r.st[i] === 2) t += s.perDay * busy(F, r, s, i); return t; }
 
-/** Every gap priced. */
+/**
+ * Every gap priced. A day: Empty 1; the Half day it ran out ½ (what sold before it ran out does not come off); the Half day it came back 0;
+ * another Half day ½ less what it sold. Another variant of the same product Full that day: 0. Days 61+ shown apart.
+ */
 function price(F) {
   for (const r of F.rows) for (const g of r.gaps) {
     const sib = F.rows.filter((p) => p !== r && p.productId === r.productId), s = speed(F, r, g.a);
     g.ref = s; g.no = r.unsure || r.always ? 'unsure' : r.gift ? 'gift' : g.before ? 'started-empty' : !s ? 'few-days' : null; g.parts = [];
     for (const [a, e] of byMonth(F, g.a, g.b)) {
-      const part = { month: F.keys[a].slice(0, 7), s: a, e, empty: 0, first: 0, later: 0, sib: 0, sold: 0, units: 0, laterUnits: 0 }, L = g.no ? null : like(F, r, a, e, g.a), x = g.no ? 0 : s.perDay * L.x;
+      const part = { month: F.keys[a].slice(0, 7), s: a, e, empty: 0, first: 0, later: 0, sib: 0, sold: 0, units: 0, laterUnits: 0, bz: 0, bd: 0 };
       for (let i = a; i <= e; i++) {
         const d = r.st[i] === 0 ? 1 : 0.5; part.empty += d;
         if (sib.some((p) => p.st[i] === 2)) { part.sib += d; continue; }
         const late = i - g.a >= LONG; part[late ? 'later' : 'first'] += d; if (g.no) continue;
-        const sold = Math.max(0, r.u[i]); if (!late) part.sold += sold;
-        part[late ? 'laterUnits' : 'units'] += Math.max(0, Math.min(d * x, x - sold));
+        const sold = Math.max(0, r.u[i]), b = busy(F, r, s, i), x = s.perDay * b; if (!late) { part.sold += sold; part.bz += b * d; part.bd += d; }
+        const half = r.st[i] === 1, back = half && r.level[i] > 0;
+        const v = !half ? Math.max(0, Math.min(d * x, x - sold)) : back ? 0 : 0.5 * x;
+        part[late ? 'laterUnits' : 'units'] += v;
       }
-      if (!g.no) Object.assign(part, { like: L.x, likeN: L.n, perDay: x, lost: part.units * s.price, laterLost: part.laterUnits * s.price });
-      g.parts.push(part);
+      if (!g.no) Object.assign(part, { busy: part.bd > 0 ? part.bz / part.bd : 1, perDay: s.perDay * (part.bd > 0 ? part.bz / part.bd : 1), lost: part.units * s.price, laterLost: part.laterUnits * s.price });
+      delete part.bz; delete part.bd; g.parts.push(part);
     }
   }
   return F;
@@ -90,7 +79,7 @@ function tests(F) {
   const out = [], rnd = rng(SEED), gaps = []; for (const r of F.rows) for (const g of r.gaps) if (!g.before && g.ended === 'back' && g.empty >= 3 && g.empty <= LONG) gaps.push(g.empty);
   const add = (kind, r, a, b, o, gap) => { const s = speed(F, r, o); if (s) out.push({ kind, id: r.id, pid: r.productId, o, a, b, gap, units: s.units, guess: guess(F, r, a, b, o) * s.price, real: r.fn[b + 1] - r.fn[a] }); };
   for (const r of F.rows) {
-    if (!usable(r)) continue;
+    if (!usableRow(r)) continue;
     if (gaps.length && r.sd.length >= 45) for (let k = 0; k < REPLAYS; k++) {
       const top = Math.max(34, r.sd.length - 10), k0 = 33 + Math.floor(rnd() * (top - 33)), u = (r.scu[k0] - r.scu[Math.max(0, k0 - LAST)]) / Math.min(LAST, k0), f = 10 + 40 * rnd(), pick = gaps[Math.floor(rnd() * gaps.length)];
       if (!(u > 0)) continue;
@@ -133,4 +122,4 @@ function ranger(groups) {
     return { low: Math.min(point, pct(z, 0.05), pct(c, 0.05)), high: Math.max(point, pct(z, 0.95)) };   // real comebacks are the real event: the low end is never above what they alone say
   };
 }
-module.exports = { prepare, speed, like, guess, price, tests, bias, ranger, byMonth, tier, K: { HALF, GUARD, MIN_DAYS, LAST, LONG, SHARE, WINDOW } };
+module.exports = { prepare, speed, busy, guess, price, tests, bias, ranger, byMonth, K: { LOOK, MIN_DAYS, LONG, SLOW } };

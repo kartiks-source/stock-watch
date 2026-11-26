@@ -3,6 +3,19 @@
 Newest first. Date · module · what changed and why · anything open.
 Shared copy for the team: https://claude.ai/artifact/27Q6x8r3rpZHYaNzhjW2Zq
 
+## 2026-11-26 · stock-watch 4.0.0
+
+A simpler money-missed rule (RULE.md, src/model.js): what a product makes a day in stock over its last 90 days × how busy the shop was that day × days empty, with products off the best-seller list × 0.74. 3.0's weighted speed, like-for-like products and speed tiers are gone.
+
+Before choosing it, three separate critics (data, demand logic, tests) checked every assumption. Their fixes are in: 60 in-stock days needed, the run-out day counts ½ with nothing taken off, the comeback day counts 0, and the 0.74 for products off the list (from placebo tests).
+
+Shipped straight away on the agency's call, instead of a quarter beside 3.0.
+
+Open:
+- substitution and late buying can't be seen in daily sales;
+- the range isn't checked blind yet;
+- some stock-outs are products the brand may have stopped, or stock removed by hand, and need the brand to confirm.
+
 ## 2026-11-25 · stock-watch 3.0.0
 
 One tested model for every product (src/model.js, RULE.md): weighted average of the speed in stock × like products on the same days × price × days empty. Picked among 19 models by replayed stock-outs and real comebacks; rebuilt line by line by a separate engine. Open: December is the first month it hasn't seen; the apiv1 groups test compares two calls moments apart on ticking demo data.
