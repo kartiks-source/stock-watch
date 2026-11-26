@@ -83,7 +83,7 @@ test('lock: a closed month keeps the factor it was locked with when later data c
   const rows = [...many(14, 100, 1000, (i, k) => ((i + k) % 2 ? 1 : 0)), ...many(14, 200, 300, (i, k) => 5 * 2 ** (-(i + k) / 200)),
     ...Array.from({ length: 4 }, (_, k) => ({ id: String(300 + k), price: 300, sell: () => 1, gaps: [[IXd('2026-08-05'), IXd('2026-08-15')], [IXd('2026-11-10'), IXd('2026-11-20')]] }))];
   const a0 = shop(rows), a = T.report(a0.y, a0.cat, opts), led = JSON.parse(JSON.stringify({ rule: T.RULE, ...a.lock }));
-  assert.equal(T.RULE, '4.3'); assert.ok(led.months['2026-08'].factor, 'the factor is saved with the month');
+  assert.equal(T.RULE, '4.4'); assert.ok(led.months['2026-08'].factor, 'the factor is saved with the month');
   const aug = (r) => r.months.find((m) => m.key === '2026-08'), part = (r, m) => r.rows.find((x) => x.id === '300').months[m].parts[0];
   /* later data: the slow sellers fade much faster, so today's factor drops */
   const rows2 = rows.map((r) => (+r.id >= 200 && +r.id < 300 ? { ...r, sell: (i) => 5 * 2 ** (-(i) / 60) } : r)), b0 = shop(rows2), b = T.report(b0.y, b0.cat, { ...opts, ledger: led });
