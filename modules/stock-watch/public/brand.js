@@ -52,7 +52,7 @@
   const SCOPE_KEY = 'sw-brand-scope';
   const scope = () => {
     const st = S();
-    if (!st.brandScope) { let v = null; try { v = new URLSearchParams(location.search).get('view'); } catch { /* */ } if (v !== 'all' && v !== 'best') { try { v = localStorage.getItem(SCOPE_KEY); } catch { /* */ } } st.brandScope = v === 'all' ? 'all' : 'best'; }   // 4.2.0: Best sellers unless chosen otherwise
+    if (!st.brandScope) { let v = null; try { v = new URLSearchParams(location.search).get('view'); } catch { /* */ } if (v !== 'all' && v !== 'best') { try { v = localStorage.getItem(SCOPE_KEY); } catch { /* */ } } st.brandScope = v === 'all' || v === 'best' ? v : window.SW_AGENCY === false ? 'all' : 'best'; }   // 4.2.0: the agency's pages: Best sellers unless chosen otherwise (the owner's pages keep All products)
     return st.brandScope;
   };
   const setScope = (v) => { S().brandScope = v; S().brandAll = false; S().brandMonthAll = false; S().adsAll = false; try { const u = new URL(location.href); if (u.searchParams.has('view')) { u.searchParams.delete('view'); history.replaceState(null, '', u); } } catch { /* */ } try { localStorage.setItem(SCOPE_KEY, v); } catch { /* private window */ } };

@@ -1217,7 +1217,7 @@ html.agency .rail a[data-view="reorder"], html.agency .owner { display: none !im
 a.tile3:hover { border-color: var(--brand); }
 .hgrid { display: grid; grid-template-columns: minmax(0, 1.75fr) minmax(300px, 1fr); gap: 14px; align-items: start; }
 .ycol { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-@media (max-width: 1179.98px) { .hgrid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 1279.98px) { .hgrid { grid-template-columns: minmax(0, 1fr); } }
 .olist { display: flex; flex-direction: column; }
 .orow { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(130px, 1fr) 76px 150px; gap: 12px; align-items: center; padding: 7px 4px; border-top: 1px solid var(--line); cursor: pointer; min-width: 0; }
 .orow:hover, .orow:focus-visible { background: var(--brand-wash2); }
@@ -1270,5 +1270,7 @@ a.tile3:hover { border-color: var(--brand); }
 .orow .life { display: none; }   /* the list is about the month: active / draft is one tap away in the drawer */
 .orow .pl2 { flex-wrap: wrap; row-gap: 2px; }
 .hp { overflow: hidden; } .hrow .life { display: none; }
-.scope button { white-space: nowrap; }
+html.agency .scope button { white-space: nowrap; }   /* 4.2.0: "Best sellers" on one line beside the five period buttons */
 @media (max-width: 759.98px) { html.agency .top .rdates { display: none; } html.agency .range button { padding: 5px 4px; } }   /* 4.2.0: five period buttons fit; the dates are in the line under the headline */
+@media (min-width: 760px) and (max-width: 1279.98px) { html.agency .range .wide-only { display: none; } html.agency .range .ph-d { display: inline; } html.agency .range button[data-days="month"] { text-transform: capitalize; } html.agency .range button { padding: 6px 9px; } }   /* 4.2.0: the five period buttons stay in the top bar on a small laptop */
+@media (min-width: 760px) and (max-width: 1099.98px) { html.agency .top .sync-pill span { display: none; } html.agency .top { gap: 10px; } }   /* 4.2.0: the sync dot alone on a small screen */
