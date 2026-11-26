@@ -130,6 +130,8 @@ function report(y, catalog, opts = {}) {
     }
     Mo.closed = !!led.months[m] || over; Mo.lockedAt = L.at;
     for (const p of L.parts) { const x = cellOf(p.id, m); x.empty += p.empty; x.best = x.best || !!p.best; x.parts.push(p); if (p.lost != null) { x.lost += p.lost; x.later += p.laterLost; x.units += p.units; } }
+    for (const [id, c] of rowsM) if (c[m]) { const o = list.map.get(id); c[m].rank = o ? o.rank : null; }   // 4.2.0: rank on that month's list (screen only)
+    Object.defineProperty(Mo, 'ids', { value: list.map, enumerable: false }); Mo.listN = list.map.size;   // 4.2.0: that month's best-seller list (Y in "X of Y")
     const began = (p) => p.start >= Mo.from && p.start <= Mo.to;
     for (const [k, l] of [['best', L.parts.filter((p) => p.best)], ['all', L.parts]]) Mo[k] = { empty: sum(l.map((p) => p.empty)), rows: new Set(l.map((p) => p.id)).size, ran: new Set(l.filter(began).map((p) => p.id)).size, lost: sum(l.map((p) => p.lost || 0)), later: sum(l.map((p) => p.laterLost || 0)), noMoney: sum(l.filter((p) => p.no).map((p) => p.empty)), ...L[k] };
     for (const r of F.rows) if (list.map.has(r.id)) for (let i = a; i <= b; i++) Mo.bestSold += r.net[i];
@@ -144,7 +146,8 @@ function report(y, catalog, opts = {}) {
     const gaps = r.gaps.filter((x) => x.b >= first), Tm = Object.entries(ms).filter(([m]) => inM.has(m)), all = Tm.flatMap(([, c]) => c.parts), rg = rgOf(all);
     rows.push({ id: r.id, productId: r.productId, name: r.c.product, variant: r.c.variant || '', sku: r.c.sku || '', active: r.active, always: r.always || undefined, unsure: r.unsure || undefined, best: !!b, rank: b ? b.rank : null, pieces, sold: Math.round(sold), price: pieces > 0 ? Math.round(sold / pieces) : null, lastSold: last,
       stock: r.level[F.n - 1], out: !!out, since: out ? (out.before && out.a === 0 ? null : F.keys[out.a]) : null, emptyNow: out ? out.empty : 0,
-      empty: sum(Tm.map(([, c]) => c.empty)), times: gaps.length, months: Object.fromEntries(Tm.map(([m, c]) => [m, { empty: c.empty, best: c.best, lost: Math.round(c.lost), later: Math.round(c.later), parts: c.parts }])),
+      empty: sum(Tm.map(([, c]) => c.empty)), times: gaps.length, months: Object.fromEntries(Tm.map(([m, c]) => [m, { empty: c.empty, best: c.best, rank: c.rank ?? null, lost: Math.round(c.lost), later: Math.round(c.later), parts: c.parts }])),
+      ends: gaps.filter((x) => x.ended === 'back' && !x.before).map((x) => [F.keys[x.b], x.empty]),   // 4.2.0: stock-outs that came back: last day, empty days (days to refill)
       speed: speedNow(F, r), lost: Math.round(sum(Tm.map(([, c]) => c.lost))), lostBest: Math.round(sum(Tm.filter(([, c]) => c.best).map(([, c]) => c.lost))), later: Math.round(sum(Tm.map(([, c]) => c.later))), low: rg.low ?? undefined, high: rg.high ?? undefined,
       strip: [...r.st.subarray(first)].map((v) => (v === -1 ? '-' : v === 2 ? '2' : String(v))).join('') });
   }

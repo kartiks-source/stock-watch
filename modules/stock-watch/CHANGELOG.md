@@ -3,6 +3,18 @@
 User-facing changes, newest first. Semver: minor when a number's rule changes or a feature lands, patch for fixes. The version in `package.json` matches the top heading. Versions before 0.9.0 were reconstructed from `docs/DEVLOG.md` on 20 Nov 2026 (no tags existed); dates are the DEVLOG dates. Per DEVLOG, nothing from 0.6.0 on has been deployed yet. Since 1.0.0-rc.1, `/health`, `/status` and the page footer show the version and the build's commit (SW-056); `test/docs.test.js` checks the top heading matches `package.json`.
 
 
+## 4.2.0 · 2026-11-26 · the home page, month first
+
+- The Brand report opens on this month so far ("November 2026 · so far, 1–24 Nov"). On the 1st to the 3rd it opens on last month, which is not closed yet. ◀ ▶ step a month; "12 months" shows the year. The address keeps the month (`#brand/2026-10`, `#brand/12m`).
+- Best sellers is the default view. The headline: "X of Y best sellers ran out in <month>. We missed about ₹Z", the share of what they sold, and which of the top 10 ran out.
+- Three tiles: Missed and Empty days, each beside the same dates of the month before, and Empty right now (best sellers out now and about ₹ a day, linking to Out now).
+- The month's list: one row per product with a day strip (in stock, empty, part day, off the website), empty days, ₹ and "N days × ₹A a day". Sort by ₹ or rank. Products empty with no ₹ fold into one grey line with the reason.
+- Past months beside it: % of sales, missed, ran out, days to refill (the middle stock-out that came back that month). The 12 months: headline, the month chart and the best seller × month grid.
+- Data → "We started on" (optional, per store): a dashed line on the 12-month chart and a line in Past months.
+- All products opens on This month. Period buttons: This month · Last month · 30 days · 90 days · Custom. Best sellers there use each month's own list, so the ₹ matches the home page for the same dates.
+- No ₹ ranges on the brand page or the product panel: "about ₹X". "Could have been", "Cost the most" and the chart under a single month are gone.
+- Money missed is unchanged: same rule, same ₹.
+
 ## 4.1.0 · 2026-11-26 · Custom period
 
 - The Period picker has Custom: pick a from and a to date (store days, both included, up to 90 days, never past today) and every number on the page uses them.

@@ -7,7 +7,7 @@
   const esc = (x) => String(x ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
   const state = {
-    days: 30, view: 'brand', report: null, settings: null, source: null,
+    days: AGENCY ? 'month' : 30, view: 'brand', report: null, settings: null, source: null,   // 4.2.0: the agency's pages open on This month
     filter: { reorder: 'all', stockouts: 'all', products: 'all' },   // show everything by default; a role (roles.js) or a tab narrows it
     q: { reorder: '', stockouts: '', products: '' },
     sort: { reorder: null, stockouts: null, products: null },
@@ -68,6 +68,13 @@
   const dayLabel = (k) => { const [, m, d] = k.split('-'); return `${+d} ${MON[+m - 1]}`; };
   const dur = (h) => (h >= 48 ? `${n1(h / 24)} days` : `${n1(h)} h`);
   const isCustom = (v = state.days) => String(v).includes('..');
+  /* 4.2.0: "Last month" = a Custom period of the store's previous calendar month (src/period.js: "YYYY-MM-DD..YYYY-MM-DD") */
+  const todayKey = () => (window.SW_TZ ? SW_TZ.dayKey(Date.now(), zone()) : new Date().toISOString().slice(0, 10));
+  function lastMonth(today = todayKey()) {
+    const d = new Date(Date.UTC(+today.slice(0, 4), +today.slice(5, 7) - 2, 1)), m = d.toISOString().slice(0, 7);
+    return `${m}-01..${new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).toISOString().slice(0, 10)}`;
+  }
+  const isLast = (v = state.days) => String(v) === lastMonth();
   const keyShort = (k) => new Date(`${k}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' });
   const inPeriod = (r = { period: state.days === 'month' ? 'month' : isCustom() ? 'custom' : 'days', days: state.days }) => (r.period === 'month' ? 'this month' : r.period === 'custom' || isCustom() ? `from ${String(state.days).split('..').map(keyShort).join(' to ')}` : `in the last ${r.days} days`);   // "This month" = from the 1st (SW-027)
 
@@ -151,7 +158,7 @@
       + (d.lastStock ? `<span>Last stock change: ${dt(d.lastStock)}</span>` : '')
       + (src.err ? `<span class="badge err">Sheet sync: ${esc(src.err)}</span>` : src.lastSync ? `<span>Sheet synced: ${dt(src.lastSync)}</span>` : '')
       + shopifyBadge() + appVersion(r.app);
-    $$('.range button').forEach((b) => b.classList.toggle('on', b.dataset.days === String(state.days) || (b.dataset.days === 'custom' && isCustom())));
+    $$('.range button').forEach((b) => b.classList.toggle('on', b.dataset.days === String(state.days) || (b.dataset.days === 'last' && isLast()) || (b.dataset.days === 'custom' && isCustom() && !(AGENCY && isLast()))));
     if ($('#rdates')) { const sp = periodDates(r); $('#rdates').textContent = sp; $('#rdates').title = `Every number on the page covers ${sp}, store time (${zone()}), today so far included: the same dates in Shopify give the same numbers`; }
     if (viewOnly()) { $('#tabs a[data-view="data"]').hidden = true; pill.removeAttribute('href'); }   // view-only: no Data page (SW-029)
   }
@@ -220,7 +227,7 @@
 
   /* ---------- view-only sign-in and the settings change log (SW-029) ---------- */
   const viewOnly = () => state.role === 'view';
-  const SETTING_LABEL = { ...Object.fromEntries(ASSUME.map(([k, l]) => [k, l.replace(/ \((days|per day)[^)]*\)$/, '')])), storeName: 'Store name', tzOffsetMin: 'Time zone (min from UTC)', timeZone: 'Time zone', sheetStockCsv: 'Stock log link', sheetOrderCsv: 'Order log link', ingestKey: 'Flow key',
+  const SETTING_LABEL = { ...Object.fromEntries(ASSUME.map(([k, l]) => [k, l.replace(/ \((days|per day)[^)]*\)$/, '')])), storeName: 'Store name', agencyStart: 'We started on', tzOffsetMin: 'Time zone (min from UTC)', timeZone: 'Time zone', sheetStockCsv: 'Stock log link', sheetOrderCsv: 'Order log link', ingestKey: 'Flow key',
     'digest.hour': 'Digest hour', 'digest.roles': 'Digest goes to', 'digest.paused': 'Digest paused', 'digest.webhook': 'Digest webhook' };   // digest: SW-028 settings in the same log
   const shortVal = (v) => (v == null || v === '' ? '–' : String(v).length > 40 ? String(v).slice(0, 37) + '…' : String(v));
   const changeText = (c) => `${esc(SETTING_LABEL[c.key] || c.key)}: ${esc(shortVal(c.old))} → <b>${esc(shortVal(c.new))}</b>`;
@@ -400,7 +407,7 @@
   const GROUP_LABEL = { today: 'Order today', week: 'This week', ordered: 'Ordered', ok: 'OK', slow: 'Slow seller', warehouse: ALLOC, none: 'No stock data' };
   const dateShort = (t) => { const d = local(t); return `${d.getUTCDate()} ${MON[d.getUTCMonth()]}`; };
   /* 1.1.5: the period's store-calendar dates, "22 Oct – 20 Nov" (one date when it is today only) */
-  const periodDates = (r) => { const a = dateShort(r.from), b = r.moneyThrough ? dayLabel(r.moneyThrough) : dateShort(r.generatedAt); return a === b ? a : `${a} – ${b}`; };
+  const periodDates = (r) => { const a = dateShort(r.from), b = r.moneyThrough ? dayLabel(r.moneyThrough) : r.toKey ? dayLabel(r.toKey) : dateShort(r.generatedAt); return a === b ? a : `${a} – ${b}`; };   // 4.2.0: a Custom period (Last month) ends on its own last day
   /* on order (LOGIC.md §6b): "Ordered · lands 25 Nov"; late or not enough → a small tag next to the status */
   const poTag = (p) => {
     const o = p.onOrder; if (!o || p.status === 'Ordered') return '';
@@ -959,6 +966,7 @@
         <div class="form">
           ${field('storeName', 'Store name', s.storeName || (state.report.store && state.report.store.name) || '', 'Shown in the store picker, the tab title and digests', 'text')}
           <div class="field"><label for="f-timeZone">Time zone</label>${tzSelect(s)}<small>Store days, the sales-by-hour pattern, the digest hour and backup dates follow this</small></div>
+          ${field('agencyStart', 'We started on', s.agencyStart || '', 'Optional. The day the agency took this brand on: a dashed line on the 12-month chart and a line in Past months. Leave empty for none', 'date')}
         </div>
         <details class="fold-in owner"><summary>Advanced: planning rules</summary>
           <div class="form">${ASSUME.map(([k, label, , , tip]) => field(k, label, s[k], tip)).join('')}</div></details>
@@ -1133,7 +1141,9 @@
       if (prev) prev.textContent = text; else b.insertAdjacentHTML('beforebegin', `<div class="sx-hint">${esc(text)}</div>`);
     });
   }
-  function route() { closeDrawer(); render._animate = true; const h = (location.hash || `#${HOME}`).slice(1); state.view = h in VIEWS ? h : HOME; render(); window.scrollTo(0, 0); }
+  /* 4.2.0: #brand/2026-10 = that month on the home page, #brand/12m = the 12 months, #brand = the default month */
+  function viewOf(hash) { const [v, sub] = (hash || `#${HOME}`).slice(1).split('/'); const view = v in VIEWS ? v : HOME; if (view === 'brand') state.brandMonth = sub === '12m' ? 'year' : /^\d{4}-\d{2}$/.test(sub || '') ? sub : null; return view; }
+  function route() { closeDrawer(); render._animate = true; state.view = viewOf(location.hash); render(); window.scrollTo(0, 0); }
 
   document.addEventListener('click', async (e) => {
     if (e.target.closest('.rz')) return;
@@ -1149,7 +1159,7 @@
       box.hidden = !box.hidden; $('#cd-from').value = a; $('#cd-to').value = b; $('#cd-from').max = today; $('#cd-to').max = today; if (!box.hidden) $('#cd-from').focus(); return;
     }
     if (t.id === 'cd-go') { const a = $('#cd-from').value, b = $('#cd-to').value; if (!a || !b) { toast('Pick both dates'); return; } const [x, y] = a <= b ? [a, b] : [b, a]; if ((Date.parse(y) - Date.parse(x)) / 864e5 > 89) toast('Up to 90 days: showing the last 90 days to the end date'); state.days = `${x}..${y}`; $('#custom-dates').hidden = true; await load(); return; }
-    if (t.matches('.range button')) { state.days = t.dataset.days === 'month' ? 'month' : +t.dataset.days; $('#custom-dates').hidden = true; await load(); return; }
+    if (t.matches('.range button')) { state.days = t.dataset.days === 'month' ? 'month' : t.dataset.days === 'last' ? lastMonth() : +t.dataset.days; $('#custom-dates').hidden = true; await load(); return; }
     if (t.dataset.go) { const v = t.dataset.go; state.filter[v] = t.dataset.filter; if (location.hash === `#${v}`) { state.limit[v] = 0; render(); } else location.hash = v; return; }   // same page (the §4c line under a headline): no hashchange, so render here
     if (t.dataset.more) { const id = t.dataset.more; state.limit[id] = t.dataset.all ? 1e9 : (state.limit[id] || PAGE) + PAGE; render(); return; }
     if (t.dataset.filterReorder) { state.filter.reorder = t.dataset.filterReorder; state.limit.reorder = 0; render(); return; }
@@ -1316,7 +1326,9 @@
     catch { const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); toast('Copied'); }
   }
 
-  state.view = (location.hash || `#${HOME}`).slice(1); if (!(state.view in VIEWS)) state.view = HOME;
+  state.view = viewOf(location.hash);
+  /* 4.2.0: the agency's period buttons: This month · Last month · 30 days · 90 days · Custom (the owner's pages keep 7 / 14 / 30 / 60) */
+  if (AGENCY && $('.top .range')) $('.top .range').innerHTML = '<button data-days="month" title="From the 1st of this month (store time)"><span class="wide-only">This </span>month</button><button data-days="last" title="The whole of last month (store time)">Last<span class="wide-only"> month</span></button><button data-days="30" aria-label="30 days">30<span class="wide-only"> days</span><span class="ph-d">d</span></button><button data-days="90" aria-label="90 days">90<span class="wide-only"> days</span><span class="ph-d">d</span></button><button data-days="custom" title="Pick your own dates, up to 90 days">Custom</button>';
   window.SW_BRAND?.init({ state, api, esc, inr, table, nameCell, saveCsv, copy, toast, render, reload: () => reloadReport({ keepBrand: true }).catch((e) => toast(e.message)), status, dateShort, dt, viewOnly, rate });   // 1.4.0 (brand.js)
   window.SW_MONEY?.init({ state, api, toast, money, esc, inr, storeUrl, copy, viewOnly, dateShort, render, reload: reloadReport });   // Sprint 3 A-money (money.js)
   window.SW_ROLES?.start(state);   // land on the chosen role's home page (SW-020)

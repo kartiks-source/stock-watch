@@ -204,6 +204,13 @@ const publicSettings = (s, role = access.ADMIN) => access.visibleSettings(s, rol
 /* The planning assumptions people can tweak. Same limits whether trying a value or saving it. */
 const LIMITS = { paceMonths: [3, 12], bestShare: [50, 95], leadDays: [0, 180], coverDays: [1, 365], safetyDays: [0, 60], demandWindowDays: [7, 90], smallTopUpDays: [1, 60], minPerDay: [0, 100], tzOffsetMin: [-720, 840], allocationCheck: [0, 1] };   // allocationCheck (1.3.0, LOGIC §6): 1 on, 0 off
 const PLAN_KEYS = ['leadDays', 'coverDays', 'safetyDays'];   // the three shown under Plan settings
+/** 4.2.0: the agency's start date for this store: 'YYYY-MM-DD' (a real calendar day, 2000 to next year), or null to clear. */
+function agencyStartOf(v) {
+  if (v == null || String(v).trim() === '') return null;
+  const k = String(v).trim(), t = Date.parse(`${k}T00:00:00Z`);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(k) || !Number.isFinite(t) || new Date(t).toISOString().slice(0, 10) !== k || k < '2000-01-01' || t > Date.now() + 366 * 864e5) throw badRequest('“We started on” must be a date, for example 2026-08-01');
+  return k;
+}
 const clampSetting = (k, v) => (v == null || String(v).trim() === '' || !Number.isFinite(+v) ? undefined : Math.min(LIMITS[k][1], Math.max(LIMITS[k][0], +v)));
 /** Saved settings, with any ?leadDays=… style trial values on top (not saved). */
 function settingsFor(url, saved) {
@@ -324,8 +331,15 @@ function truthOf(d, shop = null) {
 function oneMoney(d, r, only = false) {
   const t = truthOf(d); if (!t.on || !r) return r;
   const dayOf = (x) => TZ.dayKey(x, TZ.zoneOf(d.settings));
-  const end = t.ok ? t.span.to : dayOf(Date.now());
-  return screen.period(r, t, { y: brandInputs(d).y, only, from: dayOf(r.from), to: r.toKey && r.toKey < end ? r.toKey : end });   // 4.1.0: a Custom period ends on its own last day
+  const end = t.ok ? t.span.to : dayOf(Date.now()), to = r.toKey && r.toKey < end ? r.toKey : end;   // 4.1.0: a Custom period ends on its own last day
+  return screen.period(r, t, { y: brandInputs(d).y, only, from: dayOf(r.from), to, bestSet: only ? bestIdsFor(d, dayOf(r.from), to) : null });
+}
+/** 4.2.0: the Best sellers of a period = the best-seller lists of the months it touches (each month uses its own quarter's list), so
+ *  All products shows the same ₹ as the home page for the same dates. Not the 12 months' rule (no truth): the one set. */
+function bestIdsFor(d, from, to) {
+  const t = truthOf(d); if (!t.on || !t.ok) return bestIdsOf(d);
+  const set = new Set(); for (const m of t.months) if (m.ids && m.to >= from && m.from <= to) for (const id of m.ids.keys()) set.add(id);
+  return set.size ? set : bestIdsOf(d);
 }
 /** 1.4.4 (LOGIC §7a, §22): the one best-seller set: variant IDs of the brand report's best sellers (12 months, top 80%). */
 function bestIdsOf(d) {
@@ -664,7 +678,7 @@ async function storeApi(req, res, url, role, id) {
   const shopLinks = () => ({ ...(d.shopify.shopInfo || {}), handle: keys.status(id).store || null });   // 1.4.0 (LOGIC §19)
   const lossPace = () => lossPaceOf(scope.dir(), d);   // 1.4.0 (LOGIC §21): seasonal pace for long stock-outs' ₹ lost
   const onlyBest = url.searchParams.get('best') === '1' && ['/api/report', '/api/groups', '/api/export/reorder.csv'].includes(p);   // 1.4.9: the Best sellers switch: the same report, best sellers only
-  const reportOpts = (extra = {}) => ({ ...span, catalog: d.catalog, onOrder: onorder.all(), suppliers: sups, reversals: d.reversals, weekSales: weeks.forReport(d.shopify), syncMinutes: SYNC_MIN, ...lossOpts(lossPace()), bestIds: bestIdsOf(d), ...(onlyBest ? { only: bestIdsOf(d) } : {}), ...extra });   // span: { days } or { from } (SW-027)
+  const reportOpts = (extra = {}) => ({ ...span, catalog: d.catalog, onOrder: onorder.all(), suppliers: sups, reversals: d.reversals, weekSales: weeks.forReport(d.shopify), syncMinutes: SYNC_MIN, ...lossOpts(lossPace()), bestIds: bestIdsOf(d), ...(onlyBest ? (() => { const z = bestIdsFor(d, TZ.dayKey(span.from, TZ.zoneOf(d.settings)), span.to || TZ.dayKey(Date.now(), TZ.zoneOf(d.settings))); return { only: z, bestIds: z }; })() : {}), ...extra });   // span: { days } or { from } (SW-027)
   const savedRates = () => new Map(engine.report(d.stock, d.orders, d.settings, { days: 30, catalog: d.catalog, onOrder: onorder.all() }).products.map((x) => [String(x.id), x.perDay]));
   const dc = await decide.handle(req, p, readBody, (id) => savedRates().get(id));
   if (dc) return send(res, dc.code, dc.body);
@@ -704,7 +718,7 @@ async function storeApi(req, res, url, role, id) {
   if (p === '/api/brand' && req.method === 'GET') {
     const body = cache.memo('brand', url.searchParams.get('full') === '1' ? 'full' : '', 60e3, () => {
       const t = truthData(); if (!t.on) return brandBody();   // demo, Flow, Sheet, CSV
-      return { ...(t.ok ? screen.brand(t, { stockOf: (v) => { const q = d.shopify && d.shopify.lastQty && d.shopify.lastQty[v]; return Number.isFinite(q) ? q : null; } }) : { ok: true, ready: false, reason: t.reason }), basis: t.basis, year: year.summary(year.load()), store: here, generatedAt: Date.now(), app: version.current() };
+      return { ...(t.ok ? screen.brand(t, { today: dayOf(Date.now()), stockOf: (v) => { const q = d.shopify && d.shopify.lastQty && d.shopify.lastQty[v]; return Number.isFinite(q) ? q : null; } }) : { ok: true, ready: false, reason: t.reason }), basis: t.basis, year: year.summary(year.load()), store: here, generatedAt: Date.now(), app: version.current() };
     });
     return send(res, 200, { ...body, rev: cache.rev() });
   }
@@ -726,10 +740,11 @@ async function storeApi(req, res, url, role, id) {
     const rep = links.annotateReport(helpers.enrich(engine.report(d.stock, d.orders, d.settings, reportOpts({ days: 30, from: undefined }))), d.catalog, shopLinks());
     status.annotate(rep.products, d.catalog);
     const { b, r } = brandFull(rep);
+    if (r.ok) screen.home(r, r.details || {}, dayOf(Date.now()));   // 4.2.0: the home page's month fields
     const month = r.ok ? r.months[r.months.length - 1].key : null;
     const now = r.ok ? sell.bestNow(r, rep.products, month) : [], nowAll = r.ok ? sell.bestNow(r, rep.products, month, { all: true }).filter((x) => !x.best).map((x) => { const { season: _s, monthPace: _mp, variantPrice: _vp, noPace: _np, outFrom: _o, ...q } = x; return q; }) : [];   // 1.4.9: the other products, for All products
     const adl = sell.ads(r.ok ? r : null, rep.products, { ...engine.DEFAULT_SETTINGS, ...d.settings });
-    const slim = (x) => { const { months: _m, season: _s, variantPace: _v, outFrom: _o, monthPace: _mp, variantPrice: _vp, noPace: _np, ...rest } = x; return url.searchParams.get('full') === '1' ? x : { ...rest, months: x.best || x.lost > 0 ? x.months : undefined }; };   // 1.4.4: months for every product with money missed (All products view)
+    const slim = (x) => { const { months: _m, season: _s, variantPace: _v, outFrom: _o, monthPace: _mp, variantPrice: _vp, noPace: _np, ...rest } = x; return url.searchParams.get('full') === '1' ? x : { ...rest, months: x.best || x.lost > 0 || x.daysOut > 0 ? x.months : undefined }; };   // 1.4.4: months for every product with money missed (All products view); 4.2.0: or empty days (the ₹0 line)
     return { ok: true, ...r, products: (r.products || []).map(slim), now, nowAll, ads: adl, basis: b.basis, year: year.summary(year.load()), store: here, generatedAt: Date.now(), app: version.current() };
   }
   if (p === '/api/shopify/year' && req.method === 'POST') {   // 1.4.0: admin only; queued like a pull
@@ -800,6 +815,7 @@ async function storeApi(req, res, url, role, id) {
       patch.timeZone = z; delete patch.tzOffsetMin;   // the zone decides; reports work out the minutes per moment
     }
     if (typeof b.storeName === 'string') patch.storeName = b.storeName.slice(0, 60);
+    if (b.agencyStart !== undefined) { const v = agencyStartOf(b.agencyStart); if (v !== (d.settings.agencyStart ?? null)) patch.agencyStart = v; }   // 4.2.0: "We started on" (optional; '' or null clears it)
     for (const k of ['sheetStockCsv', 'sheetOrderCsv']) if (typeof b[k] === 'string') patch[k] = b[k].trim().slice(0, 500);
     if (b.newIngestKey === true) { patch.ingestKey = crypto.randomBytes(16).toString('hex'); patch.ingestKeyAt = Date.now(); }
     audit.record(d, audit.diff(d.settings, patch).filter((c) => c.key !== 'ingestKeyAt'), whoOf(req, role));   // saved with the settings below; the key's date rides with the masked key entry

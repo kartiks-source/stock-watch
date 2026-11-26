@@ -1216,3 +1216,17 @@ Sammsara, 24 Nov 2026, same data on 1.4.9 → 1.5.0: best sellers ₹14.8 L → 
 ## 30. 1.5.1: "Why this number" (`src/agency.js` workOf, `public/profile.js` whyBlock)
 
 `profile.work` = the working of one variant: `months[]` (days × perDay = units; units × price = missed; kind counted / guess / gap; closed), `speed` (units ÷ shelf days of the pace window, month by month, and `level`, the average season of those days), `season` of the last month out (own sales of the month and its neighbours, the store's index, how they are mixed), `price` (12 months: gross − discounts and returns = net ÷ pieces; the months used for the price), `outs[]` (stock before and after). perDay = speed.perDay × season.index ÷ speed.level. The months add up to the product's total on every page (checked on 224 Sammsara products, 25 Nov 2026: differences only in rounding, under ₹61).
+
+## 31. 4.2.0: the home page, month first (`src/screen.js` home fields, `public/brand.js`)
+
+Screens and API only; the money rule (RULE.md, `src/model.js`) and every ₹ are unchanged.
+
+- **The month it opens on:** this month so far, in store days. On the 1st–3rd, last month, because a month closes 3 days after it ends (`GRACE`). `#brand/YYYY-MM` and `#brand/12m` keep a choice; `#brand` is the default again.
+- **"X of Y best sellers ran out in <month>":** X = products empty at some point in the month (any empty or part day), on that month's quarter list; Y = that list's size. All products: Y = products with sales or a stock-out in the 12 months.
+- **The list:** products with ₹ in the month; their ₹ adds up to the headline Missed (rounding: under ₹1 a row). "N days × ₹A a day": N = the days that count (`countedDays`), A = ₹ ÷ N. Empty with no ₹ (after 60 empty days, under 60 shelf days before, empty when the record began, gift line, another size in stock) → one grey line with the reason.
+- **The month before:** an open month is compared with the same days of the month before (1–24 Nov ↔ 1–24 Oct), from each part's ₹ spread over its empty days up to the 60th, so any dates add up to the month; a closed month with the whole month before. The rows-held build (demo, Flow, Sheet, CSV) has no parts: its month ₹ is spread evenly over the month's empty days.
+- **Empty right now:** best sellers (or products) out now; ₹ a day = speed × price before the gap (× 0.74 off the list), 0 past 60 empty days or with no ₹.
+- **Days to refill:** the median empty days of the stock-outs that came back in that month (a gap that ended with a part day back in stock); never one still out, gone off the website, or already empty when the record began. Best sellers: the product on that month's list.
+- **Best sellers on a period (All products, `?best=1`):** the products on the lists of the months the period touches, and only their months on a list count, so a past month there equals the home page (before, today's list was used for every month).
+- **We started on** (`settings.agencyStart`, optional): a dashed line on the 12-month chart and a line under its month in Past months; nothing when empty.
+
