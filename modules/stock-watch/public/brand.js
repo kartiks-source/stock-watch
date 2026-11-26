@@ -75,12 +75,23 @@
   const B = () => S().brand;
   /* 2.0.0 (RULE.md): b.rule is set when the numbers come from the one rule. 4.2.0: the screens say "about ₹X", never a range */
   const rule = () => !!(B() && B().rule);
+  /** 4.3: the brand's own correction, with its working (b.factor = { best, other } from src/model.js factors) */
+  const lakhs = (z) => (z.guess >= 1e7 ? [1e7, 'crore'] : z.guess >= 1e5 ? [1e5, 'lakh'] : [1, '']);
+  function factorLine(z, who) {
+    if (!z) return '';
+    const [u, w] = lakhs(z), v = (x) => (w ? (x / u).toFixed(2) : inr.format(Math.round(x))), m = (x) => `₹${v(x)}${w ? ` ${w}` : ''}`;
+    if (z.flag === 'few') return `<p class="fx"><b>${who}:</b> not enough history to check yet: no correction${z.n ? ` (${inr.format(z.n)} months of ${inr.format(z.p)} products so far; it needs 100 months and 10 products)` : ''}.</p>`;
+    const head = `<b>${who}:</b> in ${inr.format(z.n)} months we already knew, we guessed ${m(z.guess)}; they really sold ${m(z.real)}.`;
+    if (Math.abs(z.f - 1) <= 0.005) return `<p class="fx">${head} Already right, no correction.</p>`;
+    return `<p class="fx">${head} ${v(z.real)} ÷ ${v(z.guess)} = ${(Math.round(z.raw * 100) / 100).toFixed(2)}, leaning toward 1 for how many months we checked: × ${(Math.round(z.f * 100) / 100).toFixed(2)}.${z.flag === 'clip' ? ' Capped at 0.5 / 1.5: check the data.' : ''}</p>`;
+  }
+  const factorText = (fx, only = null) => (fx ? (only ? factorLine(fx[only], only === 'best' ? 'Best sellers' : 'Products off the best-seller list') : factorLine(fx.best, 'Best sellers') + factorLine(fx.other, 'Products off the best-seller list')) : '');
   const testText = (t) => (t ? `${t.off >= 0 ? '+' : '−'}${pct(Math.abs(t.off) * 100)} (95% interval ${t.low >= 0 ? '+' : '−'}${pct(Math.abs(t.low) * 100)} to ${t.high >= 0 ? '+' : '−'}${pct(Math.abs(t.high) * 100)}; ${inr.format(t.n)} tries, ${inr.format(t.products)} products)` : 'too few to test');
   const howNew = (b) => `<p><b>Empty day:</b> the shelf was empty all day. The day it ran out counts ½, the day it came back 0. From Shopify’s own stock log.</p>
-        <p><b>Money missed</b> = what it makes a day in stock × how busy the shop was that day × empty days. Products off the best-seller list × 0.74.</p>
+        <p><b>Money missed</b> = what it makes a day in stock × how busy the shop was that day × empty days × this brand’s own correction (below).</p>
         <p><b>A day in stock:</b> its real sales (after discounts and returns) on its in-stock days in the 90 days before it ran out, ÷ those days. It needs 60 of them.</p>
         <p><b>How busy:</b> the shop’s sales that day ÷ its sales on those same days, this product left out. That carries Diwali, sales and quiet days.</p>
-        <p><b>× 0.74:</b> products off the best-seller list sell about a quarter less than their last 90 days say, even when nothing ran out (tested on normal in-stock weeks). Best sellers don’t.</p>
+        <p><b>The correction, checked on this brand:</b> every product’s normal months, when nothing ran out, guessed the same way and set against what really sold.</p>${factorText(b.factor)}
         <p><b>Is it true?</b> We tested it two ways. Real comebacks, guess against real: best sellers ${testText(b.proof.best.back)}; other products ${testText(b.proof.other.back)}. Replayed stock-outs (real sales hidden after a pretend run-out): best sellers ${testText(b.proof.best.replay)}; others ${testText(b.proof.other.replay)}.</p>
         <p><b>Best sellers:</b> the products that made 80% of real sales before each quarter began (now: ${b.bestList.n}, ${span(b.bestList.from, b.bestList.to)}). A size or colour counts as its own product.</p>
         <p><b>Locked:</b> a month is saved 3 days after it ends and never changes. This month can still move. Rule ${esc(b.rule)}.</p><p><b>Not provable:</b> a missed sale can’t be seen. Some buyers may have bought something else; we don’t take that off. It is demand we couldn’t serve, not profit lost. If people had no ads or saw the empty page less, we don’t know that either.</p>`;
@@ -443,6 +454,6 @@
   window.SW_BRAND = {
     init(ctx) { A = ctx; },
     views: { brand: brandView, best: bestView, ads: adsView },
-    fetch: fetchBrand, reset() { if (A) { A.state.brand = null; } }, after, rs, pace, scopeLine, scope, paintScope, selectMonth,
+    fetch: fetchBrand, reset() { if (A) { A.state.brand = null; } }, after, rs, pace, scopeLine, scope, paintScope, selectMonth, factorText,
   };
 })();

@@ -104,7 +104,7 @@ test('the same dates of the month before: so far for an open month, the whole mo
   assert.equal(S.prevRange({ key: '2026-09', from: '2026-09-27', closed: true, to: '2026-09-30' }, null), null);
 });
 
-test('one ₹ a day: Out now, the home tile and All products give the same; × 0.74 off the list; 0 past 60 days', () => {
+test('one ₹ a day: Out now, the home tile and All products give the same; × the brand factor; 0 past 60 days', () => {
   const t = store(), b = S.brand(t, { today: '2026-11-26' }), now = [...b.now, ...b.nowAll];
   const rep = { products: t.rows.map((x) => ({ id: x.id, sold: 0, stock: x.stock })), totals: { sold: 0 }, daily: [] };
   S.period(rep, t, { from: '2026-11-01', to: t.span.to });
@@ -113,7 +113,7 @@ test('one ₹ a day: Out now, the home tile and All products give the same; × 0
     assert.equal(a.costPerDay, r.costPerDay, x.id); assert.equal(a.costPerDay, S.costNow(t, x));
   }
   const x7 = t.rows.find((z) => z.id === '7'), m = t.months[t.months.length - 1], p7 = x7.months[m.key].parts.slice(-1)[0];
-  assert.equal(x7.best, false); assert.equal(p7.slow, 0.74); assert.ok(S.costNow(t, x7) > 0); assert.equal(S.costNow(t, x7), Math.round(p7.perDay * p7.price * 0.74), 'off the list × 0.74');
+  assert.equal(x7.best, false); assert.equal(p7.grp, 'other'); assert.equal(p7.adj, t.factor.other.f); assert.ok(S.costNow(t, x7) > 0); assert.equal(S.costNow(t, x7), Math.round(p7.perDay * p7.price * p7.adj), 'off the list × its factor');
   assert.equal(S.costNow(t, t.rows.find((z) => z.id === '9')), 0, 'out over 60 days: 0');
   near(rep.totals.stillOutPerDay, now.filter((p) => p.out).reduce((q, p) => q + p.costPerDay, 0), 0);
 });

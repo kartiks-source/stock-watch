@@ -143,12 +143,14 @@
     const none = (z) => (z.no ? `No ₹: ${w.why[z.no] || z.no}.` : '');
     const days = (n) => `${x2(n)} empty day${n === 1 ? '' : 's'}`, pc = (b) => Math.round(Math.abs(b - 1) * 100);
     const busyLine = (b) => (pc(b) === 0 ? 'The shop was as busy as usual on the empty days' : `The shop was ${pc(b)}% ${b > 1 ? 'busier' : 'quieter'} than usual on the empty days`);
-    const steps = (z) => { const k = z.slow || 1, A = z.speed * z.price, T = A * z.ref[2], B = A * z.busy, N = z.perDay > 0 ? z.units / k / z.perDay : 0;
+    const x3 = (n) => (Math.round(n * 1000) / 1000).toLocaleString('en-IN', { maximumFractionDigits: 3 });   // the factor to 3 decimals, so the sum checks by hand
+    const fxStep = (z) => { const k = z.adj ?? z.slow ?? 1, other = z.grp ? z.grp === 'other' : !!z.slow; return other || Math.abs(k - 1) > 0.005 ? k : null; };   // 4.3: best sellers only when their factor is not 1
+    const steps = (z) => { const k = z.adj ?? z.slow ?? 1, f = fxStep(z), other = z.grp ? z.grp === 'other' : !!z.slow, A = z.speed * z.price, T = A * z.ref[2], B = A * z.busy, N = z.perDay > 0 ? z.units / k / z.perDay : 0;
       return `<ol class="why-steps"><li><b>On the shelf it made ${ex(A)} a day.</b><span>${ex(T)} in its ${z.ref[2]} days in stock just before (${esc(span(z.ref[0], z.ref[1]))}): ${ex(T)} ÷ ${z.ref[2]} = ${ex(A)}.</span></li>
         <li><b>${busyLine(z.busy)}.</b><span>${ex(A)} × ${(Math.round(z.busy * 1000) / 1000).toLocaleString('en-IN', { maximumFractionDigits: 3 })} = ${ex(B)} a day.</span></li>
         <li><b>Days counted: ${x2(N)}.</b><span>Empty all day = 1, the day it ran out = ½, the day it came back = 0${z.counted != null && z.counted - N > 0.01 ? `: ${x2(z.counted)} days, less ${x2(z.counted - N)} days’ worth it still sold on them` : ''}.</span></li>
-        ${z.slow ? `<li><b>Not a best seller: × ${z.slow}.</b><span>Products like this sell about a quarter less than their last 90 days say, even when nothing runs out.</span></li>` : ''}
-        <li><b>${ex(B)} × ${x2(N)}${z.slow ? ` × ${z.slow}` : ''} = ${ex(z.lost)}.</b></li></ol>`; };
+        ${f != null ? `<li><b>${other ? 'Not a best seller' : 'Best seller'}: × ${x3(f)} (measured on this brand’s normal months).</b><span>${w.factor && window.SW_BRAND ? SW_BRAND.factorText(w.factor, other ? 'other' : 'best').replace(/<\/?(p|b)\b[^>]*>/g, '') : ''}</span></li>` : ''}
+        <li><b>${ex(B)} × ${x2(N)}${f != null ? ` × ${x3(f)}` : ''} = ${ex(z.lost)}.</b></li></ol>`; };
     const part = (z) => `<li><b>${mon(z.month)}: ${days(z.empty)}${z.lost > 0 ? `, ${ex(z.lost)}` : ''}</b><span>${z.lost == null ? esc(none(z)) : `${z.first > 0 ? steps(z) : ''}${z.laterLost > 0 ? ` ${x2(z.later)} days came after 60 empty days: ${ex(z.laterLost)} if people still wanted it, not added.` : ''}${z.sib ? ` ${x2(z.sib)} days left out: another size or colour was in stock.` : ''}${z.closed ? ' Locked.' : ' So far: can still move.'}`}</span></li>`;
     const gaps = w.gaps.slice().reverse().map((g, i) => `<details class="fold"${i ? '' : ' open'}><summary><b>${esc(span(g.start, g.to))}</b> <span class="muted">${days(g.days)}${g.lost > 0 ? `, ${ex(g.lost)}` : ''}</span></summary><ol class="why-steps">${g.parts.map(part).join('')}</ol></details>`).join('');
     return `<details class="panel fold" id="why"><summary><b>Why this number</b> <span class="muted">${prof.missed.value ? `about ${ex(prof.missed.value)}` : `${w.gaps.length} time${w.gaps.length === 1 ? '' : 's'} out`}</span></summary>${gaps}

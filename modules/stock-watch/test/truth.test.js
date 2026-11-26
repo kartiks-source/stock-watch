@@ -29,13 +29,13 @@ const steady = (n = 12, f = () => 1, start = 100) => Array.from({ length: n }, (
 const run = (rows, o) => { const s = shop(rows, o); return T.report(s.y, s.cat, s.opts); };
 const gap = (a, b) => [IX(a), IX(b)];
 
-test('missed = speed × how busy the shop was × price × days empty; ran out ½, came back 0; off the list × 0.74; could have sold = sold + missed', () => {
+test('missed = speed × how busy the shop was × price × days empty; ran out ½, came back 0; × the brand factor (1 on a small store); could have sold = sold + missed', () => {
   const r = run([...steady(), { id: '1', price: 2000, sell: (i) => (i % 2 ? 1 : 0), gaps: [gap('2026-08-05', '2026-08-15')] }, { id: '2', price: 300, sell: (i) => (i % 5 === 0 ? 1 : 0), gaps: [gap('2026-08-05', '2026-08-15')] }]);
   const x = r.rows.find((z) => z.id === '1'), p = x.months['2026-08'].parts[0], o = r.rows.find((z) => z.id === '2');
   assert.equal(p.empty, 10); assert.equal(p.first, 10);   // 5 Aug ran out (½), 6–14 empty, 15 Aug back (½, counts 0)
   near(p.speed, 0.5, 0.02); near(p.busy, 1, 0.05); assert.equal(p.price, 2000); near(p.units, 9.5 * p.speed * p.busy, 0.15); near(p.lost, p.units * 2000, 1);
   assert.equal(p.ref[1], '2026-08-04', 'the 90 days end the day before it ran out'); assert.equal(p.ref[2], 90);
-  const q = o.months['2026-08'].parts[0]; assert.equal(o.best, false); assert.equal(q.slow, 0.74); assert.ok(o.lost > 0); near(q.speed, 0.2, 0.02); near(q.lost, q.units * 300, 1);
+  const q = o.months['2026-08'].parts[0]; assert.equal(o.best, false); assert.equal(q.grp, 'other'); assert.equal(q.adj, r.factor.other.f); assert.equal(r.factor.other.flag, 'few', '4.3: a small store: no correction'); assert.equal(q.adj, 1); assert.ok(o.lost > 0); near(q.speed, 0.2, 0.02); near(q.lost, q.units * 300, 1);
   near(r.year.all.lost, x.lost + o.lost, 1); assert.equal(r.year.best.lost, x.lost); assert.equal(r.year.all.could, r.year.sold + r.year.all.lost);
   assert.equal(x.low, undefined, 'one entry: no range');
 });
