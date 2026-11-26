@@ -324,7 +324,8 @@ function truthOf(d, shop = null) {
 function oneMoney(d, r, only = false) {
   const t = truthOf(d); if (!t.on || !r) return r;
   const dayOf = (x) => TZ.dayKey(x, TZ.zoneOf(d.settings));
-  return screen.period(r, t, { y: brandInputs(d).y, only, from: dayOf(r.from), to: t.ok ? t.span.to : dayOf(Date.now()) });
+  const end = t.ok ? t.span.to : dayOf(Date.now());
+  return screen.period(r, t, { y: brandInputs(d).y, only, from: dayOf(r.from), to: r.toKey && r.toKey < end ? r.toKey : end });   // 4.1.0: a Custom period ends on its own last day
 }
 /** 1.4.4 (LOGIC §7a, §22): the one best-seller set: variant IDs of the brand report's best sellers (12 months, top 80%). */
 function bestIdsOf(d) {
@@ -644,8 +645,9 @@ async function ingestRoute(req, res, url, kind) {
 /** Every logged-in /api route, for one store (the current scope). */
 async function storeApi(req, res, url, role, id) {
   const p = url.pathname;
-  const d = store.load();
-  const { period: periodKind, ...span } = period.range(url.searchParams.get('days'), Date.now(), TZ.zoneOf(d.settings));   // { days } or { from } ("This month")
+  let d = store.load();
+  const { period: periodKind, ...span } = period.range(url.searchParams.get('days'), Date.now(), TZ.zoneOf(d.settings));
+  if (periodKind === 'custom' && req.method === 'GET' && span.now < Date.now() - 6e4) { const cut = period.asOf(d.stock, d.orders, span.now); d = { ...d, stock: cut.stock, orders: cut.orders }; }   // 4.1.0: a Custom period that ends in the past sees only what was known then   // { days } or { from } ("This month")
   const here = { id, name: storeName(id) };
   /* view-only (SW-029): one gate before every route, Sprint 1's included (Mark ordered, settings, import, backup) */
   if (access.refused(role, req.method, p)) return fail(res, 403, access.READ_ONLY);
@@ -669,7 +671,7 @@ async function storeApi(req, res, url, role, id) {
   const v1 = apiv1.handle(req, url, () => {   // SW-050: /api/v1/summary, /api/v1/rows; the same report as /api/report
     const S = settingsFor(url, d.settings), trial = Object.keys(LIMITS).some((k) => S[k] !== d.settings[k]);
     const r = helpers.enrich(engine.report(d.stock, d.orders, S, reportOpts()), { decisions: decide.all(), rates: trial ? savedRates() : null });
-    r.period = periodKind; r.yesterday = period.yesterdayFor(d.stock, d.orders, S, r, reportOpts()); return oneMoney(d, r);
+    r.period = periodKind; if (span.to) r.toKey = span.to; r.yesterday = period.yesterdayFor(d.stock, d.orders, S, r, reportOpts()); return oneMoney(d, r);
   }, { store: here, freshness, source: d.source });
   if (v1) return send(res, v1.code, v1.body);
   const sp = await suppliers.handle(req, url, readBody, {   // SW-040: Data → Suppliers (writes: admin only, gated above)
@@ -691,7 +693,7 @@ async function storeApi(req, res, url, role, id) {
   const reportKey = (S) => JSON.stringify([onlyBest, span, Object.keys(LIMITS).map((k) => S[k]), S.timeZone]);
   const cachedReport = (S, trial) => cache.memo('report', reportKey(S), 60e3, () => {
     const r = helpers.enrich(engine.report(d.stock, d.orders, S, reportOpts()), { decisions: decide.all(), rates: trial ? savedRates() : null });
-    r.period = periodKind; r.yesterday = period.yesterdayFor(d.stock, d.orders, S, r, reportOpts());   // SW-027
+    r.period = periodKind; if (span.to) r.toKey = span.to; r.yesterday = period.yesterdayFor(d.stock, d.orders, S, r, reportOpts());   // SW-027
     links.annotateReport(r, d.catalog, shopLinks());   // 1.4.0: image + links on every product row
     status.annotate(r.products, d.catalog);
     oneMoney(d, r, onlyBest);   // 2.0.0: money from the one rule, full days only
