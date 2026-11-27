@@ -47,7 +47,7 @@ test('an allocation item: status "Top-up from warehouse", out of Order today, re
   assert.equal(r.totals.lost, 0); assert.equal(r.totals.lostAllocation, p.lost); assert.equal(r.totals.lostAllocationProducts, 1); assert.equal(r.totals.allocation, 1);
   assert.equal(r.totals.lostAll, r.totals.lost + r.totals.lostEstimate + r.totals.lostNotRestocked + r.totals.lostAllocation);
   assert.equal(r.daily.reduce((s, d) => s + d.lostAllocation, 0), p.lost, 'daily refill-gap ₹ adds up (±rounding)');
-  assert.equal(p.why, 'Shopify shows a website allocation (~7 pcs, refilled from the warehouse). Warehouse stock isn’t in Shopify, so we can’t size a reorder: check the warehouse.');
+  assert.equal(p.why, 'Shopify shows a website allocation (~7 pcs, refilled from the warehouse). Warehouse stock isn’t in Shopify, so the stock shown here is the website’s share only.');
   /* the setting turns it off: back to a normal reorder row, ₹ counted */
   const off = E.report(cascade().stock, cascade().orders, { ...S, allocationCheck: 0 }, { days: 30, now });
   const q = off.products.find((x) => x.id === 'c');

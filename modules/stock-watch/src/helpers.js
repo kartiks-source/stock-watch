@@ -57,7 +57,7 @@ const NOT_RESTOCKED_WHY = 'Out 30+ days, not restocked';
 const notRestockedWhy = (days = 30) => `Out ${days}+ days, not restocked`;
 /** §6 (1.3.0): a website allocation the warehouse tops up. Warehouse stock isn't in Shopify, so no reorder is sized. */
 const ALLOCATION_STATUS = 'Top-up from warehouse';
-const allocationWhy = (level) => `Shopify shows a website allocation (~${level} pcs, refilled from the warehouse). Warehouse stock isn’t in Shopify, so we can’t size a reorder: check the warehouse.`;
+const allocationWhy = (level) => `Shopify shows a website allocation (~${level} pcs, refilled from the warehouse). Warehouse stock isn’t in Shopify, so the stock shown here is the website’s share only.`;   // 4.7.0: no reorder wording (agency screens)
 /** §4c G26 (1.3.0): the evidence behind the confidence, "sold in 10 of 25 weeks" (null when it came from units). */
 const weeksText = (p) => (p && p.weeksLive ? `sold in ${p.weeksSold || 0} of ${p.weeksLive} weeks` : null);
 /** §3 floor (1.3.0): a product out the whole time we hold, priced from Shopify's 26 weeks before. */

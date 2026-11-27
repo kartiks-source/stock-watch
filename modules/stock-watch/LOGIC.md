@@ -1247,3 +1247,9 @@ Screens and API only; the money rule (RULE.md, `src/model.js`) and every month's
 - **What:** money missed = speed × busy × price × empty days. Nothing else.
 - **Why:** the brand factor moved best sellers by about 5% (₹18.4 → ₹19.4 lakh a year on Sammsara), well inside one product's own error, and it was the step the agency could not explain in a meeting.
 - **Locking:** rule 4.5 makes every month lock again once, without a factor.
+
+## 34. 4.7: the scorecard (`src/model.js` scorecard, `src/truth.js` scoreOf)
+
+- **Pretend:** every 7th day t in the last 300 whose next 30 days are all Full: guess = speed(t) × busy × price over them; real = net sales. **Before:** the 14 Full days right before a real stock-out, guessed from before them. **After:** Full days 4–30 after a comeback, guessed with the pace at run-out.
+- Per group (that quarter's best sellers / the rest): total = Σguess ÷ Σreal − 1; miss = Σ|guess − real| ÷ Σreal; floor = Σ E|X − m| ÷ Σguess with X ~ Poisson(m), m the guessed pieces (chance alone); ratio = Σreal ÷ Σguess.
+- Targets on screen: best total ±10%, before/after ratio 1.00–1.30, other total ±20%, coverage ≥ 90%, products vs shop ±2%. A change to the money rule ships only if it improves the scorecard on 2+ brands.

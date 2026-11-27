@@ -76,10 +76,29 @@
   /* 2.0.0 (RULE.md): b.rule is set when the numbers come from the one rule. 4.2.0: the screens say "about ₹X", never a range */
   const rule = () => !!(B() && B().rule);
   const testText = (t) => (t ? `${t.off >= 0 ? '+' : '−'}${pct(Math.abs(t.off) * 100)} (95% interval ${t.low >= 0 ? '+' : '−'}${pct(Math.abs(t.low) * 100)} to ${t.high >= 0 ? '+' : '−'}${pct(Math.abs(t.high) * 100)}; ${inr.format(t.n)} tries, ${inr.format(t.products)} products)` : 'too few to test');
+  /* 4.7.0: the scorecard: the rule against days where the truth is known, with a target each (src/model.js scorecard) */
+  const pc0 = (x) => `${x >= 0 ? '+' : '−'}${Math.round(Math.abs(x) * 100)}%`;
+  function scoreTable(b) {
+    const s = b.score; if (!s || !s.pretend) return '';
+    const row = (label, val, target, ok, note) => `<tr><td>${label}</td><td class="r"><b>${val}</b></td><td class="r muted">${target}</td><td class="r">${ok == null ? '–' : ok ? '<span class="sc-ok" title="meets the target">✓</span>' : '<span class="sc-no" title="misses the target">✗</span>'}</td></tr>${note ? `<tr class="sc-note"><td colspan="4">${note}</td></tr>` : ''}`;
+    const pb = s.pretend.best || {}, po = s.pretend.other || {}, bb = s.before.best || {}, ab = s.after.best || {}, h = s.health || {};
+    const few = (z) => !(z && z.n >= 20);
+    const rows = [
+      row('Best sellers, total, on months we can check', few(pb) ? 'too few' : pc0(pb.total), 'within ±10%', few(pb) ? null : Math.abs(pb.total) <= 0.1, few(pb) ? '' : `${inr.format(pb.n)} checks of ${inr.format(pb.products)} products: guessed ${rs(pb.guess)}, really sold ${rs(pb.real)}.`),
+      row('One best seller, off by', few(pb) ? 'too few' : `${Math.round(pb.miss * 100)}%`, `chance alone: ${few(pb) || pb.floor == null ? '–' : `${Math.round(pb.floor * 100)}%`}`, null, 'A single product sells a few pieces a week, so luck alone moves it this much. Totals are far closer.'),
+      row('Best sellers right before running out: real ÷ ours', few(bb) && !(bb && bb.n >= 8) ? 'too few' : `${(bb.ratio || 0).toFixed(2)}×`, '1.00–1.30×', bb && bb.n >= 8 ? bb.ratio >= 1 && bb.ratio <= 1.3 : null, bb && bb.n >= 8 ? (bb.ratio >= 1 ? 'They sell faster just before running out than we assume, so our missed sales are a floor.' : 'They sell slower just before running out than we assume: our number may run high.') : ''),
+      row('Best sellers after coming back: real ÷ ours', !(ab && ab.n >= 8) ? 'too few' : `${(ab.ratio || 0).toFixed(2)}×`, '1.00–1.30×', ab && ab.n >= 8 ? ab.ratio >= 1 && ab.ratio <= 1.3 : null, ''),
+      row('Other products, total, on months we can check', few(po) ? 'too few' : pc0(po.total), 'within ±20%', few(po) ? null : Math.abs(po.total) <= 0.2, few(po) || Math.abs(po.total) <= 0.2 ? '' : 'Lead with best sellers: the rest are less certain.'),
+      row('Best sellers’ sold-out days that carry ₹', s.coverage == null ? '–' : `${Math.round(s.coverage * 100)}%`, '90% or more', s.coverage == null ? null : s.coverage >= 0.9, ''),
+      row('Products add up to the shop’s sales', h.rowsVsShop == null ? '–' : pc0(h.rowsVsShop), 'within ±2%', h.rowsVsShop == null ? null : Math.abs(h.rowsVsShop) <= 0.02, h.unsureShare > 0.01 ? `${Math.round(h.unsureShare * 100)}% of sales are on products whose stock record doesn’t add up.` : ''),
+    ];
+    return `<div class="scorecard"><p><b>Scorecard</b> <span class="muted">· the rule against days where the real sales are known, last 10 months</span></p><table class="mtable sc"><thead><tr><th>Check</th><th class="r">Now</th><th class="r">Target</th><th class="r"></th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
+  }
   const howNew = (b) => `<p><b>Empty day:</b> the shelf was empty all day. The day it ran out counts ½, the day it came back 0. From Shopify’s own stock log.</p>
         <p><b>Missed sales</b> = the net sales it makes a day in stock × how busy the shop was that day × empty days.</p>
         <p><b>A day in stock:</b> its real sales (after discounts and returns) on its in-stock days in the 90 days before it ran out, ÷ those days. It needs 60 of them; if a best seller that still sold was out too much for that, its last 60 days in stock in the 12 months before. It also needs at least 3 sold.</p>
         <p><b>How busy:</b> the shop’s sales that day ÷ its sales on those same days, this product left out. That carries Diwali, sales and quiet days.</p>
+        ${scoreTable(b)}
         <p><b>Is it true?</b> We tested it two ways. Real comebacks, guess against real: best sellers ${testText(b.proof.best.back)}; other products ${testText(b.proof.other.back)}. Replayed stock-outs (real sales hidden after a pretend run-out): best sellers ${testText(b.proof.best.replay)}; others ${testText(b.proof.other.replay)}.</p>
         <p><b>Best sellers:</b> the products that made 80% of real sales before each quarter began (now: ${b.bestList.n}, ${span(b.bestList.from, b.bestList.to)}). A size or colour counts as its own product.</p>
         <p><b>Locked:</b> a month is saved 3 days after it ends and never changes. This month can still move. Rule ${esc(b.rule)}.</p><p><b>Not provable:</b> a missed sale can’t be seen. Some buyers may have bought something else; we don’t take that off. It is demand we couldn’t serve, not profit lost. If people had no ads or saw the empty page less, we don’t know that either.</p>`;

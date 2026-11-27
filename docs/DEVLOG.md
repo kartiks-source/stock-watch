@@ -7,6 +7,9 @@ Shared copy for the team: https://claude.ai/artifact/27Q6x8r3rpZHYaNzhjW2Zq
 ## 2026-11-27 · stock-watch 4.6.2
 Shopify's words: Net sales / Missed sales / Net sales if in stock. All products sorted by missed sales; category view without ops columns; phone Custom dates fixed; 12-month headline uses one-decimal ₹; tooltip test made steady.
 
+## 2026-11-27 · stock-watch 4.7.0
+Scorecard per brand (pretend stock-outs, before real stock-outs, after comebacks, coverage, data health) with targets; the benchmark every later rule change must beat on 2+ brands. The ½·90+¼·60+¼·30 blend was tested and rejected by the logic critic (no gain on real stock-outs, moves closed months). Warehouse note wording fixed.
+
 ## 2026-11-27 · stock-watch 4.6.0
 Agency review of every page. Brand report: Sold · Missed · Could have sold · Out now tiles (month and 12 months), 60+ day ₹ named apart; All products: Could have sold column, Days left optional. Custom dates on the brand report skipped (locked months; would need a second engine).
 
