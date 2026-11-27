@@ -89,7 +89,7 @@ function products(t) {
     const v = x.speed ? x.speed.perDay : 0, vn = x.speed ? x.speed.now : 0;
     return { productId: x.productId, variantId: x.id, ids: [x.id], name: nameOf(x), sku: x.sku, variants: 1, best: x.best, rank: x.rank, ...(x.active ? {} : { inactive: true }),
       sold: x.sold, units: x.pieces, share: pct(x.sold, tot), price: x.price || 0, pace: { perDay: r2(v), now: r2(vn), units: x.speed ? x.speed.units : 0, inDays: x.speed ? x.speed.days : 0 }, variantPace: { [x.id]: vn }, could: x.sold + (x.lost || 0), outFrom: { [x.id]: x.out ? x.since || t.span.held : null },
-      months, times: x.times, monthsOut: Object.keys(months).length, lost: x.lost || 0, counted: x.lost || 0, lostBest: x.lostBest || 0, low: x.low, high: x.high, later: x.later || 0, daysOut: x.empty, stockNow: Math.max(0, x.stock), ...(x.unsure ? { unsure: 1 } : {}),
+      months, times: x.times, monthsOut: Object.keys(months).length, lost: x.lost || 0, counted: x.lost || 0, lostBest: x.lostBest || 0, low: x.low, high: x.high, later: x.later || 0, daysOut: x.empty, stockNow: Math.max(0, x.stock), ...(x.unsure ? { unsure: 1 } : {}), stockSeen: x.stockSeen, seen: x.seen,   // 4.8.0 (§35)
       image: x.image, adminUrl: x.adminUrl, webUrl: x.webUrl, life: x.life, ...(x.empty > 0 || x.out ? { strip: x.strip, outNow: !!x.out, since: x.since || null } : {}) };
   });
 }
@@ -97,10 +97,12 @@ function products(t) {
 function brand(t, { stockOf = null, today = null } = {}) {
   if (!t.ok || t.ready === false) return { ok: false, reason: t.reason || 'short' };
   const label = agency.monthLabel;
+  /* 4.8.0 (§35): best sellers whose stock-outs Shopify's log can't show (set to keep selling, or the count not kept) */
+  const blind = new Set(t.rows.filter((x) => x.stockSeen === 'always' || x.stockSeen === 'unseen').map((x) => x.id)), cant = (ids) => [...ids].filter((id) => blind.has(id)).length;
   const months = t.months.map((m) => {
     const of = (k, sold) => ({ lost: m[k].lost, low: m[k].low, high: m[k].high, n: m[k].n, later: m[k].later, out: m[k].rows, ran: m[k].ran, daysOut: m[k].empty, noMoney: m[k].noMoney, sold, pct: pct(m[k].lost, sold), late: 0, est: 0, nr: 0, apart: 0, total: m[k].lost, units: 0 });
     const best = of('best', m.bestSold), all = of('all', m.sold);
-    return { key: m.key, label: label(m.key), from: m.from, to: m.to, days: m.days, sold: m.sold, units: m.pieces, closed: m.closed, listN: m.listN, best, all, lost: best.lost, pct: best.pct, bestOut: best.out, daysOut: best.daysOut };
+    return { key: m.key, label: label(m.key), from: m.from, to: m.to, days: m.days, sold: m.sold, units: m.pieces, closed: m.closed, listN: m.listN, cantSee: m.ids ? cant(m.ids.keys()) : 0, best, all, lost: best.lost, pct: best.pct, bestOut: best.out, daysOut: best.daysOut };
   });
   /* 4.2.0: each month beside the same dates of the month before (₹ from the per-day split, so any dates add up), days to refill */
   months.forEach((M, i) => {
@@ -114,7 +116,7 @@ function brand(t, { stockOf = null, today = null } = {}) {
   const yr = refills(months, t.rows.map((x) => ({ ends: x.ends, best: (m) => !!(x.months[m] && x.months[m].best) })));
   const y = t.year, ps = products(t);
   const head = (k, o) => ({ lost: y[k].lost, low: y[k].low, high: y[k].high, later: y[k].later, could: y[k].could, open: y[k].open, noMoney: y[k].noMoney, daysOut: y[k].empty, late: 0, est: 0, nr: 0, apart: 0, total: y[k].lost, ...o, pct: pct(y[k].lost, o.sold) });
-  const headline = { from: t.span.from, through: t.span.to, sold: y.sold, lost: y.best.lost, daysOut: y.best.empty, bestsellers: y.bestN, bestRanOut: y.bestRan, unsure: 0, best: head('best', { products: y.bestN, ranOut: y.bestRan, sold: y.bestSold }), all: head('all', { products: ps.length, ranOut: y.allRan, sold: y.sold }) };
+  const headline = { from: t.span.from, through: t.span.to, sold: y.sold, lost: y.best.lost, daysOut: y.best.empty, bestsellers: y.bestN, bestRanOut: y.bestRan, cantSee: cant(new Set(t.months.flatMap((m) => (m.ids ? [...m.ids.keys()] : [])))), unsure: 0, best: head('best', { products: y.bestN, ranOut: y.bestRan, sold: y.bestSold }), all: head('all', { products: ps.length, ranOut: y.allRan, sold: y.sold }) };
   for (const k of ['best', 'all']) Object.assign(headline[k], yr[k]);
   const last = months[months.length - 1];
   const now = t.rows.map((x, i) => ({ x, p: ps[i] })).filter(({ x }) => x.active).map(({ x, p }) => {
@@ -191,6 +193,13 @@ function between(t, x, from, to, best = false) {
   return { lost, units, empty: sum(emptyDays(t, x, from, to).map((z) => z[1])) };
 }
 /** The period report with its money from the one rule. Mutates and returns rep. */
+/* 4.8.0 (LOGIC §35): set to keep selling at 0 now: no in-stock pace (its days are left out of the speed), so its plain 12-month average, never "No sales lately" */
+const keeps = (x) => x.stockSeen === 'always' || !!x.always;
+const avgOf = (t, x) => { const days = sum(t.months.map((m) => m.days)); return days > 0 ? Math.max(0, x.pieces) / days : 0; };   // pieces a day over the 12 months
+function keepsWhy(t, x) {
+  const a = avgOf(t, x);
+  return `Keeps selling at 0 in Shopify · sells about ${a >= 1 ? Math.round(a) : Math.round(a * 10) / 10} a day (12-month average)`;
+}
 function period(rep, t, { from, to, y = null, only = false, bestSet = null }) {   // 4.2.0: bestSet = the best-seller lists of the period's months (Best sellers scope)
   if (!rep || !t.ok || t.ready === false) return rep;
   const pause = new Set(brand(t).ads.pause.map((p) => p.id)), sl = (y && y.sales) || null;
@@ -201,9 +210,9 @@ function period(rep, t, { from, to, y = null, only = false, bestSet = null }) { 
     Object.assign(p, { lost, lostCounted: lost, lostEstimate: 0, lostNotRestocked: 0, lostAllocation: 0, lostOver30: 0, lostProfit: p.lostProfit == null ? p.lostProfit : 0, unitsLost: r2(b.units), lostPct: lost > 0 ? r2(lost / (lost + p.sold) * 100) : 0, daysEmpty: b.empty, costPerDay: x ? costNow(t, x) : 0, ...(x && x.out ? { outSinceDay: x.since } : {}) });
     if (sl) { const [u, v] = soldOf(sl.by[p.id]); p.sold = Math.round(v); p.unitsSold = u; p.lostPct = lost > 0 && lost + v > 0 ? r2(lost / (lost + v) * 100) : 0; }   // Shopify's sales report, full days
     if (x && p.status !== 'Inactive') {   // one speed and one "out now" everywhere
-      const v = x.speed ? x.speed.now : 0, out = p.stock != null && p.stock <= 0 && !x.always;
-      Object.assign(p, { perDay: r2(x.speed ? x.speed.perDay : 0), daysLeft: p.stock == null ? null : out ? 0 : v > 0 ? Math.round(p.stock / v * 10) / 10 : null, status: out ? 'Out now' : v > 0 && p.stock / v < SOON_DAYS ? 'Critical' : v > 0 ? 'OK' : 'Slow seller', mkt: pause.has(x.id) ? 'pause' : null, abc: (bestSet ? bestSet.has(x.id) : x.best) ? 'A' : p.abc === 'A' ? 'B' : p.abc,
-        why: out ? (x.since ? `Out since ${agency.ranges([x.since])}` : x.out ? 'Out since before our record' : 'Out since today') : v > 0 ? `About ${Math.round(p.stock / v)} days of stock` : 'No sales lately' });
+      const v = x.speed ? x.speed.now : 0, out = p.stock != null && p.stock <= 0 && !x.always, vs = keeps(x) ? avgOf(t, x) : v;   // vs: the speed the status uses (keep selling: its 12-month average, §35)
+      Object.assign(p, { perDay: r2(x.speed ? x.speed.perDay : 0), daysLeft: p.stock == null ? null : out ? 0 : v > 0 ? Math.round(p.stock / v * 10) / 10 : null, status: out ? 'Out now' : vs > 0 && p.stock / vs < SOON_DAYS ? 'Critical' : vs > 0 ? 'OK' : 'Slow seller', mkt: pause.has(x.id) ? 'pause' : null, abc: (bestSet ? bestSet.has(x.id) : x.best) ? 'A' : p.abc === 'A' ? 'B' : p.abc,
+        why: out ? (x.since ? `Out since ${agency.ranges([x.since])}` : x.out ? 'Out since before our record' : 'Out since today') : keeps(x) ? keepsWhy(t, x) : v > 0 ? `About ${Math.round(p.stock / v)} days of stock` : 'No sales lately', ...(keeps(x) && !out ? { keepsWhy: keepsWhy(t, x) } : {}) });   // keepsWhy: the drawer's line keeps it (helpers.enrichDetail)
     }
     Object.assign(p, { trendPct: null, trendCall: null, trendNew: false, confidence: null, lossPace: null });
     if (list === rep.products) { L += lost; if (lost > 0) N++; }
@@ -225,6 +234,7 @@ function period(rep, t, { from, to, y = null, only = false, bestSet = null }) { 
 function profile(prof, t, id) {
   const x = t.ok && t.ready !== false ? t.rows.find((r) => r.id === String(id)) : null;
   if (!prof || !prof.ok || !x) return prof;
+  if (x.stockSeen) Object.assign(prof, { stockSeen: x.stockSeen, seen: x.seen });   // 4.8.0 (§35): the brand page's label, the same 12 months
   const gaps = new Map();
   for (const m of t.months) for (const p of (x.months[m.key] || { parts: [] }).parts) { const g = gaps.get(p.start) || { start: p.start, from: p.from, to: p.to, days: 0, lost: 0, later: 0, parts: [], best: !!p.best }; g.to = p.to; g.days += p.empty; g.parts.push({ ...p, month: m.key, closed: m.closed }); g.lost += p.lost || 0; g.later += p.laterLost || 0; gaps.set(p.start, g); }
   const list = [...gaps.values()].sort((a, b) => a.start < b.start ? -1 : 1);

@@ -21,7 +21,7 @@ function prepare(F) {
     const ok = usableRow(r), days = [], scu = [0];
     r.fu = new Float64Array(F.n + 1); r.fd = new Float64Array(F.n + 1); r.fn = new Float64Array(F.n + 1); r.fs = new Float64Array(F.n + 1);
     for (let i = 0; i < F.n; i++) {
-      const full = ok && r.st[i] === 2; if (full) { days.push(i); scu.push(scu[scu.length - 1] + r.u[i]); }
+      const full = ok && r.st[i] === 2 && !(r.alw && r.alw[i]); if (full) { days.push(i); scu.push(scu[scu.length - 1] + r.u[i]); }
       r.fu[i + 1] = r.fu[i] + (full ? r.u[i] : 0); r.fd[i + 1] = r.fd[i] + (full ? 1 : 0); r.fn[i + 1] = r.fn[i] + (full ? r.net[i] : 0); r.fs[i + 1] = r.fs[i] + (full ? Math.max(0, shop[i] - r.net[i]) : 0);
     }
     r.sd = days; r.scu = scu; r.upto = new Int32Array(F.n + 2); let j = 0; for (let t = 0; t < r.upto.length; t++) { while (j < days.length && days[j] < t) j++; r.upto[t] = j; }

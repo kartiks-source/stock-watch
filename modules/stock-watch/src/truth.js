@@ -12,7 +12,7 @@
 const A = require('./agency');
 const { keyPlus, spanOf, dayKeys, lifeOf, days: daysOf } = A;
 
-const M = require('./model');
+const M = require('./model'), P = require('./policy');
 const RULE = '4.5.1';   // 4.5.1: same money; each part carries its busy working (base, bdays), so months relock once with it. 4.5: no trim (4.3's brand factor dropped: ~5% on best sellers, hard to explain). 4.4: 3+ pieces in the window; sold out too often lately: its last 60 in-stock days within the year
 const YEAR_DAYS = 365, WINDOW = 365, BEST_SHARE = 0.8, MIN_RANGE = 5, MIN_PRICE = 100, LIST_DAYS = 60;   // under ₹100 = a gift line, not merchandise
 
@@ -22,7 +22,7 @@ const sum = (a) => a.reduce((s, x) => s + x, 0);
 const quarterStart = (day) => `${day.slice(0, 4)}-${String(Math.floor((+day.slice(5, 7) - 1) / 3) * 3 + 1).padStart(2, '0')}-01`;
 
 /** Everything Shopify recorded, per row, on one array of days. */
-function facts(y, catalog, { dayOf, firstSeenDay = null, offOf = null, knownEnd = null } = {}) {
+function facts(y, catalog, { dayOf, firstSeenDay = null, offOf = null, knownEnd = null, policy = null } = {}) {
   const sp = spanOf(y); if (!sp) return null;
   const keys = dayKeys(sp.from, sp.through), n = keys.length, at = new Map(keys.map((k, i) => [k, i]));
   const winFrom = Math.max(0, n - WINDOW), rows = [];
@@ -30,12 +30,15 @@ function facts(y, catalog, { dayOf, firstSeenDay = null, offOf = null, knownEnd 
     if (!c || c.tracked === false) continue;
     const life = lifeOf(y, id, c, keys, { dayOf, firstSeenDay, winFrom: keys[winFrom], offOf });
     if (c.active === false && !life.sold) continue;
-    const ds = daysOf(y, id, keys, life.from, { skip: life.skip, end: life.end, always: !!c.oversell, known: knownEnd ? knownEnd(id, sp.through) : null });
+    const alw = policy ? P.alwaysOf(policy, id, !!c.oversell) : !!c.oversell;   // 4.8.0 (§35): keep-selling day by day (src/policy.js)
+    const ds = daysOf(y, id, keys, life.from, { skip: life.skip, end: life.end, always: alw, known: knownEnd ? knownEnd(id, sp.through) : null });
     if (!ds) continue;
     const u = new Float64Array(n), net = new Float64Array(n), st = new Int8Array(n).fill(-1), level = new Int32Array(n);   // st: -1 not on the website, 2 full shelf, 1 half day, 0 empty all day
     const sl = (y.sales.by && y.sales.by[id]) || {};
     for (const [k, x] of Object.entries(sl)) { const i = at.get(k); if (i != null) { u[i] = Number(x[0]) || 0; net[i] = Number(x[1]) || 0; } }
-    if (!ds.dropped) for (const x of ds.list) { const i = at.get(x.k); level[i] = x.end; st[i] = x.inF === 1 ? 2 : x.inF === 0 ? 0 : x.end > 0 && x.start > 0 ? 2 : 1; }
+    let ad = null;   // 4.8.0: the days it was set to keep selling, when that changed inside the record (they count as neither in stock nor empty for the speed)
+    if (!ds.dropped) for (const x of ds.list) { const i = at.get(x.k); level[i] = x.end; st[i] = x.inF === 1 ? 2 : x.inF === 0 ? 0 : x.end > 0 && x.start > 0 ? 2 : 1; if (x.alw) (ad || (ad = new Uint8Array(n)))[i] = 1; }
+    const always = typeof alw === 'function' ? !ds.dropped && ds.list.length > 0 && ds.list.every((x) => x.alw) : alw;
     /* the day it went on the website (or came back on it) is not a day it ran out */
     for (let i = 0; i < n; i++) if (st[i] === 1 && level[i] > 0 && (i === 0 || st[i - 1] === -1)) st[i] = 2;
     const gaps = [];
@@ -48,7 +51,7 @@ function facts(y, catalog, { dayOf, firstSeenDay = null, offOf = null, knownEnd 
       i = b;
     }
     let gu = 0, gn = 0; for (let i = 0; i < n; i++) { gu += u[i]; gn += net[i]; }
-    rows.push({ id, c, gift: gu > 0 && gn / gu < MIN_PRICE, productId: String(c.productId || ''), u, net, st, level, gaps, unsure: !!ds.dropped, always: !!c.oversell, active: c.active !== false });
+    rows.push({ id, c, gift: gu > 0 && gn / gu < MIN_PRICE, productId: String(c.productId || ''), u, net, st, level, gaps, unsure: !!ds.dropped, always, ...(ad && !always ? { alw: ad } : {}), alwaysNow: typeof alw === 'function' ? alw(sp.through) : alw, active: c.active !== false });
   }
   return { span: sp, keys, at, n, winFrom, rows };
 }
@@ -72,7 +75,7 @@ function bestOf(F, y, q) {
 function sums(F) {
   for (const r of F.rows) {
     r.cu = new Float64Array(F.n + 1); r.cn = new Float64Array(F.n + 1); r.cd = new Float64Array(F.n + 1);
-    for (let i = 0; i < F.n; i++) { const full = r.st[i] === 2 && !r.always && !r.unsure; r.cu[i + 1] = r.cu[i] + (full ? r.u[i] : 0); r.cn[i + 1] = r.cn[i] + (full ? r.net[i] : 0); r.cd[i + 1] = r.cd[i] + (full ? 1 : 0); }
+    for (let i = 0; i < F.n; i++) { const full = r.st[i] === 2 && !r.always && !r.unsure && !(r.alw && r.alw[i]); r.cu[i + 1] = r.cu[i] + (full ? r.u[i] : 0); r.cn[i + 1] = r.cn[i] + (full ? r.net[i] : 0); r.cd[i + 1] = r.cd[i] + (full ? 1 : 0); }
   }
 }
 const win = (r, a, b) => ({ u: r.cu[b + 1] - r.cu[a], n: r.cn[b + 1] - r.cn[a], d: r.cd[b + 1] - r.cd[a] });
@@ -154,11 +157,13 @@ function report(y, catalog, opts = {}) {
     for (let i = first; i < F.n; i++) { pieces += r.u[i]; sold += r.net[i]; if (r.u[i] > 0) last = F.keys[i]; }
     const g = r.gaps[r.gaps.length - 1], out = r.active && !r.always && !r.unsure && g && g.open ? g : null, ms = rowsM.get(r.id) || {}, b = best.get(r.id);
     if (!pieces && !out && !Object.keys(ms).length) continue;
+    const sn = A.seenOf(y, r.id, F.keys[first], F.keys[F.n - 1]);
     const gaps = r.gaps.filter((x) => x.b >= first), Tm = Object.entries(ms).filter(([m]) => inM.has(m)), all = Tm.flatMap(([, c]) => c.parts), rg = rgOf(all);
     rows.push({ id: r.id, productId: r.productId, name: r.c.product, variant: r.c.variant || '', sku: r.c.sku || '', active: r.active, always: r.always || undefined, unsure: r.unsure || undefined, best: !!b, rank: b ? b.rank : null, pieces, sold: Math.round(sold), price: pieces > 0 ? Math.round(sold / pieces) : null, lastSold: last,
       stock: r.level[F.n - 1], out: !!out, since: out ? (out.before && out.a === 0 ? null : F.keys[out.a]) : null, emptyNow: out ? out.empty : 0,
       empty: sum(Tm.map(([, c]) => c.empty)), times: gaps.length, months: Object.fromEntries(Tm.map(([m, c]) => [m, { empty: c.empty, best: c.best, rank: c.rank ?? null, lost: Math.round(c.lost), later: Math.round(c.later), parts: c.parts }])),
       ends: gaps.filter((x) => x.ended === 'back' && !x.before).map((x) => [F.keys[r.st[x.b] === 0 && x.b + 1 < F.n ? x.b + 1 : x.b], x.empty]),   // filed under the day it came back   // 4.2.0: stock-outs that came back: last day, empty days (days to refill)
+      stockSeen: A.stockSeenOf({ always: r.alwaysNow, unsure: r.unsure, ...sn }), seen: sn,   // 4.8.0 (§35): labels only
       speed: speedNow(F, r), lost: Math.round(sum(Tm.map(([, c]) => c.lost))), lostBest: Math.round(sum(Tm.filter(([, c]) => c.best).map(([, c]) => c.lost))), later: Math.round(sum(Tm.map(([, c]) => c.later))), low: rg.low ?? undefined, high: rg.high ?? undefined,
       strip: [...r.st.subarray(first)].map((v) => (v === -1 ? '-' : v === 2 ? '2' : String(v))).join('') });
   }

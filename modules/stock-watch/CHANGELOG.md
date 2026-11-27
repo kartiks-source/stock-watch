@@ -3,6 +3,13 @@
 User-facing changes, newest first. Semver: minor when a number's rule changes or a feature lands, patch for fixes. The version in `package.json` matches the top heading. Versions before 0.9.0 were reconstructed from `docs/DEVLOG.md` on 20 Nov 2026 (no tags existed); dates are the DEVLOG dates. Per DEVLOG, nothing from 0.6.0 on has been deployed yet. Since 1.0.0-rc.1, `/health`, `/status` and the page footer show the version and the build's commit (SW-056); `test/docs.test.js` checks the top heading matches `package.json`.
 
 
+## 4.8.0 · 2026-11-27 · when Shopify can't see a stock-out
+
+- The drawer says when Shopify's stock log can't show a product's stock-outs: "Shopify’s stock count didn’t change on most days this sold (X of Y pieces), so its stock line and days out may be wrong." For these products and those set to keep selling at 0: On the shelf, Missed sales and Net sales if in stock read "not known"; Sells is the plain 12-month average ("329 sold in the 12 months"); the day calendar is hidden; Ran out keeps its days with "may be wrong", or says "can’t be seen in Shopify" when there are none, as do the story, Why this number and Every stock-out. A keep-selling best seller no longer reads "It hardly sold" / "no sales"; its last days say "Keeps selling at 0 in Shopify · sells about N a day (12-month average)" in place of "No sales lately".
+- The brand page adds "· N of them: Shopify’s stock count is unreliable" beside "X of Y best sellers ran out" when some best sellers keep selling at 0 or have a stock count that isn't kept (its own line on phones).
+- "Continue selling when out of stock" is now kept day by day (policy.json per store, from each stock pull, no extra Shopify calls). A product that is switched on or off counts as keep-selling only on the days it was. No money changes until the first switch is seen; past switches can't be recovered (LOGIC §35).
+- API: `/api/product/:id` `profile.stockSeen` and `profile.seen` (`{ seen, of, net, netSeen }`); `/api/brand` products `stockSeen` and `seen`, months and `headline` `cantSee`.
+
 ## 4.7.0 · 2026-11-27 · a scorecard for every brand
 
 - "How sure are we?" now opens a scorecard: the rule against days where the real sales are known, each with a target and ✓ / ✗. Best sellers' total on known months (±10%), one best seller's miss next to what chance alone costs, best sellers right before running out and after coming back (real ÷ ours, 1.00–1.30× = our number is a floor), other products' total (±20%), best sellers' sold-out days that carry ₹ (90%+), products adding up to the shop (±2%). Worked out for every brand from its own data, every build. No money changes.

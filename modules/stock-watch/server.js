@@ -61,7 +61,7 @@ const zlib = require('node:zlib');
 const links = require('./src/links');       // 1.4.0: product image, Shopify admin and website links (LOGIC §19)
 const year = require('./src/year');         // 1.4.0: 12 months of daily sales + stock from ShopifyQL (LOGIC §20)
 const sell = require('./src/sell');         // 1.4.0: best sellers now, push / pause ads (LOGIC §23)
-const truth = require('./src/truth'), screen = require('./src/screen'), ledger = require('./src/ledger');   // 2.0.0: RULE.md
+const truth = require('./src/truth'), screen = require('./src/screen'), ledger = require('./src/ledger'), policy = require('./src/policy');   // 2.0.0: RULE.md
 const closed = require('./src/closed');     // 1.4.6: closed months keep the ₹ they closed with
 const status = require('./src/status');     // 1.4.7: active / draft / archived, and when
 const agency = require('./src/agency');     // 1.4.0: the brand report: best sellers out of stock, month by month (LOGIC §20–§22)
@@ -301,7 +301,7 @@ function knownEndOf(d) {
 /** The brand report's options on the saved settings (links added by the caller that sends products). */
 function brandOptsOf(d, extra = {}) {
   const S = { ...engine.DEFAULT_SETTINGS, ...d.settings }, zone = TZ.zoneOf(d.settings), w = weeks.forReport(d.shopify);
-  return { paceMonths: Math.round(+S.paceMonths || 6), bestShare: (+S.bestShare || 80) / 100, offOf: (c) => status.offSpells(status.of(c)), ...(d.source === 'live' ? { knownEnd: knownEndOf(d) } : {}), firstSeenDay: d.shopify && d.shopify.history && +d.shopify.history.until ? TZ.dayKey(+d.shopify.history.until, zone) : null, dayOf: (t) => TZ.dayKey(t, zone),
+  return { paceMonths: Math.round(+S.paceMonths || 6), bestShare: (+S.bestShare || 80) / 100, offOf: (c) => status.offSpells(status.of(c)), policy: policy.history(),   // 4.8.0 (§35) ...(d.source === 'live' ? { knownEnd: knownEndOf(d) } : {}), firstSeenDay: d.shopify && d.shopify.history && +d.shopify.history.until ? TZ.dayKey(+d.shopify.history.until, zone) : null, dayOf: (t) => TZ.dayKey(t, zone),
     rankBy: w ? Object.fromEntries(Object.entries(w.by).map(([k, v]) => [k, v.n])) : null, ...extra };   // 26 weeks, while the 12 months load
 }
 /** 1.4.3: the whole store's 12-month build with every variant's days (the drawer, ₹ lost pace), once per data version. */
@@ -318,7 +318,7 @@ function truthOf(d, shop = null) {
   const t = cache.memo('truth', '', 5 * 60e3, () => {
     const b = brandInputs(d), o = brandOptsOf(d), keep = b.basis === 'shopify' && !!(b.y && b.y.done);
     if (b.basis !== 'shopify') return { ok: false, on: false, basis: b.basis };
-    const r = truth.report(b.y, b.cat, { dayOf: o.dayOf, firstSeenDay: o.firstSeenDay, offOf: o.offOf, knownEnd: o.knownEnd, now: Date.now(), ledger: keep ? ledger.get(truth.RULE) : null });
+    const r = truth.report(b.y, b.cat, { dayOf: o.dayOf, firstSeenDay: o.firstSeenDay, offOf: o.offOf, knownEnd: o.knownEnd, policy: o.policy, now: Date.now(), ledger: keep ? ledger.get(truth.RULE) : null });
     if (r.ok && keep && r.lock && !readOnly()) { const n = ledger.add(truth.RULE, r.lock); if (n) console.log(`ledger: locked ${[...n.lists.map((k) => `list ${k}`), ...n.months].join(', ')} (rule ${truth.RULE})`); }
     delete r.lock;
     if (r.ok) status.annotate(r.rows, b.cat);
@@ -446,6 +446,7 @@ async function pullOne(id) {
     stores.noteShop(id, keys.status(id).store);
     const stock = store.add('stock', s.rows, 'shopify');
     store.setCatalog(s.catalog, started);   // current stock + attributes, replaced whole (SW-002)
+    try { const fl = policy.save(s.policy, TZ.dayKey(started, TZ.zoneOf(store.load().settings))); if (fl.length) log.info('keep-selling history', { store: id, changed: fl.length }); } catch (e) { console.warn('policy:', e.message); }   // 4.8.0 (§35): only after a complete stock read
     if (s.shop) store.setShopify({ shopInfo: s.shop });   // 1.4.0: shop domain + website address for product links
     Object.assign(run, { stock, phase: 'orders', notes: runs.stockNotes(s.excluded) });
     store.setShopify({ lastQty: s.lastQty });
@@ -852,7 +853,7 @@ async function storeApi(req, res, url, role, id) {
     const g = loadDemo();
     return send(res, 200, { ok: true, stock: g.stock.length, orders: g.orders.length });
   }
-  if (p === '/api/clear' && req.method === 'POST') { if (pulls.has(id)) return fail(res, 409, PULL_RUNNING); store.replaceAll([], [], 'empty'); onorder.clear(); decide.clear(); weekly.clear(); year.clear(); closed.clear(); ledger.clear(); status.clear(); return send(res, 200, { ok: true }); }
+  if (p === '/api/clear' && req.method === 'POST') { if (pulls.has(id)) return fail(res, 409, PULL_RUNNING); store.replaceAll([], [], 'empty'); onorder.clear(); decide.clear(); weekly.clear(); year.clear(); closed.clear(); ledger.clear(); status.clear(); policy.clear(); return send(res, 200, { ok: true }); }
   if (p === '/api/export/reorder.csv' && req.method === 'GET') {
     /* SW-025: usable as a PO: the tab filter and search on the page, vendor, unit cost, variant ID (LOGIC.md §15b) */
     const r = links.annotateReport(helpers.enrich(engine.report(d.stock, d.orders, settingsFor(url, d.settings), reportOpts())), d.catalog, shopLinks());

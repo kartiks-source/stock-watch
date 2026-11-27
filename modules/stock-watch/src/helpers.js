@@ -189,6 +189,7 @@ function enrichDetail(d, S, now) {
   const p = d && d.product; if (!p) return d;
   const o = (d.stockouts || []).find((s) => s.open);
   Object.assign(p, why(p, S, now, o ? o.start : null, o ? o.lost : null));
+  if (p.keepsWhy) p.why = p.keepsWhy;   // 4.8.0 (src/screen.js period): set to keep selling at 0, never "No sales lately"
   p.mkt = mktList(p, S); p.backIn = p.mkt === 'pause' ? backIn(p, S, now) : null;
   return d;
 }
