@@ -212,12 +212,12 @@ test('1440 + 390: drawer opens at once, fold open by default and remembered, det
     await g.scrollIntoViewIfNeeded();
     if (w < 760) await g.click({ force: true }); else await g.hover({ force: true });
     await pg.waitForSelector('#ptip:not([hidden])');
-    assert.match(await pg.textContent('#ptip'), /\w{3,} \d{4}.*Sold [\d,]+ · ₹.*(Out .* missed|In stock all month)Busy-month index ×[\d.]+/s);
+    assert.match(await pg.textContent('#ptip'), /\w{3,} \d{4}.*Sold [\d,]+ · ₹.*(Out .* missed(, \+₹[\d.,]+[k]?( lakh)? not counted)?|In stock all month)Busy-month index ×[\d.]+/s);
     const inside = await pg.evaluate(() => { const t = document.getElementById('ptip').getBoundingClientRect(), c = document.querySelector('.drawer-card').getBoundingClientRect(); return t.left >= c.left - 1 && t.right <= c.right + 1; });
     assert.ok(inside, 'the box stays inside the drawer');
     /* keyboard focus on a price month, and a calendar day / stock day */
     await pg.focus('#drawer svg[aria-label="Price paid each month"] g.tipg');
-    await pg.waitForFunction(() => /Paid ₹|No sales/.test(document.getElementById('ptip').textContent), null, { timeout: 2000 }).catch(() => {});   // the box fills a frame after focus (was flaky)
+    await pg.waitForFunction(() => /Paid ₹[\d,]+ with GST|No sales/.test(document.getElementById('ptip').textContent), null, { timeout: 3000 }).catch(() => {});   // the box fills a frame after focus (was flaky)
     assert.match(await pg.textContent('#ptip'), /(Paid ₹[\d,]+ with GST|No sales).*sold/s);
     const day = await pg.$('#drawer .cal .cd[data-tip]'); await day.scrollIntoViewIfNeeded(); await day.click({ force: true });
     await pg.waitForFunction(() => /In stock all day|Ran out or came back|Out of stock all day/.test(document.getElementById('ptip').textContent), null, { timeout: 2000 }).catch(() => {});

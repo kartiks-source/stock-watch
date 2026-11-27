@@ -86,6 +86,47 @@ function price(F) {
   return F;
 }
 
+/** E|X − m| for X ~ Poisson(m): what pure chance costs one product even with a perfect pace. */
+function poissonMad(m) {
+  if (!(m > 0)) return 0;
+  if (m > 30) return Math.sqrt(2 * m / Math.PI);
+  let p = Math.exp(-m), e = 0;
+  for (let k = 0; k < m * 4 + 30; k++) { if (k) p *= m / k; e += Math.abs(k - m) * p; }
+  return e;
+}
+/**
+ * 4.7.0 scorecard: how the rule does where the truth is known, apart for best sellers and the rest (bestAt(row, t)).
+ *   pretend   every 7th day t in the last 300: if the next 30 days are all Full, guess them from before t (what a stock-out on t would get)
+ *   before    the 14 Full days just before a real stock-out, guessed from before them (demand right before running out)
+ *   after     Full days 4–30 after a real stock-out came back, guessed with the pace it had when it ran out
+ * Each: n, products, real ₹, guess ₹, total = guess ÷ real − 1, miss = Σ|guess − real| ÷ real, floor = chance alone (Poisson), ratio = real ÷ guess.
+ */
+function scorecard(F, bestAt) {
+  const acc = () => ({ n: 0, p: new Set(), real: 0, guess: 0, err: 0, mad: 0 });
+  const S = { pretend: { best: acc(), other: acc() }, before: { best: acc(), other: acc() }, after: { best: acc(), other: acc() } };
+  const add = (k, r, t, a, b, o) => {
+    const s = speed(F, r, o); if (!s) return;
+    const u = guess(F, r, a, b, o), g = u * s.price, real = r.fn[b + 1] - r.fn[a], z = S[k][bestAt(r, t) ? 'best' : 'other'];
+    z.n++; z.p.add(r.productId || r.id); z.real += real; z.guess += g; z.err += Math.abs(g - real); z.mad += poissonMad(u) * s.price;
+  };
+  const fullRun = (r, a, b) => { for (let i = a; i <= b; i++) if (r.st[i] !== 2) return false; return true; };
+  for (const r of F.rows) {
+    if (!usableRow(r)) continue;
+    for (let t = Math.max(LOOK, F.n - 300); t + 30 <= F.n; t += 7) if (fullRun(r, t, t + 29)) add('pretend', r, t, t, t + 29, t);
+    for (const g of r.gaps) {
+      if (g.before) continue;
+      const t = g.a - 14; if (t >= LOOK && fullRun(r, t, g.a - 1)) add('before', r, g.a, t, g.a - 1, t);
+      if (g.ended === 'back') { const a = g.b + 4, b = Math.min(F.n - 1, g.b + 30); if (b - a >= 10 && r.fd[b + 1] - r.fd[a] >= 10) add('after', r, g.a, a, b, g.a); }
+    }
+  }
+  const out = {};
+  for (const [k, v] of Object.entries(S)) {
+    out[k] = {};
+    for (const [grp, z] of Object.entries(v)) out[k][grp] = z.real > 0 ? { n: z.n, products: z.p.size, real: Math.round(z.real), guess: Math.round(z.guess), total: Math.round((z.guess / z.real - 1) * 1e4) / 1e4, miss: Math.round(z.err / z.real * 1e4) / 1e4, floor: z.guess > 0 ? Math.round(z.mad / z.guess * 1e4) / 1e4 : null, ratio: z.guess > 0 ? Math.round(z.real / z.guess * 1e4) / 1e4 : null } : { n: z.n, products: z.p.size };
+  }
+  return out;
+}
+
 /** The tests: [{ kind: 'replay' | 'back', id, pid, o, a, b, guess, real }] in ₹. */
 function tests(F) {
   const out = [], rnd = rng(SEED), gaps = []; for (const r of F.rows) for (const g of r.gaps) if (!g.before && g.ended === 'back' && g.empty >= 3 && g.empty <= LONG) gaps.push(g.empty);
@@ -134,4 +175,4 @@ function ranger(groups) {
     return { low: Math.min(point, pct(z, 0.05), pct(c, 0.05)), high: Math.max(point, pct(z, 0.95)) };   // real comebacks are the real event: the low end is never above what they alone say
   };
 }
-module.exports = { prepare, speed, busy, guess, price, tests, bias, ranger, byMonth, K: { LOOK, MIN_DAYS, MIN_UNITS, LONG } };
+module.exports = { prepare, speed, busy, guess, price, tests, bias, ranger, byMonth, scorecard, poissonMad, K: { LOOK, MIN_DAYS, MIN_UNITS, LONG } };

@@ -123,7 +123,7 @@ function brand(t, { stockOf = null, today = null } = {}) {
     return { ...p, months: undefined, id: x.id, out: x.out, outVariants: x.out ? 1 : 0, variantsLive: 1, outSince: null, outFromDay: x.out ? x.since || t.span.held : null, stock: live != null ? live : Math.max(0, x.stock), daysOutMonth: c ? c.daysOut : 0, rangeMonth: c ? c.range : '', lostMonth: c ? c.lost : 0, unitsMonth: c ? c.units : 0, missedMonthAll: c ? c.lost : 0, moneyDaysMonth: c ? c.moneyDays : 0, no: c ? c.no : null, costPerDay: costNow(t, x) };
   }).sort((a, b) => (b.out - a.out) || (b.lostMonth - a.lostMonth) || (b.sold - a.sold));
   const keys = months.map((m) => m.key);
-  return { ok: true, rule: t.rule, home: { defaultMonth: defaultMonth(today || t.span.to, keys), today, stripFrom: t.span.from }, span: { from: t.span.from, through: t.span.to, days: sum(t.months.map((m) => m.days)) }, window: { from: t.span.from, through: t.span.to }, asOf: { through: t.span.to }, settings: { bestShare: 0.8, paceMonths: 0 }, months, headline, products: ps, proof: t.proof, bestList: t.best, countsNow: t.now,
+  return { ok: true, rule: t.rule, home: { defaultMonth: defaultMonth(today || t.span.to, keys), today, stripFrom: t.span.from }, span: { from: t.span.from, through: t.span.to, days: sum(t.months.map((m) => m.days)) }, window: { from: t.span.from, through: t.span.to }, asOf: { through: t.span.to }, settings: { bestShare: 0.8, paceMonths: 0 }, months, headline, products: ps, proof: t.proof, score: t.score, bestList: t.best, countsNow: t.now,
     now: now.filter((p) => p.best), nowAll: now.filter((p) => !p.best), ads: ads(now) };
 }
 

@@ -3,6 +3,13 @@
 User-facing changes, newest first. Semver: minor when a number's rule changes or a feature lands, patch for fixes. The version in `package.json` matches the top heading. Versions before 0.9.0 were reconstructed from `docs/DEVLOG.md` on 20 Nov 2026 (no tags existed); dates are the DEVLOG dates. Per DEVLOG, nothing from 0.6.0 on has been deployed yet. Since 1.0.0-rc.1, `/health`, `/status` and the page footer show the version and the build's commit (SW-056); `test/docs.test.js` checks the top heading matches `package.json`.
 
 
+## 4.7.0 · 2026-11-27 · a scorecard for every brand
+
+- "How sure are we?" now opens a scorecard: the rule against days where the real sales are known, each with a target and ✓ / ✗. Best sellers' total on known months (±10%), one best seller's miss next to what chance alone costs, best sellers right before running out and after coming back (real ÷ ours, 1.00–1.30× = our number is a floor), other products' total (±20%), best sellers' sold-out days that carry ₹ (90%+), products adding up to the shop (±2%). Worked out for every brand from its own data, every build. No money changes.
+- Any later change to the money rule must improve this scorecard on two or more brands.
+- Fix: the warehouse-allocation note no longer says "reorder" on agency screens. Two screen tests no longer depend on today's date.
+- API: `/api/brand` carries `score`: `{ pretend|before|after: { best|other: { n, products, real, guess, total, miss, floor, ratio } }, coverage, health: { rowsVsShop, unsureShare } }`.
+
 ## 4.6.4 · 2026-11-27 · Past months adds up on screen
 
 - Past months money to one decimal (₹40.1 lakh + ₹1.2 lakh = ₹41.3 lakh; ₹5.86 Cr + ₹19.4 lakh = ₹6.05 Cr).

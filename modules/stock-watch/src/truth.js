@@ -77,6 +77,15 @@ function sums(F) {
 }
 const win = (r, a, b) => ({ u: r.cu[b + 1] - r.cu[a], n: r.cn[b + 1] - r.cn[a], d: r.cd[b + 1] - r.cd[a] });
 
+/** 4.7.0: the scorecard (src/model.js) plus coverage (best sellers' empty days that carry ₹) and data health (products add up to the shop). */
+function scoreOf(F, yb, first, bestAt) {
+  const sc = M.scorecard(F, bestAt); let rows = 0, unsure = 0, shop = 0;
+  for (let i = first; i < F.n; i++) shop += F.shop[i];
+  for (const r of F.rows) { let v = 0; for (let i = first; i < F.n; i++) v += r.net[i]; rows += v; if (r.unsure) unsure += v; }
+  return { ...sc, coverage: yb.empty > 0 ? Math.round((1 - yb.noMoney / yb.empty) * 1e4) / 1e4 : null,
+    health: { rowsVsShop: shop > 0 ? Math.round((rows / shop - 1) * 1e4) / 1e4 : null, unsureShare: rows > 0 ? Math.round(unsure / rows * 1e4) / 1e4 : 0 } };
+}
+
 /* ---------- the report ---------- */
 const MONTHS = 12, GRACE = 3;
 const monthBack = (m, n) => { const t = new Date(Date.UTC(+m.slice(0, 4), +m.slice(5, 7) - 1 - n, 1)); return t.toISOString().slice(0, 7); };
@@ -166,6 +175,7 @@ function report(y, catalog, opts = {}) {
     now: { out: outRows.length, best: outRows.filter((r) => r.best).length, bestN: rows.filter((r) => r.best && r.active).length, onSale: F.rows.filter((r) => r.active).length },
     best: { quarter: q, from: cur.from, to: cur.to, n: best.size }, rows,
     proof: { all: set('all', T), best: set('best', gb), other: set('other', go), tests: T.length },
+    score: scoreOf(F, yb, first, (r, t) => listOf(F.keys[Math.min(t, F.n - 1)]).map.has(r.id)),
     lock: Object.keys(lock.lists).length || Object.keys(lock.months).length ? lock : null,
   };
 }
