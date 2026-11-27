@@ -218,7 +218,8 @@
   function zeroLine(rows, id, more = true) {
     if (!rows.length) return '';
     const why = [...new Set(rows.flatMap((p) => (p.x ? whyShort(p.x) : Object.values(p.months || {}).filter((x) => x.daysOut > 0).flatMap(whyShort))))], show = rows.slice(0, 6);
-    return `<p class="zero muted small" id="${id}">${inr.format(rows.length)}${more ? ' more' : ''} ${rows.length === 1 ? 'was' : 'were'} empty but we can’t put a price on ${rows.length === 1 ? 'it' : 'them'}: ${show.map((p) => `<button class="linkbtn nm" data-product="${esc(p.variantId)}">${esc(p.name)}</button>`).join(', ')}${rows.length > show.length ? '…' : ''} (${esc(why.join(', or '))}).${why.includes(WHY_SHORT.later) ? ` Ask the brand if they still sell ${rows.length === 1 ? 'it' : 'them'}.` : ''}</p>`;
+    const lat = (p) => (p.x ? p.x.later : p.later) || 0, gone = rows.reduce((s, p) => s + lat(p), 0);   // 4.6.0: ₹ past day 60, shown apart, never added
+    return `<p class="zero muted small" id="${id}">${inr.format(rows.length)}${more ? ' more' : ''} ${rows.length === 1 ? 'was' : 'were'} empty but we can’t put a price on ${rows.length === 1 ? 'it' : 'them'}: ${show.map((p) => `<button class="linkbtn nm" data-product="${esc(p.variantId)}">${esc(p.name)}</button>${lat(p) > 0 ? ` (${rs(lat(p))})` : ''}`).join(', ')}${rows.length > show.length ? '…' : ''} (${esc(why.join(', or '))}).${gone > 0 ? ` <b>Out over 60 days: about ${rs(gone)} more if people still wanted ${rows.length === 1 ? 'it' : 'them'}, not added to the total.</b>` : ''}${why.includes(WHY_SHORT.later) ? ` Ask the brand if they still sell ${rows.length === 1 ? 'it' : 'them'}.` : ''}</p>`;
   }
   const tile = (label, value, sub, { cls = '', href = '', id = '' } = {}) => `<${href ? `a href="${href}"` : 'div'} class="tile3 ${cls}"${id ? ` id="${id}"` : ''}><span class="tl">${label}</span><b class="tv">${value}</b>${sub ? `<small>${sub}</small>` : ''}</${href ? 'a' : 'div'}>`;
   /** best sellers (or products) out right now and what one more day costs (the Out now page's ₹ a day) */
@@ -226,6 +227,16 @@
     const sa = scope() === 'all', rows = [...(b.now || []), ...(sa ? b.nowAll || [] : [])].filter((p) => p.out && !p.inactive && !p.allApart), n = rows.length;
     const perDay = rows.reduce((s, p) => s + (p.costPerDay || 0), 0);   // the same ₹ a day as Out now
     return tile('Empty right now', inr.format(n), `${sa ? (n === 1 ? 'product' : 'products') : n === 1 ? 'best seller' : 'best sellers'}${n ? `${perDay > 0 ? ` · about ${rs(perDay)} a day` : ''}` : ' · all in stock'}`, { cls: n ? 'bad' : '', href: '#best', id: 'tile-now' });
+  }
+  /** 4.6.0: the pitch in four tiles: what sold, what was missed, what it could have been, what is out now */
+  function moneyTiles(b, sold, lost, p, prev) {
+    const sc = scope(), who = sc === 'all' ? 'all products' : 'best sellers';
+    return `<div class="tiles3 tiles4" id="tiles3">
+        ${tile('Sold', money(sold), `${who}, after discounts`, { id: 'tile-sold' })}
+        ${tile('Missed', money(lost), `${pct(p)} of sales${prev ? ` · ${prev}` : ''}`, { cls: lost > 0 ? 'bad' : '', id: 'tile-missed' })}
+        ${tile('Could have sold', money((+sold || 0) + (+lost || 0)), 'if nothing had sold out', { id: 'tile-could' })}
+        ${nowTile(b)}
+      </div>`;
   }
   function monthBar(b, sel) {
     const ms = monthsOf(b), yr = sel === 'year', i = ms.findIndex((m) => m.key === sel), h = b.headline;
@@ -279,15 +290,10 @@
     return `${monthBar(b, m.key)}
       <section class="headline brand-h">
         <h1>${Y ? `${inr.format(X)} of ${inr.format(Y)} ${noun} ran out in ${esc(name)}. ${esc(storeName(b))} missed about <span class="lost">${money(x.lost)}</span>.` : `No sales recorded in ${esc(name)} yet.`}</h1>
-        <p class="lead">${pct(x.pct)} of what ${sc === 'all' ? 'all products' : noun} sold (${money(x.sold ?? m.sold)}).</p>
         ${top.length ? `<p class="top10" id="top10">${top.length} of the top 10 ran out: ${top.map((p) => `<button class="linkbtn nm" data-product="${esc(p.variantId)}">#${p.mrank} ${esc(p.name)}</button>`).join(', ')}.</p>` : ''}
         ${howSure(b)}${notes(b)}
       </section>
-      <div class="tiles3" id="tiles3">
-        ${tile('Missed', money(x.lost), pv ? `${esc(prevText(pv))}: ${rs(pv[sc].lost)}` : '', { cls: x.lost > 0 ? 'bad' : '', id: 'tile-missed' })}
-        ${tile(X > 1 ? `Empty days, all ${inr.format(X)} added up` : 'Empty days', inr.format(Math.round(x.daysOut || 0)), pv ? `${esc(prevText(pv))}: ${inr.format(Math.round(pv[sc].empty))}` : '', { id: 'tile-empty' })}
-        ${nowTile(b)}
-      </div>
+      ${moneyTiles(b, x.sold ?? m.sold, x.lost, x.pct, pv ? `${esc(prevText(pv))}: ${rs(pv[sc].lost)}` : '')}
       <div class="hgrid">
         <div class="panel" id="olist"><div class="panel-head"><h2>${sc === 'all' ? 'Products' : 'Best sellers'} that ran out in ${esc(name)}</h2><span class="tb"><span class="osort" role="group" aria-label="Sort the list">${sortBtn('money', '₹')}${sortBtn('rank', 'Rank')}</span><button class="btn ghost xs" id="csv-month">CSV</button></span></div>
           ${paid.length ? `${legend}<div class="olist">${paid.slice(0, lim).map((p) => listRow(b, p, m)).join('')}</div>${paid.length > 12 ? `<div class="more"><button class="btn ghost" id="brand-all">${S().brandAll ? 'Show the first 12' : `Show all ${paid.length}`}</button></div>` : ''}`
@@ -308,6 +314,7 @@
         <h1>${inr.format(A)} of ${inr.format(Bn)} ${noun} ran out ${when}. ${esc(storeName(b))} missed about <span class="lost">${money(h.lost)}</span> (${pct(h.pct)} of ${money(h.sold)} sold).</h1>
         ${howSure(b)}${notes(b)}
       </section>
+      ${moneyTiles(b, h.sold, h.lost, h.pct, '')}
       <div class="hgrid">
         <div class="ycol">
           <div class="panel"><div class="panel-head"><h2>Sold and missed, each month</h2><span class="muted small"><i class="sw sold"></i> sold${sc === 'all' ? '' : ' (best sellers)'} <i class="sw lost"></i> missed${months.some((m) => m.days < 28) ? ' · * part of the month' : ''}${agencyStart() ? ' · <i class="sw st"></i> we started' : ''}</span></div><div id="brand-chart">${chart(months, 600)}</div></div>

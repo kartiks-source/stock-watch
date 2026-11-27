@@ -1208,7 +1208,7 @@ html.agency .rail a[data-view="reorder"], html.agency .owner { display: none !im
 .brand-h { flex-direction: column; align-items: flex-start; gap: 2px; }
 .brand-h .top10 { margin: 2px 0 0; font-size: 13.5px; color: var(--ink-2); }
 .linkbtn.nm { display: inline; min-height: 0 !important; width: auto; padding: 0; font: inherit; color: var(--brand); background: none; border: 0; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 2px; }
-.tiles3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.tiles3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; } .tiles4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }   /* 4.6.0: sold · missed · could have sold · out now */
 .tile3 { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 10px 14px; display: flex; flex-direction: column; gap: 1px; min-width: 0; color: var(--ink); text-decoration: none; box-shadow: var(--shadow); }
 .tile3 .tl { font-size: 12.5px; color: var(--soft); font-weight: 600; }
 .tile3 .tv { font-size: 22px; font-weight: 650; letter-spacing: -.02em; line-height: 1.2; }
@@ -1254,7 +1254,7 @@ a.tile3:hover { border-color: var(--brand); }
   .mstep { width: 44px; height: 44px; }
   .mname { font-size: 13px; padding: 0 2px; }
   .y12 { height: 48px; padding: 0 9px; font-size: 12px; }
-  .tiles3 { gap: 6px; }
+  .tiles3 { gap: 6px; } .tiles4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .tile3 { padding: 7px 8px; border-radius: 10px; }
   .tile3 .tl { font-size: 11px; line-height: 1.2; }
   .tile3 .tv { font-size: 17px; }
@@ -1302,3 +1302,5 @@ html.agency .scope button { white-space: nowrap; }   /* 4.2.0: "Best sellers" on
 .why-steps .why-steps li > b { display: block; color: var(--ink); }   /* 4.4: a step's heading on its own line, even inside a stock-out's line */
 
 .busy-work { margin-top: 6px; } .busy-work > summary { font-size: 13px; color: var(--ink-2); cursor: pointer; } .busy-work p { font-size: 13px; line-height: 1.45; color: var(--ink-2); margin: 6px 0; } .why-steps li .busy-work b { display: inline; color: var(--ink); } .busy-work .mtable { font-size: 12.5px; } .busy-work .mtable th, .busy-work .mtable td { padding: 2px 8px; line-height: 1.35; }   /* 4.5.1: the busy number, day by day */
+
+.zero b { color: var(--ink-2); font-weight: 600; }

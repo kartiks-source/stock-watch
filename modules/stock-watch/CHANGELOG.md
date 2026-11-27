@@ -3,6 +3,13 @@
 User-facing changes, newest first. Semver: minor when a number's rule changes or a feature lands, patch for fixes. The version in `package.json` matches the top heading. Versions before 0.9.0 were reconstructed from `docs/DEVLOG.md` on 20 Nov 2026 (no tags existed); dates are the DEVLOG dates. Per DEVLOG, nothing from 0.6.0 on has been deployed yet. Since 1.0.0-rc.1, `/health`, `/status` and the page footer show the version and the build's commit (SW-056); `test/docs.test.js` checks the top heading matches `package.json`.
 
 
+## 4.6.0 · 2026-11-27 · Sold, Missed, Could have sold on the brand report
+
+- Brand report (each month and 12 months): four tiles, Sold · Missed (% of sales) · Could have sold · Empty right now. "Empty days, all N added up" is gone; the lead line it repeated too.
+- Products out over 60 days now show their uncounted ₹ beside their names (“about ₹X more if people still wanted them, not added”).
+- All products: a Could have sold column (sold + missed for the period); Days left moves to the optional columns.
+- Custom dates stay on All products only: the brand report's months are locked once closed.
+
 ## 4.5.2 · 2026-11-27 · the busy table is compact
 
 - "How 0.8 is worked out": tighter rows, so a month of days fits without long scrolling.
