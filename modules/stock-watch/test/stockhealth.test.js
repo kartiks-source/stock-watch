@@ -143,6 +143,8 @@ test('keep selling now: the last days say "Keeps selling at 0 in Shopify · sell
   S.period(rep, r, { from: r.span.from, to: r.span.to });
   const days = r.months.reduce((a, m) => a + m.days, 0), n = x.pieces / days, txt = `Keeps selling at 0 in Shopify · sells about ${n >= 1 ? Math.round(n) : Math.round(n * 10) / 10} a day (12-month average)`;
   assert.equal(rep.products[0].why, txt); assert.equal(rep.products[0].keepsWhy, txt);
+  assert.equal(rep.products[0].status, 'OK', 'keep selling: the status uses its 12-month average, not Slow seller');
+  const low = { products: [{ id: 'k', stock: 1, status: 'OK', sold: 0 }], totals: {} }; S.period(low, r, { from: r.span.from, to: r.span.to }); assert.equal(low.products[0].status, 'Critical', 'a few days of stock at that average');
   assert.match(rep.products[1].why, /days of stock/, 'others as before'); assert.equal(rep.products[1].keepsWhy, undefined);
   const H = require('../src/helpers'), E = require('../src/engine'), d = H.enrichDetail({ product: { ...rep.products[0], perDay: 0, daysLeft: null }, stockouts: [] }, E.DEFAULT_SETTINGS, Date.now());
   assert.equal(d.product.why, txt, 'the drawer keeps it');

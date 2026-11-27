@@ -195,8 +195,9 @@ function between(t, x, from, to, best = false) {
 /** The period report with its money from the one rule. Mutates and returns rep. */
 /* 4.8.0 (LOGIC §35): set to keep selling at 0 now: no in-stock pace (its days are left out of the speed), so its plain 12-month average, never "No sales lately" */
 const keeps = (x) => x.stockSeen === 'always' || !!x.always;
+const avgOf = (t, x) => { const days = sum(t.months.map((m) => m.days)); return days > 0 ? Math.max(0, x.pieces) / days : 0; };   // pieces a day over the 12 months
 function keepsWhy(t, x) {
-  const days = sum(t.months.map((m) => m.days)), a = days > 0 ? Math.max(0, x.pieces) / days : 0;
+  const a = avgOf(t, x);
   return `Keeps selling at 0 in Shopify · sells about ${a >= 1 ? Math.round(a) : Math.round(a * 10) / 10} a day (12-month average)`;
 }
 function period(rep, t, { from, to, y = null, only = false, bestSet = null }) {   // 4.2.0: bestSet = the best-seller lists of the period's months (Best sellers scope)
@@ -209,8 +210,8 @@ function period(rep, t, { from, to, y = null, only = false, bestSet = null }) { 
     Object.assign(p, { lost, lostCounted: lost, lostEstimate: 0, lostNotRestocked: 0, lostAllocation: 0, lostOver30: 0, lostProfit: p.lostProfit == null ? p.lostProfit : 0, unitsLost: r2(b.units), lostPct: lost > 0 ? r2(lost / (lost + p.sold) * 100) : 0, daysEmpty: b.empty, costPerDay: x ? costNow(t, x) : 0, ...(x && x.out ? { outSinceDay: x.since } : {}) });
     if (sl) { const [u, v] = soldOf(sl.by[p.id]); p.sold = Math.round(v); p.unitsSold = u; p.lostPct = lost > 0 && lost + v > 0 ? r2(lost / (lost + v) * 100) : 0; }   // Shopify's sales report, full days
     if (x && p.status !== 'Inactive') {   // one speed and one "out now" everywhere
-      const v = x.speed ? x.speed.now : 0, out = p.stock != null && p.stock <= 0 && !x.always;
-      Object.assign(p, { perDay: r2(x.speed ? x.speed.perDay : 0), daysLeft: p.stock == null ? null : out ? 0 : v > 0 ? Math.round(p.stock / v * 10) / 10 : null, status: out ? 'Out now' : v > 0 && p.stock / v < SOON_DAYS ? 'Critical' : v > 0 ? 'OK' : 'Slow seller', mkt: pause.has(x.id) ? 'pause' : null, abc: (bestSet ? bestSet.has(x.id) : x.best) ? 'A' : p.abc === 'A' ? 'B' : p.abc,
+      const v = x.speed ? x.speed.now : 0, out = p.stock != null && p.stock <= 0 && !x.always, vs = keeps(x) ? avgOf(t, x) : v;   // vs: the speed the status uses (keep selling: its 12-month average, §35)
+      Object.assign(p, { perDay: r2(x.speed ? x.speed.perDay : 0), daysLeft: p.stock == null ? null : out ? 0 : v > 0 ? Math.round(p.stock / v * 10) / 10 : null, status: out ? 'Out now' : vs > 0 && p.stock / vs < SOON_DAYS ? 'Critical' : vs > 0 ? 'OK' : 'Slow seller', mkt: pause.has(x.id) ? 'pause' : null, abc: (bestSet ? bestSet.has(x.id) : x.best) ? 'A' : p.abc === 'A' ? 'B' : p.abc,
         why: out ? (x.since ? `Out since ${agency.ranges([x.since])}` : x.out ? 'Out since before our record' : 'Out since today') : keeps(x) ? keepsWhy(t, x) : v > 0 ? `About ${Math.round(p.stock / v)} days of stock` : 'No sales lately', ...(keeps(x) && !out ? { keepsWhy: keepsWhy(t, x) } : {}) });   // keepsWhy: the drawer's line keeps it (helpers.enrichDetail)
     }
     Object.assign(p, { trendPct: null, trendCall: null, trendNew: false, confidence: null, lossPace: null });
