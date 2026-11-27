@@ -5,10 +5,10 @@ User-facing changes, newest first. Semver: minor when a number's rule changes or
 
 ## 4.8.0 · 2026-11-27 · when Shopify can't see a stock-out
 
-- The drawer says when Shopify's stock log can't show a product's stock-outs: "Shopify’s stock count didn’t change on most days this sold (X of Y pieces), so its stock line and days out may be wrong." On the shelf then reads "not known"; Ran out keeps its days with "may be wrong", or says "can’t be seen in Shopify" when there are none. Products set to keep selling at 0 read the same way (On the shelf "not known", Ran out "can’t be seen in Shopify"). "Never ran out" and "never empty, nothing missed" are no longer said for these products.
-- The brand page adds "· N can’t be seen in Shopify" beside "X of Y best sellers ran out" when some best sellers keep selling at 0 or have a stock count that isn't kept.
+- The drawer says when Shopify's stock log can't show a product's stock-outs: "Shopify’s stock count didn’t change on most days this sold (X of Y pieces), so its stock line and days out may be wrong." For these products and those set to keep selling at 0: On the shelf, Missed sales and Net sales if in stock read "not known"; Sells is the plain 12-month average ("329 sold in the 12 months"); the day calendar is hidden; Ran out keeps its days with "may be wrong", or says "can’t be seen in Shopify" when there are none, as do the story, Why this number and Every stock-out. A keep-selling best seller no longer reads "It hardly sold" / "no sales".
+- The brand page adds "· N of them: Shopify’s stock count is unreliable" beside "X of Y best sellers ran out" when some best sellers keep selling at 0 or have a stock count that isn't kept (its own line on phones).
 - "Continue selling when out of stock" is now kept day by day (policy.json per store, from each stock pull, no extra Shopify calls). A product that is switched on or off counts as keep-selling only on the days it was. No money changes until the first switch is seen; past switches can't be recovered (LOGIC §35).
-- API: `/api/product/:id` `profile.stockSeen` and `profile.seen`; `/api/brand` products `stockSeen` and `seen`, months and `headline` `cantSee`.
+- API: `/api/product/:id` `profile.stockSeen` and `profile.seen` (`{ seen, of, net, netSeen }`); `/api/brand` products `stockSeen` and `seen`, months and `headline` `cantSee`.
 
 ## 4.7.0 · 2026-11-27 · a scorecard for every brand
 

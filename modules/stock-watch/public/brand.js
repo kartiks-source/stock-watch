@@ -294,7 +294,8 @@
   }
 
   /** 4.8.0 (LOGIC §35): best sellers whose stock-outs Shopify's stock log can't show (set to keep selling at 0, or the count not kept) */
-  const cantSee = (sc, n) => (sc !== 'all' && n > 0 ? `<span class="cant" id="cant-see" title="Set to keep selling at 0, or Shopify’s stock count didn’t change on most days they sold: their days out can’t be told"> · ${inr.format(n)} can’t be seen in Shopify</span>` : '');
+  const cantSee = (sc, n) => (sc !== 'all' && n > 0 ? `<span class="cant" id="cant-see" title="Set to keep selling at 0, or Shopify’s stock count didn’t change on most days they sold: their days out can’t be told"> · ${inr.format(n)} of them: Shopify’s stock count is unreliable</span>` : '');
+  const cantLine = (sc, n) => (sc !== 'all' && n > 0 ? `<p class="cant-ph small" id="cant-see-ph">${inr.format(n)} of them: Shopify’s stock count is unreliable.</p>` : '');   // phones: its own line, so the headline stays 2 lines
   function brandView() {
     if (need()) return loading;
     const b = B();
@@ -313,6 +314,7 @@
     return `${monthBar(b, m.key)}
       <section class="headline brand-h">
         <h1>${Y ? `${inr.format(X)} of ${inr.format(Y)} ${noun} ran out in ${esc(name)}${cantSee(sc, m.cantSee)}. ${esc(storeName(b))} missed about <span class="lost">${money(x.lost)}</span>.` : `No sales recorded in ${esc(name)} yet.`}</h1>
+        ${cantLine(sc, m.cantSee)}
         ${top.length ? `<p class="top10" id="top10">${top.length} of the top 10 ran out: ${top.map((p) => `<button class="linkbtn nm" data-product="${esc(p.variantId)}">#${p.mrank} ${esc(p.name)}</button>`).join(', ')}.</p>` : ''}
         ${howSure(b)}${notes(b)}
       </section>
@@ -335,6 +337,7 @@
     return `${monthBar(b, 'year')}
       <section class="headline brand-h">
         <h1>${inr.format(A)} of ${inr.format(Bn)} ${noun} ran out ${when}${cantSee(sc, b.headline.cantSee)}. ${esc(storeName(b))} missed about <span class="lost">${tm(h.lost)}</span> (${pct(h.pct)} of ${tm(h.sold)} net sales).</h1>
+        ${cantLine(sc, b.headline.cantSee)}
         ${howSure(b)}${notes(b)}
       </section>
       ${moneyTiles(b, h.sold, h.lost, h.pct, '')}

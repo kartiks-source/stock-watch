@@ -1310,3 +1310,6 @@ html.agency .scope button { white-space: nowrap; }   /* 4.2.0: "Best sellers" on
 @media (min-width: 760px) { .ptable { font-size: 13px; } .ptable th, .ptable td { padding-left: 6px; padding-right: 6px; white-space: nowrap; } .ptable .pbar { width: 28px; } }   /* 4.6.3: Net sales + If in stock fit beside Missed */
 
 .scorecard { margin: 10px 0; } .scorecard table.sc td, .scorecard table.sc th { padding: 4px 8px; font-size: 13px; } .sc-ok { color: var(--good, #1B7A4B); font-weight: 700; } .sc-no { color: var(--lost); font-weight: 700; } .scorecard tr.sc-note td { color: var(--ink-2); font-size: 12px; padding-top: 0; border-top: 0; }   /* 4.7.0 */
+/* 4.8.0 (LOGIC §35): "N of them: Shopify's stock count is unreliable": in the headline on wide screens, its own line on phones */
+.brand-h p.cant-ph { display: none; margin: 0; color: var(--ink-2); }
+@media (max-width: 760px) { .brand-h h1 .cant { display: none; } .brand-h p.cant-ph { display: block; } }

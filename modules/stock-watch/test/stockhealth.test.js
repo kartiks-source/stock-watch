@@ -35,16 +35,16 @@ test('seenOf / stockSeenOf: under half the pieces on days the count moved, with 
   /* the count never moves while it sells (Shopify's count not kept) */
   const y = { sales: { by: { a: Object.fromEntries(Array.from({ length: 30 }, (_, i) => [DAY(i), [2, 200]])) } }, moves: { by: { a: { [DAY(3)]: -2, [DAY(10)]: 40 } } } };
   const s = A.seenOf(y, 'a', DAY(0), DAY(29));
-  assert.deepEqual(s, { seen: 4, of: 60 }, 'pieces on the 2 days the count moved, of 60');
+  assert.deepEqual(s, { seen: 4, of: 60, net: 60, netSeen: 4 }, 'pieces on the 2 days the count moved, of 60');
   assert.equal(A.stockSeenOf(s), 'unseen');
   assert.equal(A.stockSeenOf({ seen: 0, of: 4 }), 'ok', 'under 5 pieces: too few to tell');
   assert.equal(A.stockSeenOf({ seen: 5, of: 10 }), 'ok', 'half exactly is seen');
   assert.equal(A.stockSeenOf({ seen: 4, of: 10 }), 'unseen');
   assert.equal(A.stockSeenOf({ always: true, seen: 0, of: 60 }), 'always');
   assert.equal(A.stockSeenOf({ unsure: true, seen: 0, of: 60 }), 'unsure');
-  assert.deepEqual(A.seenOf(y, 'a', DAY(5), DAY(9)), { seen: 0, of: 10 }, 'only the window');
+  assert.deepEqual(A.seenOf(y, 'a', DAY(5), DAY(9)), { seen: 0, of: 10, net: 10, netSeen: 0 }, 'only the window');
   const ret = { sales: { by: { a: { [DAY(0)]: [-3, -300], [DAY(1)]: [6, 600] } } }, moves: { by: { a: { [DAY(1)]: -6 } } } };
-  assert.deepEqual(A.seenOf(ret, 'a', DAY(0), DAY(1)), { seen: 6, of: 6 }, 'a return day is not a day it sold');
+  assert.deepEqual(A.seenOf(ret, 'a', DAY(0), DAY(1)), { seen: 6, of: 6, net: 3, netSeen: 6 }, 'a return day is not a day it sold; net takes it off');
 });
 
 test('a Cascade-like product: every sale logged day by day, restocks (even one that cancels the day’s sales) stay ok', () => {
@@ -62,7 +62,7 @@ test('unseen on the report, the brand page and the drawer: labels only, the mone
   const ks = { id: 'k', price: 900, sell, level: (i) => 30 - Math.floor(i / 2), oversell: true };   // keeps selling at 0
   const rows = [{ id: 'u', name: 'Unseen clutch', price: 2000, sell, level }, ks, ...many(6, 100, 500)];
   const { y, cat } = shop(rows), r = T.report(y, cat, opts), u = r.rows.find((z) => z.id === 'u'), k = r.rows.find((z) => z.id === 'k');
-  assert.equal(u.stockSeen, 'unseen'); assert.deepEqual(u.seen, { seen: 0, of: u.pieces }); assert.equal(k.stockSeen, 'always');
+  assert.equal(u.stockSeen, 'unseen'); assert.deepEqual(u.seen, { seen: 0, of: u.pieces, net: u.pieces, netSeen: 0 }); assert.equal(k.stockSeen, 'always');
   assert.ok(u.best && k.best, 'both on the best-seller list');
   const b = S.brand(r, { today: '2026-11-25' });
   assert.equal(b.products.find((p) => p.variantId === 'u').stockSeen, 'unseen');

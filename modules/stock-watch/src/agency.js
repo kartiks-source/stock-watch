@@ -110,15 +110,18 @@ function days(y, id, keys, createdDay = null, { skip = null, end: endDay = null,
  * 4.8.0 (LOGIC §35, part B): can Shopify's stock log see this variant's stock-outs? Shopify keeps one net change in "available" a
  * day, so a day that sold with no change at all means the count was not kept (a restock the same day still moves it, so a product
  * logged sale by sale passes). seenOf → { seen: pieces sold on days the count moved, of: pieces sold } over from..through (days
- * that sold; returns left out). stockSeenOf: 'always' (set to keep selling now) · 'unsure' (the walk doesn't add up) · 'unseen'
+ * that sold; returns left out), and the same net of returns (net, netSeen: what the drawer shows). stockSeenOf: 'always' (set to keep selling now) · 'unsure' (the walk doesn't add up) · 'unseen'
  * (5+ pieces and under half of them on days the count moved) · 'ok'. Labels only: the money is unchanged.
  */
 const SEEN_SHARE = 0.5, SEEN_MIN = 5;
 function seenOf(y, id, from, through) {
   const sl = (y && y.sales && y.sales.by && y.sales.by[id]) || {}, mv = (y && y.moves && y.moves.by && y.moves.by[id]) || {};
-  let seen = 0, of = 0;
-  for (const [k, x] of Object.entries(sl)) { if (k < from || k > through) continue; const u = Math.max(0, Number(x[0]) || 0); if (!u) continue; of += u; if (Number(mv[k]) || 0) seen += u; }
-  return { seen, of };
+  let seen = 0, of = 0, net = 0, netSeen = 0;   // net: the pieces the drawer's Sold shows (returns taken off), for the line on screen
+  for (const [k, x] of Object.entries(sl)) {
+    if (k < from || k > through) continue; const n = Number(x[0]) || 0, u = Math.max(0, n), moved = !!(Number(mv[k]) || 0);
+    net += n; if (moved) netSeen += n; if (!u) continue; of += u; if (moved) seen += u;
+  }
+  return { seen, of, net, netSeen };
 }
 const stockSeenOf = ({ always = false, unsure = false, seen = 0, of = 0 } = {}) => (always ? 'always' : unsure ? 'unsure' : of >= SEEN_MIN && seen < SEEN_SHARE * of ? 'unseen' : 'ok');
 

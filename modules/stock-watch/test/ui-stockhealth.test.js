@@ -38,20 +38,31 @@ async function page(w, h, url, ready, route = null) {
   await pg.goto(base + url); await pg.waitForSelector(ready);
   return pg;
 }
-async function drawer(w, h, edit) {
-  const pg = await page(w, h, '/?store=sammsara-demo#best', w < 760 ? '#view .mcard' : '#view table[data-table="best"] tbody tr', { match: /\/api\/product\//, edit: (j) => { if (j.profile && j.profile.ok) edit(j.profile); } });
+async function drawer(w, h, edit, editAll = null) {
+  const pg = await page(w, h, '/?store=sammsara-demo#best', w < 760 ? '#view .mcard' : '#view table[data-table="best"] tbody tr', { match: /\/api\/product\//, edit: (j) => { if (j.profile && j.profile.ok) edit(j.profile); if (editAll) editAll(j); } });
   await pg.click(w < 760 ? '#view .mcard' : '#view table[data-table="best"] tbody tr');
   await pg.waitForSelector('#drawer .pstory');
   return pg;
 }
+const NK = 'stock-outs can’t be seen in Shopify';
+/** the tiles and blocks every blind product shares (4.8.0 UI check items 1–4) */
+async function blindParts(pg, kind) {
+  assert.equal(await pg.textContent('#shelf-tile b'), 'not known', kind);
+  for (const id of ['#missed-tile', '#could-tile']) { if (id === '#could-tile' && !(await pg.$(id))) continue;   // the rows-held build has no "if in stock" tile
+    assert.equal(await pg.textContent(`${id} b`), 'not known', `${kind} ${id}`); assert.equal(await pg.textContent(`${id} small`), NK); }
+  assert.equal(await pg.textContent('#sells-tile > span'), 'Sells'); assert.equal(await pg.textContent('#sells-tile small'), '329 sold in the 12 months');
+  assert.ok(!/full-shelf|no sales|hardly sold/.test(await pg.innerText('#drawer')), `${kind}: no in-stock pace, no "no sales"`);
+  assert.equal(await pg.$('#drawer .ycal'), null, `${kind}: no day calendar`);
+  assert.equal(await pg.textContent('#hour-cant'), 'Can’t be seen in Shopify.', `${kind}: Every stock-out`);
+}
 
-test('1440 + 390: unseen: one line above the stock graph, On the shelf "not known", Ran out keeps its days with "may be wrong"', opts, async () => {
+test('1440 + 390: unseen: the line in net pieces above the stock graph; not known tiles; plain average; no calendar; Ran out "may be wrong"', opts, async () => {
   for (const [w, h] of SIZES) {
-    const pg = await drawer(w, h, (p) => { p.stockSeen = 'unseen'; p.seen = { seen: 26, of: 329 }; p.outs = { ...p.outs, times: 2, days: 12.5, longest: { from: p.span.from, to: p.span.from, days: 9 } }; });
+    const pg = await drawer(w, h, (p) => { p.stockSeen = 'unseen'; p.seen = { seen: 30, of: 340, net: 329, netSeen: 26 }; p.sold = { ...p.sold, units: 329 }; p.span = { ...p.span, days: 365 }; p.outs = { ...p.outs, times: 2, days: 12.5, longest: { from: p.span.from, to: p.span.from, days: 9 } }; }, (j) => { j.stockouts = []; });
     assert.equal(await pg.textContent('#unseen'), 'Shopify’s stock count didn’t change on most days this sold (303 of 329 pieces), so its stock line and days out may be wrong.');
     assert.equal(await pg.evaluate(() => document.getElementById('unseen').closest('section').querySelector('h2').textContent), 'Stock level', 'in the Stock level panel, above its graph');
     assert.ok(await pg.evaluate(() => { const u = document.getElementById('unseen'), c = u.closest('section').querySelector('.chartbox'); return !!(u.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_FOLLOWING); }));
-    assert.equal(await pg.textContent('#shelf-tile b'), 'not known');
+    await blindParts(pg, 'unseen');
     assert.match(await pg.textContent('#out-tile b'), /^2× · 12\.5 days$/); assert.match(await pg.textContent('#out-tile small'), /^may be wrong · longest/);
     assert.equal(await sideways(pg), 0, `${w}: no sideways scroll`);
     assert.deepEqual(pg.errors, []);
@@ -59,14 +70,15 @@ test('1440 + 390: unseen: one line above the stock graph, On the shelf "not know
   }
 });
 
-test('1440 + 390: unseen that never shows a stock-out, and keep selling: "can’t be seen in Shopify", no "never ran out"', opts, async () => {
+test('1440 + 390: keep selling (a big seller) and unseen with no stock-out: "can’t be seen in Shopify", sells on average, never "hardly sold"', opts, async () => {
   for (const [w, h] of SIZES) {
     for (const kind of ['unseen', 'always']) {
-      const pg = await drawer(w, h, (p) => { p.stockSeen = kind; p.seen = { seen: 2, of: 40 }; p.outs = { times: 0, days: 0, longest: null, open: false, since: null }; if (p.work) p.work.gaps = []; });
-      assert.equal(await pg.textContent('#shelf-tile b'), 'not known', kind);
+      const pg = await drawer(w, h, (p) => { p.stockSeen = kind; p.seen = { seen: 2, of: 340, net: 329, netSeen: 2 }; p.sold = { ...p.sold, units: 329 }; p.span = { ...p.span, days: 365 }; p.pace = { ...p.pace, perDay: 0, sixMonths: 0, speed: null }; p.outs = { times: 0, days: 0, longest: null, open: false, since: null }; if (p.work) p.work.gaps = []; }, (j) => { j.stockouts = []; });
+      await blindParts(pg, kind);
       assert.equal(await pg.textContent('#out-tile b'), 'can’t be seen in Shopify', kind);
+      assert.equal(await pg.textContent('#sells-tile b'), '6 a week', '329 in 365 days');
       const story = await pg.textContent('#drawer .pstory');
-      assert.match(story, /Whether it ran out can’t be seen in Shopify\./); assert.ok(!/never ran out/.test(story));
+      assert.match(story, /^Sells about 6 a week on average\. Whether it ran out can’t be seen in Shopify\./); assert.ok(!/never ran out|hardly sold/.test(story));
       if (kind === 'always') assert.equal(await pg.$('#unseen'), null, 'keep selling: its own note, no unseen line');
       assert.equal(await sideways(pg), 0, `${w} ${kind}`);
       assert.deepEqual(pg.errors, []);
@@ -77,27 +89,34 @@ test('1440 + 390: unseen that never shows a stock-out, and keep selling: "can’
 
 test('1440 + 390: ok: nothing new in the drawer', opts, async () => {
   for (const [w, h] of SIZES) {
-    const pg = await drawer(w, h, (p) => { p.stockSeen = 'ok'; p.seen = { seen: 300, of: 310 }; });
-    assert.equal(await pg.$('#unseen'), null);
+    const pg = await drawer(w, h, (p) => { p.stockSeen = 'ok'; p.seen = { seen: 300, of: 310, net: 305, netSeen: 296 }; });
+    assert.equal(await pg.$('#unseen'), null); assert.equal(await pg.$('#hour-cant'), null);
     assert.match(await pg.textContent('#shelf-tile b'), /^\d+% of the (year|days)$/);
-    assert.ok(!/can’t be seen/.test(await pg.innerText('#drawer')));
+    assert.equal(await pg.textContent('#sells-tile > span'), 'Sells, on days in stock'); assert.ok(!/sold in the 12 months/.test(await pg.textContent('#sells-tile small')));
+    assert.notEqual(await pg.textContent('#missed-tile b'), 'not known'); assert.ok(await pg.$('#drawer .ycal'), 'the day calendar');
+    assert.ok(!/can’t be seen|not known/.test(await pg.innerText('#drawer')));
     await pg.context().close();
   }
 });
 
-test('1440 + 390: the brand page says "· N can’t be seen in Shopify" beside the best sellers that ran out, only when N > 0', opts, async () => {
+test('1440 + 390: the brand page says "· N of them: Shopify’s stock count is unreliable", only when N > 0; on phones its own line, the headline as tall as without it', opts, async () => {
+  const heights = {};
   for (const [w, h] of SIZES) {
-    for (const n of [3, 0]) {
+    for (const n of [0, 3]) {
       const pg = await page(w, h, '/?store=sammsara-demo', '#view .brand-h h1', { match: /\/api\/brand/, edit: (j) => { for (const m of j.months || []) m.cantSee = n; if (j.headline) j.headline.cantSee = n; } });
-      const t = await pg.textContent('.brand-h h1');
-      if (n) assert.match(t, /^[\d,]+ of [\d,]+ best sellers ran out in \w+( \d{4})? · 3 can’t be seen in Shopify\. /); else assert.ok(!/can’t be seen/.test(t), t);
+      const t = await pg.innerText('.brand-h h1'), hh = await pg.evaluate(() => document.querySelector('.brand-h h1').getBoundingClientRect().height);
+      heights[`${w}|${n}`] = hh;
+      if (!n) { assert.ok(!/unreliable/.test(await pg.innerText('.brand-h')), t); assert.equal(await pg.$('#cant-see-ph'), null); }
+      else if (w >= 760) { assert.match(t, /^[\d,]+ of [\d,]+ best sellers ran out in \w+( \d{4})? · 3 of them: Shopify’s stock count is unreliable\. /); assert.ok(await pg.isHidden('#cant-see-ph')); }
+      else { assert.ok(!/unreliable/.test(t), 'not in the phone headline'); assert.equal(await pg.innerText('#cant-see-ph'), '3 of them: Shopify’s stock count is unreliable.'); }
       if (n) {
         await pg.click('.scope button[data-scope="all"]'); await pg.waitForFunction(() => /products ran out/.test(document.querySelector('.brand-h h1').textContent));
-        assert.ok(!/can’t be seen/.test(await pg.textContent('.brand-h h1')), 'All products: not shown');
+        assert.ok(!/unreliable/.test(await pg.innerText('.brand-h')), 'All products: not shown');
       }
       assert.equal(await sideways(pg), 0, `${w} ${n}`);
       assert.deepEqual(pg.errors, []);
       await pg.context().close();
     }
   }
+  assert.equal(heights['390|3'], heights['390|0'], 'the phone headline keeps its lines');
 });

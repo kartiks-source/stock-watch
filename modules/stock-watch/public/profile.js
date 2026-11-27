@@ -53,12 +53,15 @@
   /* 4.8.0 (LOGIC §35): Shopify's stock log can't show this product's stock-outs: set to keep selling at 0, or the count not kept */
   const blind = (prof) => prof && (prof.stockSeen === 'unseen' || prof.stockSeen === 'always');
   const CANT = 'can’t be seen in Shopify';
-  const unseenLine = (prof) => (prof && prof.stockSeen === 'unseen' && prof.seen ? `<p class="note small" id="unseen">Shopify’s stock count didn’t change on most days this sold (${inr.format(prof.seen.of - prof.seen.seen)} of ${inr.format(prof.seen.of)} pieces), so its stock line and days out may be wrong.</p>` : '');
+  const unseenLine = (prof) => (prof && prof.stockSeen === 'unseen' && prof.seen ? `<p class="note small" id="unseen">Shopify’s stock count didn’t change on most days this sold (${inr.format(Math.max(0, prof.sold.units - (prof.seen.netSeen ?? prof.seen.seen)))} of ${inr.format(prof.sold.units)} pieces), so its stock line and days out may be wrong.</p>` : '');   // net pieces, as the Net sales tile
+  /* blind: days in stock can't be told, so the pace is the plain average over the 12 months (a keep-selling best seller has no "days in stock" pace) */
+  const avgPace = (prof) => (prof.span && prof.span.days > 0 ? Math.max(0, prof.sold.units) / prof.span.days : 0);
+  const STOCKOUTS = 'stock-outs can’t be seen in Shopify';
 
   /* ---------- 2–10. body ---------- */
   function story(prof) {
     const o = prof.outs, sp = span(prof.span.from, prof.span.through);
-    const a = speed(prof) > 0 ? `Sells about ${pace(speed(prof))} when it is in stock.` : 'It hardly sold in these months.';
+    const a = blind(prof) ? (avgPace(prof) > 0 ? `Sells about ${pace(avgPace(prof))} on average.` : 'It hardly sold in these months.') : speed(prof) > 0 ? `Sells about ${pace(speed(prof))} when it is in stock.` : 'It hardly sold in these months.';
     const b = o.times ? `Ran out ${o.times === 1 ? 'once' : o.times === 2 ? 'twice' : `${o.times} times`} in ${prof.span.days >= 330 ? 'the last 12 months' : 'these days'}, ${nDays(o.days)} in all.` : blind(prof) ? `Whether it ran out ${CANT}.` : 'It never ran out in the last 12 months.';
     const nw = prof.work && prof.work.rule, c = nw && prof.missed.value > 0 ? `That cost about ${rs(prof.missed.value)} in sales.${prof.missed.later > 0 ? ` Another ${rs(prof.missed.later)} if people still wanted it after 60 empty days.` : ''}` : nw && prof.outs.times ? 'No ₹ is shown: see Why this number.' : prof.missed.value > 0 ? `That cost about ${rs(prof.missed.value)} in sales${prof.missed.apart > 0 ? `, +${rs(prof.missed.apart)} not counted` : ''}.` : prof.missed.apart > 0 ? `${rs(prof.missed.apart)} missed, not counted.` : '';
     return `<p class="pstory">${esc(a)} ${esc(b)} ${esc(c)} <span class="muted small">(${esc(sp)})</span></p>`;
@@ -70,11 +73,11 @@
     const rr = prof.lastRestock;
     return `<div class="kgrid" title="${esc(sp)}">
       ${kv('Net sales, 12 months', `${inr.format(prof.sold.units)} · ${money(prof.sold.value)}`, `${n1(prof.share)}% of the store’s sales`)}
-      ${kv('Sells, on days in stock', esc(pace(speed(prof))), `${prof.pace.speed ? `${inr.format(prof.pace.speed.units)} in ${prof.pace.speed.days} full-shelf days; lately ${(Math.round(prof.pace.speed.now * 100) / 100).toLocaleString('en-IN')} a day` : `last ${prof.pace.sixMonths != null ? '6' : '12'} months`}: ${(Math.round(speed(prof) * 100) / 100).toLocaleString('en-IN')} a day · ${n1(speed(prof) * 7)} a week · ${inr.format(Math.round(speed(prof) * 30.4))} a month`)}
+      ${blind(prof) ? kv('Sells', esc(pace(avgPace(prof))), `${inr.format(prof.sold.units)} sold in the 12 months`, '', 'sells-tile') : kv('Sells, on days in stock', esc(pace(speed(prof))), `${prof.pace.speed ? `${inr.format(prof.pace.speed.units)} in ${prof.pace.speed.days} full-shelf days; lately ${(Math.round(prof.pace.speed.now * 100) / 100).toLocaleString('en-IN')} a day` : `last ${prof.pace.sixMonths != null ? '6' : '12'} months`}: ${(Math.round(speed(prof) * 100) / 100).toLocaleString('en-IN')} a day · ${n1(speed(prof) * 7)} a week · ${inr.format(Math.round(speed(prof) * 30.4))} a month`, '', 'sells-tile')}
       ${blind(prof) ? kv('On the shelf', 'not known', '', '', 'shelf-tile') : kv('On the shelf', `${prof.inStock.pct ?? '–'}% of ${prof.inStock.of >= 330 ? 'the year' : 'the days'}`, `${inr.format(Math.round(prof.inStock.days))} of ${inr.format(prof.inStock.of)} days in stock`, '', 'shelf-tile')}
       ${prof.stockSeen === 'always' || (blind(prof) && !o.times) ? kv('Ran out', CANT, '', '', 'out-tile') : kv('Ran out', o.times ? `${o.times}× · ${esc(nDays(o.days))}` : 'never', [prof.stockSeen === 'unseen' ? 'may be wrong' : '', o.longest ? `longest ${esc(nDays(o.longest.days))}: ${esc(span(o.longest.from, o.longest.to))}${o.open && o.longest.to === prof.span.through ? ' (still out)' : ''}` : ''].filter(Boolean).join(' · '), o.times ? 'bad' : '', 'out-tile')}
-      ${kv('Missed sales', prof.missed.value ? money(prof.missed.value) : prof.work && prof.work.rule ? (o.times ? 'not shown' : '₹0') : '₹0', [prof.missed.units ? `${about(prof.missed.units)} it would have sold` : '', prof.missed.apart > 0 ? `+${rs(prof.missed.apart)} not counted` : ''].filter(Boolean).join(' · '), prof.missed.value ? 'bad' : '')}
-      ${prof.could != null ? kv('Net sales if in stock', money(prof.could), `net sales ${rs(prof.sold.value)} + missed ${rs(prof.missed.value)}`) : ''}
+      ${blind(prof) ? kv('Missed sales', 'not known', STOCKOUTS, '', 'missed-tile') : kv('Missed sales', prof.missed.value ? money(prof.missed.value) : prof.work && prof.work.rule ? (o.times ? 'not shown' : '₹0') : '₹0', [prof.missed.units ? `${about(prof.missed.units)} it would have sold` : '', prof.missed.apart > 0 ? `+${rs(prof.missed.apart)} not counted` : ''].filter(Boolean).join(' · '), prof.missed.value ? 'bad' : '', 'missed-tile')}
+      ${prof.could != null ? (blind(prof) ? kv('Net sales if in stock', 'not known', STOCKOUTS, '', 'could-tile') : kv('Net sales if in stock', money(prof.could), `net sales ${rs(prof.sold.value)} + missed ${rs(prof.missed.value)}`, '', 'could-tile')) : ''}
       ${stockNow}
       ${kv('Last restock', rr ? `+${inr.format(rr.qty)}` : '–', rr ? `on ${esc(dayY(rr.day))}` : 'none in 12 months')}
       ${p && p.returnPct != null ? kv('Cancelled or refunded', `${n1(p.returnPct)}%`, `last 30 days: ${inr.format(p.unitsReturned)} of ${inr.format(p.unitsOrdered)} ordered${p.unitsCancelled ? `, ${inr.format(p.unitsCancelled)} cancelled` : ''} · ${rs(p.refundValue)} back`, '', 'returns-tile') : ''}
@@ -95,7 +98,7 @@
       <p class="muted small">Line = price paid each month (with GST); bars = units sold. Did discounts drive sales? Compare the two.</p></section>`;
   }
   function calendar(prof) {
-    const cal = prof.calendar || []; if (!cal.length) return '';
+    const cal = prof.calendar || []; if (!cal.length || blind(prof)) return '';   // 4.8.0: its days in stock can't be told
     const dow = (new Date(`${cal[0][0]}T00:00:00Z`).getUTCDay() + 6) % 7;
     const cells = [...Array(dow).fill('<i class="cd e"></i>'), ...cal.map(([k, f], i) => { const u = prof.stock && prof.stock[i] ? prof.stock[i][2] : null; const tip = [dayY(k), f >= 1 ? 'In stock all day' : f > 0 ? 'Ran out or came back that day (about half the day out)' : 'Out of stock all day', u != null ? `${inr.format(u)} sold` : ''].filter(Boolean).join('\n'); return `<i class="cd ${f >= 1 ? 'in' : f > 0 ? 'half' : 'out'}" data-tip="${esc(tip)}"></i>`; })].join('');
     return `<section class="panel ycal"><div class="panel-head"><h2>Every day on the shelf</h2><span class="muted small">${esc(span(prof.span.from, prof.span.through))}</span></div>
@@ -303,5 +306,5 @@
     els.forEach((el) => io.observe(el));
   }
 
-  window.SW_PROFILE = { why: (prof, p) => (prof && prof.ok ? whyBlock(prof, p) : ''), top, body, charts, skeleton, showTip, hideTip, monthsChart, priceChart, stockChart, story };
+  window.SW_PROFILE = { blind, CANT, why: (prof, p) => (prof && prof.ok ? whyBlock(prof, p) : ''), top, body, charts, skeleton, showTip, hideTip, monthsChart, priceChart, stockChart, story };
 })();
