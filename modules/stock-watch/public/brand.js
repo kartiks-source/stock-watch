@@ -231,10 +231,11 @@
   /** 4.6.0: the pitch in four tiles: what sold, what was missed, what it could have been, what is out now */
   function moneyTiles(b, sold, lost, p, prev) {
     const sc = scope(), who = sc === 'all' ? 'all products' : 'best sellers';
+    const tm = (x) => { const v = +x || 0, t = v >= 1e7 ? `₹${(v / 1e7).toFixed(2)} Cr` : v >= 1e5 ? `₹${(v / 1e5).toFixed(1)} lakh` : rs(v); return `<span title="${exact(v)}">${t}</span>`; };   // one decimal, so sold + missed = could have sold on screen
     return `<div class="tiles3 tiles4" id="tiles3">
-        ${tile('Sold', money(sold), `${who}, after discounts`, { id: 'tile-sold' })}
-        ${tile('Missed', money(lost), `${pct(p)} of sales${prev ? ` · ${prev}` : ''}`, { cls: lost > 0 ? 'bad' : '', id: 'tile-missed' })}
-        ${tile('Could have sold', money((+sold || 0) + (+lost || 0)), 'if nothing had sold out', { id: 'tile-could' })}
+        ${tile('Sold', tm(sold), `${who}, after discounts`, { id: 'tile-sold' })}
+        ${tile('Missed', tm(lost), `${pct(p)} of sales${prev ? ` · ${prev}` : ''}`, { cls: lost > 0 ? 'bad' : '', id: 'tile-missed' })}
+        ${tile('Could have sold', tm((+sold || 0) + (+lost || 0)), 'if nothing had sold out', { id: 'tile-could' })}
         ${nowTile(b)}
       </div>`;
   }

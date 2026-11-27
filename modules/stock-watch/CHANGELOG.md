@@ -3,6 +3,10 @@
 User-facing changes, newest first. Semver: minor when a number's rule changes or a feature lands, patch for fixes. The version in `package.json` matches the top heading. Versions before 0.9.0 were reconstructed from `docs/DEVLOG.md` on 20 Nov 2026 (no tags existed); dates are the DEVLOG dates. Per DEVLOG, nothing from 0.6.0 on has been deployed yet. Since 1.0.0-rc.1, `/health`, `/status` and the page footer show the version and the build's commit (SW-056); `test/docs.test.js` checks the top heading matches `package.json`.
 
 
+## 4.6.1 · 2026-11-27 · tiles add up on screen
+
+- Sold, Missed and Could have sold show one decimal (₹40.1 lakh + ₹1.2 lakh = ₹41.3 lakh; ₹5.86 Cr + ₹19.4 lakh = ₹6.05 Cr).
+
 ## 4.6.0 · 2026-11-27 · Sold, Missed, Could have sold on the brand report
 
 - Brand report (each month and 12 months): four tiles, Sold · Missed (% of sales) · Could have sold · Empty right now. "Empty days, all N added up" is gone; the lead line it repeated too.
