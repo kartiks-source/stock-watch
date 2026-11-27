@@ -68,17 +68,18 @@ function price(F) {
     const sib = F.rows.filter((p) => p !== r && p.productId === r.productId), s = speed(F, r, g.a);
     g.ref = s; g.no = r.unsure || r.always ? 'unsure' : r.gift ? 'gift' : g.before ? 'started-empty' : !s ? noReason(F, r, g.a) : null; g.parts = [];
     for (const [a, e] of byMonth(F, g.a, g.b)) {
-      const part = { month: F.keys[a].slice(0, 7), s: a, e, empty: 0, first: 0, later: 0, sib: 0, sold: 0, units: 0, laterUnits: 0, bz: 0, bd: 0 };
+      const part = { month: F.keys[a].slice(0, 7), s: a, e, empty: 0, first: 0, later: 0, sib: 0, sold: 0, units: 0, laterUnits: 0, bz: 0, bd: 0, bdays: [] };
       for (let i = a; i <= e; i++) {
         const d = r.st[i] === 0 ? 1 : 0.5; part.empty += d;
         if (sib.some((p) => p.st[i] === 2)) { part.sib += d; continue; }
         const late = i - g.a >= LONG; part[late ? 'later' : 'first'] += d; if (g.no) continue;
         const sold = Math.max(0, r.u[i]), b = busy(F, r, s, i), x = s.perDay * b, half = r.st[i] === 1, back = half && r.level[i] > 0, c = back ? 0 : d;   // c: how much of the day counts
-        if (!late) { part.sold += sold; part.bz += b * c; part.bd += c; }
+        if (!late) { part.sold += sold; part.bz += b * c; part.bd += c; part.bdays.push([i, F.shopOf(r, i), c]); }   // 4.5.1: each day's working (shop ₹ without this row, weight)
         const v = !half ? Math.max(0, Math.min(d * x, x - sold)) : back ? 0 : 0.5 * x;
         part[late ? 'laterUnits' : 'units'] += v;
       }
       if (!g.no) Object.assign(part, { counted: part.bd, busy: part.bd > 0 ? part.bz / part.bd : 1, perDay: s.perDay * (part.bd > 0 ? part.bz / part.bd : 1), lost: part.units * s.price, laterLost: part.laterUnits * s.price });
+      if (g.no) delete part.bdays;
       delete part.bz; delete part.bd; g.parts.push(part);
     }
   }

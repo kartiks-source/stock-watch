@@ -13,7 +13,7 @@ const A = require('./agency');
 const { keyPlus, spanOf, dayKeys, lifeOf, days: daysOf } = A;
 
 const M = require('./model');
-const RULE = '4.5';   // 4.5: no trim (4.3's brand factor dropped: ~5% on best sellers, hard to explain). 4.4: 3+ pieces in the window; sold out too often lately: its last 60 in-stock days within the year
+const RULE = '4.5.1';   // 4.5.1: same money; each part carries its busy working (base, bdays), so months relock once with it. 4.5: no trim (4.3's brand factor dropped: ~5% on best sellers, hard to explain). 4.4: 3+ pieces in the window; sold out too often lately: its last 60 in-stock days within the year
 const YEAR_DAYS = 365, WINDOW = 365, BEST_SHARE = 0.8, MIN_RANGE = 5, MIN_PRICE = 100, LIST_DAYS = 60;   // under ₹100 = a gift line, not merchandise
 
 const sum = (a) => a.reduce((s, x) => s + x, 0);
@@ -125,7 +125,7 @@ function report(y, catalog, opts = {}) {
       for (const r of F.rows) for (const g of r.gaps) for (const p of g.parts) {
         if (p.month !== m) continue; const s = g.ref;
         const bs = list.map.has(r.id);
-        parts.push({ id: r.id, start: F.keys[g.a], from: F.keys[p.s], to: F.keys[p.e], empty: p.empty, ...(bs ? { best: 1 } : {}), ...(g.no ? { no: g.no } : { first: p.first, later: p.later, sold: p.sold || undefined, sib: p.sib || undefined, speed: r4(s.perDay), ref: [F.keys[s.from], F.keys[s.to], s.days, s.units, s.yearDays, s.yearUnits], ...(s.fb ? { fb: 1 } : {}), busy: r4(p.busy), counted: r2(p.counted), perDay: r4(p.perDay), price: r2(s.price), units: r4(p.units), lost: r2(p.lost), laterLost: r2(p.laterLost) }) });
+        parts.push({ id: r.id, start: F.keys[g.a], from: F.keys[p.s], to: F.keys[p.e], empty: p.empty, ...(bs ? { best: 1 } : {}), ...(g.no ? { no: g.no } : { first: p.first, later: p.later, sold: p.sold || undefined, sib: p.sib || undefined, speed: r4(s.perDay), ref: [F.keys[s.from], F.keys[s.to], s.days, s.units, s.yearDays, s.yearUnits], ...(s.fb ? { fb: 1 } : {}), busy: r4(p.busy), base: Math.round(s.base), bdays: p.bdays.map(([i, v, c]) => [F.keys[i], Math.round(v), c]), counted: r2(p.counted), perDay: r4(p.perDay), price: r2(s.price), units: r4(p.units), lost: r2(p.lost), laterLost: r2(p.laterLost) }) });
       }
       L = { at: opts.now || null, best: rgOf(parts.filter((p) => p.best)), all: rgOf(parts), parts };
       if (over) lock.months[m] = L;

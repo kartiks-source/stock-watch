@@ -3,6 +3,12 @@
 User-facing changes, newest first. Semver: minor when a number's rule changes or a feature lands, patch for fixes. The version in `package.json` matches the top heading. Versions before 0.9.0 were reconstructed from `docs/DEVLOG.md` on 20 Nov 2026 (no tags existed); dates are the DEVLOG dates. Per DEVLOG, nothing from 0.6.0 on has been deployed yet. Since 1.0.0-rc.1, `/health`, `/status` and the page footer show the version and the build's commit (SW-056); `test/docs.test.js` checks the top heading matches `package.json`.
 
 
+## 4.5.1 · 2026-11-27 · "Why this number" shows the busy number day by day
+
+- Each product's working now opens "How 0.829 is worked out": a normal shop day (the rest of the shop's sales a day on the days it was in stock), each sold-out day's shop sales ÷ that, how much each day counts, and the average. Same money.
+- Rule label 4.5.1 so every month locks again once with this working saved.
+- API: money parts carry `base` (₹ a normal shop day) and `bdays` ([day, rest of the shop ₹, weight]).
+
 ## 4.5.0 · 2026-11-27 · no trim: missed = a day's sales × how busy × days empty
 
 - The brand's correction factor (4.3) is gone, from the money, the brand page and each product's working. It changed best sellers by about 5% and was the hardest step to explain. Best sellers' 12 months: about ₹18.4 lakh → ₹19.4 lakh on Sammsara.
