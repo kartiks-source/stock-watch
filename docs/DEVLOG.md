@@ -4,6 +4,9 @@ Newest first. Date · module · what changed and why · anything open.
 Shared copy for the team: https://claude.ai/artifact/27Q6x8r3rpZHYaNzhjW2Zq
 
 
+## 2026-11-27 · stock-watch 4.6.0
+Agency review of every page. Brand report: Sold · Missed · Could have sold · Out now tiles (month and 12 months), 60+ day ₹ named apart; All products: Could have sold column, Days left optional. Custom dates on the brand report skipped (locked months; would need a second engine).
+
 ## 2026-11-27 · stock-watch 4.5.1
 The product panel's step 2 opens the busy number day by day (rest of the shop ÷ a normal shop day, weights, average). Parts carry `base` and `bdays`; rule label 4.5.1 relocks months once. Money unchanged.
 

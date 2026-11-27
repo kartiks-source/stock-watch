@@ -48,14 +48,15 @@ test('1440: the Brand report is home, month first: bar, headline, three tiles, t
   assert.match(await pg.textContent('#mname'), cur.closed ? /^\w+ \d{4}$/ : /^\w+ \d{4} · so far, 1–\d+ \w{3}$/);
   assert.match(await pg.textContent('.brand-h h1'), /^[\d,]+ of [\d,]+ best sellers ran out in \w+( \d{4})?\. Sammsara \(demo\) missed about ₹[\d.,]+( lakh| Cr|k)?\.$/);   // 4.2.0: the store's name
   assert.ok((await pg.textContent('.brand-h h1')).startsWith(`${cur.best.out} of ${cur.listN} best sellers`), 'X of Y = the API');
-  assert.match(await pg.textContent('.brand-h .lead'), /^[\d.]+% of what best sellers sold \(₹.+\)\.$/);
   assert.equal(await pg.textContent('#how-sure > summary'), 'How sure are we?');
   assert.ok(await pg.isHidden('.top .range'), 'the period buttons step aside');
   const tl = await pg.$$eval('.tiles3 .tl', (e) => e.map((x) => x.textContent));
-  assert.equal(tl.length, 3); assert.equal(tl[0], 'Missed'); assert.match(tl[1], /^Empty days(, all \d+ added up)?$/); assert.equal(tl[2], 'Empty right now');
-  assert.match(await pg.textContent('#tile-empty .tv'), /^[\d,]+$/, 'empty days: a whole number');
+  assert.deepEqual(tl, ['Sold', 'Missed', 'Could have sold', 'Empty right now'], '4.6.0: the pitch in four tiles');
+  const rv = (s) => { const t = s.replace(/[₹,\s]/g, ''); const m = t.match(/^([\d.]+)(lakh|Cr|k)?$/); return m ? +m[1] * ({ lakh: 1e5, Cr: 1e7, k: 1e3 }[m[2]] || 1) : NaN; };
+  const [so, mi, co] = await Promise.all(['#tile-sold .tv', '#tile-missed .tv', '#tile-could .tv'].map((q) => pg.textContent(q)));
+  assert.ok(Math.abs(rv(so) + rv(mi) - rv(co)) <= Math.max(rv(co) * 0.02, 200), `sold + missed = could have sold: ${so} + ${mi} vs ${co}`);
   assert.ok(!/ · all in stock/.test(await pg.textContent('#tile-now')) || cur.best.out >= 0);
-  if (cur.prev) assert.match(await pg.textContent('#tile-missed small'), /^(\d+–\d+ \w{3}|\w+): ₹/);
+  if (cur.prev) assert.match(await pg.textContent('#tile-missed small'), /^[\d.]+% of sales · (\d+–\d+ \w{3}|\w+): ₹/);
   assert.equal(await pg.getAttribute('#tile-now', 'href'), '#best');
   assert.equal(await pg.$('#brand-chart'), null, 'no chart in a month');
   assert.equal(await pg.$('.top5'), null, 'no "Cost the most"');
@@ -145,15 +146,15 @@ test('390: Brand report, Best sellers now and Ads usable on a phone, no sideways
   const pg = await open(390, 844, '/?store=sammsara-demo#brand', '#view .brand-h h1');
   assert.deepEqual(await pg.$$eval('#tabs a .rs', (a) => a.filter((x) => getComputedStyle(x).display !== 'none').map((x) => x.textContent)), ['Report', 'Out now', 'Ads', 'Restock', 'Products']);
   assert.equal(await sideways(pg), 0, 'brand');
-  /* 4.2.0: the month bar sticks; three small tiles in one row; rows are two-line cards with the day strip full width; Past months = Month, %, Missed */
+  /* 4.2.0: the month bar sticks; four small tiles, two by two (4.6.0); rows are two-line cards with the day strip full width; Past months = Month, %, Missed */
   const lay = await pg.evaluate(async () => {
     const t = [...document.querySelectorAll('.tiles3 .tile3')].map((e) => e.getBoundingClientRect()), r = document.querySelector('#olist .orow');
     const strip = r && r.querySelector('.dstrip').getBoundingClientRect(), name = r && r.querySelector('.oname').getBoundingClientRect();
     const cols = [...document.querySelectorAll('.ptable thead th')].filter((e) => getComputedStyle(e).display !== 'none').map((e) => e.textContent);
     window.scrollTo(0, 1200); await new Promise((ok) => setTimeout(ok, 100));
-    return { oneRow: t.length === 3 && new Set(t.map((x) => Math.round(x.top))).size === 1, strip: strip ? strip.width : 0, below: strip ? strip.top >= name.bottom - 1 : true, cols, bar: document.getElementById('monthbar').getBoundingClientRect().top };
+    return { oneRow: t.length === 4 && new Set(t.map((x) => Math.round(x.top))).size === 2, strip: strip ? strip.width : 0, below: strip ? strip.top >= name.bottom - 1 : true, cols, bar: document.getElementById('monthbar').getBoundingClientRect().top };
   });
-  assert.ok(lay.oneRow, 'tiles in one row'); assert.ok(lay.below && (lay.strip === 0 || lay.strip > 200), `strip on line 2, wide: ${lay.strip}`);
+  assert.ok(lay.oneRow, '4.6.0: four tiles, two by two'); assert.ok(lay.below && (lay.strip === 0 || lay.strip > 200), `strip on line 2, wide: ${lay.strip}`);
   assert.deepEqual(lay.cols, ['Month', '% of sales', 'Missed']); assert.ok(Math.abs(lay.bar) <= 1, `sticky bar at the top: ${lay.bar}`);
   const m = await pg.$$eval('.ptable tbody tr[data-month]', (r) => r.map((x) => x.dataset.month));
   await pg.click(`.ptable tbody tr[data-month="${m[1]}"]`);
