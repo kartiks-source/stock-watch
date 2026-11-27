@@ -77,7 +77,7 @@
   const rule = () => !!(B() && B().rule);
   const testText = (t) => (t ? `${t.off >= 0 ? '+' : '−'}${pct(Math.abs(t.off) * 100)} (95% interval ${t.low >= 0 ? '+' : '−'}${pct(Math.abs(t.low) * 100)} to ${t.high >= 0 ? '+' : '−'}${pct(Math.abs(t.high) * 100)}; ${inr.format(t.n)} tries, ${inr.format(t.products)} products)` : 'too few to test');
   const howNew = (b) => `<p><b>Empty day:</b> the shelf was empty all day. The day it ran out counts ½, the day it came back 0. From Shopify’s own stock log.</p>
-        <p><b>Money missed</b> = what it makes a day in stock × how busy the shop was that day × empty days.</p>
+        <p><b>Missed sales</b> = the net sales it makes a day in stock × how busy the shop was that day × empty days.</p>
         <p><b>A day in stock:</b> its real sales (after discounts and returns) on its in-stock days in the 90 days before it ran out, ÷ those days. It needs 60 of them; if a best seller that still sold was out too much for that, its last 60 days in stock in the 12 months before. It also needs at least 3 sold.</p>
         <p><b>How busy:</b> the shop’s sales that day ÷ its sales on those same days, this product left out. That carries Diwali, sales and quiet days.</p>
         <p><b>Is it true?</b> We tested it two ways. Real comebacks, guess against real: best sellers ${testText(b.proof.best.back)}; other products ${testText(b.proof.other.back)}. Replayed stock-outs (real sales hidden after a pretend run-out): best sellers ${testText(b.proof.best.replay)}; others ${testText(b.proof.other.replay)}.</p>
@@ -228,14 +228,15 @@
     const perDay = rows.reduce((s, p) => s + (p.costPerDay || 0), 0);   // the same ₹ a day as Out now
     return tile('Empty right now', inr.format(n), `${sa ? (n === 1 ? 'product' : 'products') : n === 1 ? 'best seller' : 'best sellers'}${n ? `${perDay > 0 ? ` · about ${rs(perDay)} a day` : ''}` : ' · all in stock'}`, { cls: n ? 'bad' : '', href: '#best', id: 'tile-now' });
   }
+  /** 4.6.2: ₹ to one decimal (₹40.1 lakh, ₹5.86 Cr), so the tiles and the headline agree and add up on screen */
+  const tm = (x) => { const v = +x || 0, t = v >= 1e7 ? `₹${(v / 1e7).toFixed(2)} Cr` : v >= 1e5 ? `₹${(v / 1e5).toFixed(1)} lakh` : rs(v); return `<span title="${exact(v)}">${t}</span>`; };
   /** 4.6.0: the pitch in four tiles: what sold, what was missed, what it could have been, what is out now */
   function moneyTiles(b, sold, lost, p, prev) {
     const sc = scope(), who = sc === 'all' ? 'all products' : 'best sellers';
-    const tm = (x) => { const v = +x || 0, t = v >= 1e7 ? `₹${(v / 1e7).toFixed(2)} Cr` : v >= 1e5 ? `₹${(v / 1e5).toFixed(1)} lakh` : rs(v); return `<span title="${exact(v)}">${t}</span>`; };   // one decimal, so sold + missed = could have sold on screen
     return `<div class="tiles3 tiles4" id="tiles3">
-        ${tile('Sold', tm(sold), `${who}, after discounts`, { id: 'tile-sold' })}
-        ${tile('Missed', tm(lost), `${pct(p)} of sales${prev ? ` · ${prev}` : ''}`, { cls: lost > 0 ? 'bad' : '', id: 'tile-missed' })}
-        ${tile('Could have sold', tm((+sold || 0) + (+lost || 0)), 'if nothing had sold out', { id: 'tile-could' })}
+        ${tile('Net sales', tm(sold), `${who}, same as Shopify’s Net sales`, { id: 'tile-sold' })}
+        ${tile('Missed sales', tm(lost), `${pct(p)} of net sales${prev ? ` · ${prev}` : ''}`, { cls: lost > 0 ? 'bad' : '', id: 'tile-missed' })}
+        ${tile('Net sales if in stock', tm((+sold || 0) + (+lost || 0)), 'net sales + missed sales', { id: 'tile-could' })}
         ${nowTile(b)}
       </div>`;
   }
@@ -270,7 +271,7 @@
     return `<div class="panel" id="past"><div class="panel-head"><h2>Past months</h2><button class="btn ghost xs" id="csv-months">CSV</button></div>
       <table class="mtable ptable"><thead><tr><th>Month</th><th>% of sales</th><th class="r">Missed</th><th class="r m-hide">Ran out</th><th class="r m-hide">Back in</th></tr></thead>
       <tbody>${rows}<tr data-month="year" tabindex="0" class="yr${sel === 'year' ? ' on' : ''}"><td>${short(b) ? 'All months' : '12 months'}</td><td class="pc">${bar(h.pct)}</td><td class="r"><b class="lostv">${money(h.lost)}</b></td><td class="r m-hide">${inr.format(h.ranOut ?? h.bestRanOut ?? 0)}</td><td class="r m-hide">${refill(h.refill)}</td></tr></tbody></table>
-      <p class="muted small">% of sales = missed ÷ what ${sc === 'all' ? 'all products' : 'best sellers'} sold.<span class="m-hide"> Back in = how long a sold-out item usually took to come back.</span></p></div>`;
+      <p class="muted small">% of sales = missed sales ÷ net sales of ${sc === 'all' ? 'all products' : 'best sellers'}.<span class="m-hide"> Back in = how long a sold-out item usually took to come back.</span></p></div>`;
   }
 
   function brandView() {
@@ -312,13 +313,13 @@
     const top = S().brandAll ? paid.length : Math.min(narrow() ? 8 : 12, paid.length);
     return `${monthBar(b, 'year')}
       <section class="headline brand-h">
-        <h1>${inr.format(A)} of ${inr.format(Bn)} ${noun} ran out ${when}. ${esc(storeName(b))} missed about <span class="lost">${money(h.lost)}</span> (${pct(h.pct)} of ${money(h.sold)} sold).</h1>
+        <h1>${inr.format(A)} of ${inr.format(Bn)} ${noun} ran out ${when}. ${esc(storeName(b))} missed about <span class="lost">${tm(h.lost)}</span> (${pct(h.pct)} of ${tm(h.sold)} net sales).</h1>
         ${howSure(b)}${notes(b)}
       </section>
       ${moneyTiles(b, h.sold, h.lost, h.pct, '')}
       <div class="hgrid">
         <div class="ycol">
-          <div class="panel"><div class="panel-head"><h2>Sold and missed, each month</h2><span class="muted small"><i class="sw sold"></i> sold${sc === 'all' ? '' : ' (best sellers)'} <i class="sw lost"></i> missed${months.some((m) => m.days < 28) ? ' · * part of the month' : ''}${agencyStart() ? ' · <i class="sw st"></i> we started' : ''}</span></div><div id="brand-chart">${chart(months, 600)}</div></div>
+          <div class="panel"><div class="panel-head"><h2>Net sales and missed sales, each month</h2><span class="muted small"><i class="sw sold"></i> net sales${sc === 'all' ? '' : ' (best sellers)'} <i class="sw lost"></i> missed sales${months.some((m) => m.days < 28) ? ' · * part of the month' : ''}${agencyStart() ? ' · <i class="sw st"></i> we started' : ''}</span></div><div id="brand-chart">${chart(months, 600)}</div></div>
           <div class="panel"><div class="panel-head"><h2>Which ${noun} ran out, and when</h2><span class="muted small">Empty days each month. Darker = longer. Tap a month to open it.</span></div>
             ${paid.length ? `<div class="heat" style="--mcols:${ms.length}"><div class="hrow hhead"><span></span>${ms.map((k) => `<button class="hm" data-month="${k}" title="${esc(monthText(months[ms.indexOf(k)]))}">${shortLabel(k, ms)}</button>`).join('')}<span class="r" title="${esc(span(h.from, h.through))}">Missed</span></div>
               ${paid.slice(0, top).map((p) => `<div class="hrow"><span class="hp" data-product="${esc(p.variantId)}" tabindex="0" role="button">${SW_PROD.cell(noSku(p), { size: 32, sub: rankChip(rankOf(p)), extra: topUp(p) + offSale(p) })}</span>${ms.map((k) => { const x = p.months && p.months[k]; const d = x ? x.daysOut : 0; return `<span class="hc h${heat(d)}" data-month="${k}" title="${esc(x && d ? `${p.name}: ${nDays(d)} empty in ${monthName(k)} (${x.range}). ${counted(x) ? `About ${exact(counted(x))} missed` : 'No ₹'}.` : `${p.name}: in stock all of ${monthName(k)}`)}">${d ? Math.round(d) || '½' : ''}</span>`; }).join('')}<span class="r hv"><b class="lostv">${money(counted(p))}</b><small class="ph-only"> missed</small></span></div>`).join('')}
@@ -337,7 +338,7 @@
   function csvMonth() {
     const b = B(), key = selOf(b), m = monthsOf(b).find((z) => z.key === key); if (!m) return;
     const { paid, none } = monthList(b, m);
-    const head = ['Month', 'Product', 'SKU', 'Variant ID', 'Best seller', 'Rank', 'Empty dates', 'Empty days', 'Money missed ₹', 'No ₹ because', ...SW_PROD.CSV_HEAD];
+    const head = ['Month', 'Product', 'SKU', 'Variant ID', 'Best seller', 'Rank', 'Empty dates', 'Empty days', 'Missed sales ₹', 'No ₹ because', ...SW_PROD.CSV_HEAD];
     const rows = [...paid, ...none].map((p) => [monthText(m), p.name, p.sku, p.variantId, p.best ? 'yes' : 'no', p.mrank || '', (p.x.dates || []).join(' '), p.x.daysOut, p.x.counted, p.x.counted > 0 ? '' : whyShort(p.x).join(' / '), ...SW_PROD.csv(p)]);
     A.saveCsv(`brand-report-${scope() === 'all' ? 'all-products' : 'best-sellers'}-${m.key}.csv`, [head, ...rows]);
   }
@@ -361,7 +362,7 @@
       { k: 'pace', label: 'Sells', r: 1, tip: rule() ? 'Pieces a day when it is in stock, last 12 months' : 'How fast it sells on days it is in stock (last 6 months)', f: (p) => esc(pace(p.pace.perDay)), val: (p) => p.pace.perDay },
       { k: 'times', label: 'Times out, 12 months', r: 1, tip: 'Separate times it ran out in the last 12 months, and in how many months', f: (p) => (p.times ? `${inr.format(p.times)}× <span class="muted">in ${p.monthsOut} month${p.monthsOut === 1 ? '' : 's'}</span>` : '–') },
       { k: 'counted', label: 'Missed, 12 months', r: 1, f: (p) => (p.counted ? `<b class="lostv">${money(p.counted)}</b>` : '–') },
-      ...(rule() ? [{ k: 'could', label: 'Sold + missed, 12 months', r: 1, tip: 'Net sales plus money missed', f: (p) => (p.could != null ? money(p.could) : '–'), val: (p) => p.could || 0 }] : []),
+      ...(rule() ? [{ k: 'could', label: 'Net sales if in stock, 12 months', r: 1, tip: 'Net sales + missed sales', f: (p) => (p.could != null ? money(p.could) : '–'), val: (p) => p.could || 0 }] : []),
       { k: 'costPerDay', label: 'Costs a day now', r: 1, tip: 'What each more empty day costs', f: (p) => (p.out && p.costPerDay ? `<b class="lostv">${rs(p.costPerDay)}</b>` : '–') },
     ];
     return `<section class="headline"><h1>${out.length ? `<span class="lost">${out.length} of ${rows.length}</span> ${noun} are out right now.` : `All ${rows.length} ${noun} are in stock.`}</h1>

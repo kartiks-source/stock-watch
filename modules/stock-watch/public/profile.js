@@ -64,12 +64,12 @@
     const stockNow = p && p.stock != null ? (p.stock <= 0 ? kv('Stock now', '0', 'out of stock', 'bad') : kv('Stock now', inr.format(p.stock), p.daysLeft != null ? `about ${inr.format(Math.round(p.daysLeft))} days left at the recent pace` : '')) : '';
     const rr = prof.lastRestock;
     return `<div class="kgrid" title="${esc(sp)}">
-      ${kv('Sold, 12 months', `${inr.format(prof.sold.units)} · ${money(prof.sold.value)}`, `${n1(prof.share)}% of the store’s sales`)}
+      ${kv('Net sales, 12 months', `${inr.format(prof.sold.units)} · ${money(prof.sold.value)}`, `${n1(prof.share)}% of the store’s sales`)}
       ${kv('Sells, on days in stock', esc(pace(speed(prof))), `${prof.pace.speed ? `${inr.format(prof.pace.speed.units)} in ${prof.pace.speed.days} full-shelf days; lately ${(Math.round(prof.pace.speed.now * 100) / 100).toLocaleString('en-IN')} a day` : `last ${prof.pace.sixMonths != null ? '6' : '12'} months`}: ${(Math.round(speed(prof) * 100) / 100).toLocaleString('en-IN')} a day · ${n1(speed(prof) * 7)} a week · ${inr.format(Math.round(speed(prof) * 30.4))} a month`)}
       ${kv('On the shelf', `${prof.inStock.pct ?? '–'}% of ${prof.inStock.of >= 330 ? 'the year' : 'the days'}`, `${inr.format(Math.round(prof.inStock.days))} of ${inr.format(prof.inStock.of)} days in stock`)}
       ${kv('Ran out', o.times ? `${o.times}× · ${esc(nDays(o.days))}` : 'never', o.longest ? `longest ${esc(nDays(o.longest.days))}: ${esc(span(o.longest.from, o.longest.to))}${o.open && o.longest.to === prof.span.through ? ' (still out)' : ''}` : '', o.times ? 'bad' : '')}
-      ${kv('Money missed', prof.missed.value ? money(prof.missed.value) : prof.work && prof.work.rule ? (o.times ? 'not shown' : '₹0') : '₹0', [prof.missed.units ? `${about(prof.missed.units)} it would have sold` : '', prof.missed.apart > 0 ? `+${rs(prof.missed.apart)} not counted` : ''].filter(Boolean).join(' · '), prof.missed.value ? 'bad' : '')}
-      ${prof.could != null ? kv('Sold + missed', money(prof.could), `sold ${rs(prof.sold.value)} + missed ${rs(prof.missed.value)}`) : ''}
+      ${kv('Missed sales', prof.missed.value ? money(prof.missed.value) : prof.work && prof.work.rule ? (o.times ? 'not shown' : '₹0') : '₹0', [prof.missed.units ? `${about(prof.missed.units)} it would have sold` : '', prof.missed.apart > 0 ? `+${rs(prof.missed.apart)} not counted` : ''].filter(Boolean).join(' · '), prof.missed.value ? 'bad' : '')}
+      ${prof.could != null ? kv('Net sales if in stock', money(prof.could), `net sales ${rs(prof.sold.value)} + missed ${rs(prof.missed.value)}`) : ''}
       ${stockNow}
       ${kv('Last restock', rr ? `+${inr.format(rr.qty)}` : '–', rr ? `on ${esc(dayY(rr.day))}` : 'none in 12 months')}
       ${p && p.returnPct != null ? kv('Cancelled or refunded', `${n1(p.returnPct)}%`, `last 30 days: ${inr.format(p.unitsReturned)} of ${inr.format(p.unitsOrdered)} ordered${p.unitsCancelled ? `, ${inr.format(p.unitsCancelled)} cancelled` : ''} · ${rs(p.refundValue)} back`, '', 'returns-tile') : ''}
