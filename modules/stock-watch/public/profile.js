@@ -50,11 +50,16 @@
     return SW_PROD.hero(p, `<div class="toolbar">${best}${rank}${top}</div><div class="toolbar">${statusHtml || ''}</div>`);
   }
 
+  /* 4.8.0 (LOGIC §35): Shopify's stock log can't show this product's stock-outs: set to keep selling at 0, or the count not kept */
+  const blind = (prof) => prof && (prof.stockSeen === 'unseen' || prof.stockSeen === 'always');
+  const CANT = 'can’t be seen in Shopify';
+  const unseenLine = (prof) => (prof && prof.stockSeen === 'unseen' && prof.seen ? `<p class="note small" id="unseen">Shopify’s stock count didn’t change on most days this sold (${inr.format(prof.seen.of - prof.seen.seen)} of ${inr.format(prof.seen.of)} pieces), so its stock line and days out may be wrong.</p>` : '');
+
   /* ---------- 2–10. body ---------- */
   function story(prof) {
     const o = prof.outs, sp = span(prof.span.from, prof.span.through);
     const a = speed(prof) > 0 ? `Sells about ${pace(speed(prof))} when it is in stock.` : 'It hardly sold in these months.';
-    const b = o.times ? `Ran out ${o.times === 1 ? 'once' : o.times === 2 ? 'twice' : `${o.times} times`} in ${prof.span.days >= 330 ? 'the last 12 months' : 'these days'}, ${nDays(o.days)} in all.` : 'It never ran out in the last 12 months.';
+    const b = o.times ? `Ran out ${o.times === 1 ? 'once' : o.times === 2 ? 'twice' : `${o.times} times`} in ${prof.span.days >= 330 ? 'the last 12 months' : 'these days'}, ${nDays(o.days)} in all.` : blind(prof) ? `Whether it ran out ${CANT}.` : 'It never ran out in the last 12 months.';
     const nw = prof.work && prof.work.rule, c = nw && prof.missed.value > 0 ? `That cost about ${rs(prof.missed.value)} in sales.${prof.missed.later > 0 ? ` Another ${rs(prof.missed.later)} if people still wanted it after 60 empty days.` : ''}` : nw && prof.outs.times ? 'No ₹ is shown: see Why this number.' : prof.missed.value > 0 ? `That cost about ${rs(prof.missed.value)} in sales${prof.missed.apart > 0 ? `, +${rs(prof.missed.apart)} not counted` : ''}.` : prof.missed.apart > 0 ? `${rs(prof.missed.apart)} missed, not counted.` : '';
     return `<p class="pstory">${esc(a)} ${esc(b)} ${esc(c)} <span class="muted small">(${esc(sp)})</span></p>`;
   }
@@ -66,8 +71,8 @@
     return `<div class="kgrid" title="${esc(sp)}">
       ${kv('Net sales, 12 months', `${inr.format(prof.sold.units)} · ${money(prof.sold.value)}`, `${n1(prof.share)}% of the store’s sales`)}
       ${kv('Sells, on days in stock', esc(pace(speed(prof))), `${prof.pace.speed ? `${inr.format(prof.pace.speed.units)} in ${prof.pace.speed.days} full-shelf days; lately ${(Math.round(prof.pace.speed.now * 100) / 100).toLocaleString('en-IN')} a day` : `last ${prof.pace.sixMonths != null ? '6' : '12'} months`}: ${(Math.round(speed(prof) * 100) / 100).toLocaleString('en-IN')} a day · ${n1(speed(prof) * 7)} a week · ${inr.format(Math.round(speed(prof) * 30.4))} a month`)}
-      ${kv('On the shelf', `${prof.inStock.pct ?? '–'}% of ${prof.inStock.of >= 330 ? 'the year' : 'the days'}`, `${inr.format(Math.round(prof.inStock.days))} of ${inr.format(prof.inStock.of)} days in stock`)}
-      ${kv('Ran out', o.times ? `${o.times}× · ${esc(nDays(o.days))}` : 'never', o.longest ? `longest ${esc(nDays(o.longest.days))}: ${esc(span(o.longest.from, o.longest.to))}${o.open && o.longest.to === prof.span.through ? ' (still out)' : ''}` : '', o.times ? 'bad' : '')}
+      ${blind(prof) ? kv('On the shelf', 'not known', '', '', 'shelf-tile') : kv('On the shelf', `${prof.inStock.pct ?? '–'}% of ${prof.inStock.of >= 330 ? 'the year' : 'the days'}`, `${inr.format(Math.round(prof.inStock.days))} of ${inr.format(prof.inStock.of)} days in stock`, '', 'shelf-tile')}
+      ${prof.stockSeen === 'always' || (blind(prof) && !o.times) ? kv('Ran out', CANT, '', '', 'out-tile') : kv('Ran out', o.times ? `${o.times}× · ${esc(nDays(o.days))}` : 'never', [prof.stockSeen === 'unseen' ? 'may be wrong' : '', o.longest ? `longest ${esc(nDays(o.longest.days))}: ${esc(span(o.longest.from, o.longest.to))}${o.open && o.longest.to === prof.span.through ? ' (still out)' : ''}` : ''].filter(Boolean).join(' · '), o.times ? 'bad' : '', 'out-tile')}
       ${kv('Missed sales', prof.missed.value ? money(prof.missed.value) : prof.work && prof.work.rule ? (o.times ? 'not shown' : '₹0') : '₹0', [prof.missed.units ? `${about(prof.missed.units)} it would have sold` : '', prof.missed.apart > 0 ? `+${rs(prof.missed.apart)} not counted` : ''].filter(Boolean).join(' · '), prof.missed.value ? 'bad' : '')}
       ${prof.could != null ? kv('Net sales if in stock', money(prof.could), `net sales ${rs(prof.sold.value)} + missed ${rs(prof.missed.value)}`) : ''}
       ${stockNow}
@@ -138,7 +143,7 @@
   function whyNew(prof, p, w) {
     const x2 = (n) => (Math.round(n * 100) / 100).toLocaleString('en-IN'), x4 = (n) => (Math.round(n * 1e4) / 1e4).toLocaleString('en-IN', { maximumFractionDigits: 4 }), ex = (n) => `₹${inr.format(Math.round(n))}`, mon = (k) => `${mShort(k)} ${k.slice(0, 4)}`;
     const tst = (t) => (t ? `${t.off >= 0 ? '+' : '−'}${x2(Math.abs(t.off) * 100)}% (95% interval ${t.low >= 0 ? '+' : '−'}${x2(Math.abs(t.low) * 100)}% to ${t.high >= 0 ? '+' : '−'}${x2(Math.abs(t.high) * 100)}%)` : 'too few to test');
-    if (!w.gaps.length) return `<details class="panel fold" id="why"><summary><b>Why this number</b></summary><p>It was never empty in these 12 months, so nothing was missed.</p></details>`;
+    if (!w.gaps.length) return `<details class="panel fold" id="why"><summary><b>Why this number</b></summary><p>${blind(prof) ? `Its empty days ${CANT}, so nothing is counted.` : 'It was never empty in these 12 months, so nothing was missed.'}</p></details>`;
     const adm = p && p.adminUrl ? ` <a href="${esc(p.adminUrl)}" target="_blank" rel="noopener noreferrer">Open it in Shopify</a>` : '';
     const none = (z) => (z.no ? `No ₹: ${w.why[z.no] || z.no}.` : '');
     const days = (n) => `${x2(n)} empty day${n === 1 ? '' : 's'}`, pc = (b) => Math.round(Math.abs(b - 1) * 100);
@@ -169,7 +174,7 @@
     const w = prof.work; if (!w) return '';
     if (w.rule) return whyNew(prof, p, w);
     const x2 = (n) => (Math.round(n * 100) / 100).toLocaleString('en-IN'), ex = (n) => `₹${inr.format(Math.round(n))}`, mon = (k) => `${mShort(k)} ${k.slice(0, 4)}`;
-    if (!w.months.length) return `<details class="panel fold" id="why"><summary><b>Why this number</b></summary><p>It was never empty in these 12 months, so nothing was missed.</p></details>`;
+    if (!w.months.length) return `<details class="panel fold" id="why"><summary><b>Why this number</b></summary><p>${blind(prof) ? `Its empty days ${CANT}, so nothing is counted.` : 'It was never empty in these 12 months, so nothing was missed.'}</p></details>`;
     const m = w.months[w.months.length - 1], s = w.speed, se = w.season || {}, pr = w.price, o = w.outs[w.outs.length - 1];
     const step = (n, h, t) => `<li><b>${h}</b><span>${t}</span></li>`;
     const slow = s.perDay > 0 ? `${x2(s.perDay)} a day` : 'nothing';
@@ -199,7 +204,7 @@
         <p class="muted small"><i class="sw sold"></i> sold <i class="sw ghost"></i> would have sold while out <i class="sw out"></i> empty days (under the month)${prof.season ? ' <i class="sw line"></i> busy-month line (×1 = normal)' : ''}</p></section>
       ${priceBlock(prof)}
       ${calendar(prof)}
-      <section class="panel"><div class="panel-head"><h2>Stock level</h2><span class="muted small">pieces at each day’s end · ${esc(span(prof.span.from, prof.span.through))}</span></div>
+      <section class="panel"><div class="panel-head"><h2>Stock level</h2><span class="muted small">pieces at each day’s end · ${esc(span(prof.span.from, prof.span.through))}</span></div>${unseenLine(prof)}
         <div class="chartbox"><div class="lazy-chart" data-chart="stock" style="height:160px"></div></div>
         <p class="muted small">Shaded = out of stock. ▼ = restocked (+pieces).</p></section>
       ${seasonBlock(prof)}${monthList(prof)}${periodsBlock(prof)}${details(prof)}`;

@@ -145,7 +145,7 @@ const vid = (gid) => String(gid || '').replace(/^gid:\/\/shopify\/ProductVariant
  * Inactive = product archived or draft, or stock not tracked; it's kept in the catalog, marked.
  */
 function diffStock(variants, lastQty, t) {
-  const rows = []; const next = {}; const catalog = {}; const excluded = { notActive: 0, untracked: 0 };   // counted for the run history (SW-030)
+  const rows = []; const next = {}; const catalog = {}; const excluded = { notActive: 0, untracked: 0 }, policy = {};   // 4.8.0: policy = { variantId: keeps selling at 0 } where Shopify said (src/policy.js)   // counted for the run history (SW-030)
   for (const v of variants) {
     const id = vid(v.id); const now = Number(v.inventoryQuantity);
     if (!id) continue;
@@ -163,6 +163,7 @@ function diffStock(variants, lastQty, t) {
       ...productLinks(v.product),   // 1.4.0: image, handle, website address (LOGIC §19)
       ...(Number(v.compareAtPrice) > 0 ? { compareAt: Number(v.compareAtPrice) } : {}),   // 1.4.1: MRP, the "compare at" price (LOGIC §24)
     };
+    if (v.inventoryPolicy === 'CONTINUE' || v.inventoryPolicy === 'DENY') policy[id] = v.inventoryPolicy === 'CONTINUE';
     if (!tracked) excluded.untracked++; else if (status !== 'ACTIVE') excluded.notActive++;
     if (!catalog[id].active || !Number.isFinite(now)) continue;
     next[id] = now;
@@ -170,7 +171,7 @@ function diffStock(variants, lastQty, t) {
     if (before === now) continue;
     rows.push({ t, variantId: id, sku: v.sku || '', product: v.product?.title || '', variant, before, now, price: Number(v.price) || 0, ...(v.product?.productType ? { type: v.product.productType } : {}), ...(v.product?.vendor ? { vendor: v.product.vendor } : {}), ...(cost ? { cost } : {}) });
   }
-  return { rows, lastQty: next, catalog, excluded };
+  return { rows, lastQty: next, catalog, excluded, policy };
 }
 
 /** 1.4.0 (LOGIC §19): what the catalog keeps to show and link a product. image = Shopify CDN URL (https://cdn.shopify.com
