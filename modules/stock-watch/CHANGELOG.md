@@ -3,6 +3,13 @@
 User-facing changes, newest first. Semver: minor when a number's rule changes or a feature lands, patch for fixes. The version in `package.json` matches the top heading. Versions before 0.9.0 were reconstructed from `docs/DEVLOG.md` on 20 Nov 2026 (no tags existed); dates are the DEVLOG dates. Per DEVLOG, nothing from 0.6.0 on has been deployed yet. Since 1.0.0-rc.1, `/health`, `/status` and the page footer show the version and the build's commit (SW-056); `test/docs.test.js` checks the top heading matches `package.json`.
 
 
+## 4.5.0 · 2026-11-27 · no trim: missed = a day's sales × how busy × days empty
+
+- The brand's correction factor (4.3) is gone, from the money, the brand page and each product's working. It changed best sellers by about 5% and was the hardest step to explain. Best sellers' 12 months: about ₹18.4 lakh → ₹19.4 lakh on Sammsara.
+- Rule 4.5: months locked under 4.4 are worked out again once.
+- API: `factor` (brand, months, product working) and parts' `adj` / `grp` are gone.
+- "Is it true?" percentages and ranges move too: the test guesses are no longer trimmed either.
+
 ## 4.4.0 · 2026-11-26 · products that sell out often get a number; too few sales get none
 
 - **Best sellers out of stock too often lately.** If a best seller had fewer than 60 in-stock days in the 90 days before a stock-out (and still sold in them), it now uses its last 60 in-stock days within the year. Before, these stock-outs got no ₹, so the best sellers that sold out most often were left out. With the trim, these cases came out about 19% low on pretend stock-outs (a wide range, 12 products), so they lean cautious. Other products don't get the fallback: for them it came out about 30% high.

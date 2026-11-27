@@ -1,6 +1,6 @@
 'use strict';
 /*
- * 4.0: the prediction behind "money missed" (RULE.md). 4.3: × the brand's own factor (factors), measured on its normal months. Pure: works on the facts of src/truth.js. F.shop[i] = the shop's net ₹ on day i.
+ * 4.0: the prediction behind "money missed" (RULE.md). 4.5: no trim (4.3's brand factor dropped). Pure: works on the facts of src/truth.js. F.shop[i] = the shop's net ₹ on day i.
  *   speed   net pieces a Full day over the Full days in the 90 calendar days before the gap. Needs 60+ such days and 3+ pieces; a best seller with fewer (but a sale lately) uses its last 60 in-stock days within the year.
  *   busy    the shop's net ₹ that day (this row's own taken out) ÷ the same on the speed's days. Carries Diwali, sales and quiet days.
  *   price   net ₹ ÷ pieces on the speed's days. So speed × price = ₹ a Full day.
@@ -9,8 +9,6 @@
  * Chosen 26 Nov 2026 over 3.0 after three critics (data, demand, tests) and placebo, comeback and replay tests (RULE.md, CHANGELOG).
  */
 const LOOK = 90, MIN_DAYS = 60, MIN_UNITS = 3, YEAR = 365, LONG = 60;   // 4.4: 3+ pieces sold in the window; under 60 in-stock days in the 90: the last 60 in-stock days within 365
-/* 4.3: the brand's own factor (replaces the fixed 0.74): on its normal in-stock 30-day checks, what really sold ÷ what the rule guessed */
-const SPAN = 30, MIN_FULL = 10, MIN_N = 100, MIN_P = 10, PRIOR = 100, CLIP = [0.5, 1.5];
 const NOISE = 0.22, MODEL_SD = 0.055, SIMS = 2000, REPLAYS = 40, SEED = 20261125, LAST = 60;
 /** A fixed random sequence: the same data always gives the same range. */
 function rng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
@@ -87,48 +85,6 @@ function price(F) {
   return F;
 }
 
-/**
- * 4.3: the brand's factor for best sellers and for the rest, measured on its own normal months (nothing out). Each usable row gives
- * 30-day checks that never overlap: the first starts on its first Full day, each next one on the first Full day at least 30 days after
- * the last start. A check counts when its 30 calendar days hold no Empty or Half day, it starts more than 30 days after a gap ended,
- * 10+ of its days are Full and a speed is known before it: guess = speed × how busy × price on its Full days, real = what it sold on
- * them. Grouped by bestAt(row, t) (that quarter's list). Per group: raw = Σ real ÷ Σ guess; under 100 checks or 10 products → 1
- * ("few"); else (n × raw + 100) ÷ (n + 100), within 0.5–1.5 ("clip" when cut).  → { best: { f, raw, n, p, real, guess, flag }, other }
- */
-function factors(F, bestAt) {
-  const g = { best: { real: 0, guess: 0, n: 0, p: new Set() }, other: { real: 0, guess: 0, n: 0, p: new Set() } };
-  for (const r of F.rows) {
-    if (!usableRow(r) || !r.sd.length) continue;
-    const ends = r.gaps.map((x) => x.b);   // last day of each gap (the day it came back, or the record's end)
-    for (let j = 0; j < r.sd.length;) {
-      const t = r.sd[j], end = Math.min(F.n - 1, t + SPAN - 1);
-      let next = j; while (next < r.sd.length && r.sd[next] < t + SPAN) next++;   // the next check: the first Full day 30+ days on
-      const use = (() => {
-        if (t + SPAN - 1 > F.n - 1) return false;   // a check needs its whole 30 days
-        for (let i = t; i <= end; i++) if (r.st[i] === 0 || r.st[i] === 1) return false;   // nothing ran out in it
-        if (ends.some((b) => b < t && t - b <= SPAN)) return false;   // not just after a refill
-        return true;
-      })();
-      const s = use ? speed(F, r, t) : null;
-      if (s) {
-        let full = 0, guess = 0, real = 0;
-        for (let i = t; i <= end; i++) if (r.st[i] === 2) { full++; guess += s.perDay * busy(F, r, s, i) * s.price; real += r.net[i]; }
-        if (full >= MIN_FULL) { const z = g[bestAt(r, t) ? 'best' : 'other']; z.real += real; z.guess += guess; z.n++; z.p.add(r.productId || r.id); }
-      }
-      j = next;
-    }
-  }
-  const out = {};
-  for (const [k, z] of Object.entries(g)) {
-    const raw = z.guess > 0 ? z.real / z.guess : 1, n = z.n, p = z.p.size;
-    let f = 1, flag = null;
-    if (n < MIN_N || p < MIN_P) flag = 'few';
-    else { f = (n * raw + PRIOR) / (n + PRIOR); if (f < CLIP[0] || f > CLIP[1]) { f = Math.min(CLIP[1], Math.max(CLIP[0], f)); flag = 'clip'; } }
-    out[k] = { f: Math.round(f * 1e4) / 1e4, raw: Math.round(raw * 1e4) / 1e4, n, p, real: Math.round(z.real), guess: Math.round(z.guess), flag };
-  }
-  return out;
-}
-
 /** The tests: [{ kind: 'replay' | 'back', id, pid, o, a, b, guess, real }] in ₹. */
 function tests(F) {
   const out = [], rnd = rng(SEED), gaps = []; for (const r of F.rows) for (const g of r.gaps) if (!g.before && g.ended === 'back' && g.empty >= 3 && g.empty <= LONG) gaps.push(g.empty);
@@ -177,4 +133,4 @@ function ranger(groups) {
     return { low: Math.min(point, pct(z, 0.05), pct(c, 0.05)), high: Math.max(point, pct(z, 0.95)) };   // real comebacks are the real event: the low end is never above what they alone say
   };
 }
-module.exports = { prepare, speed, busy, guess, price, tests, bias, ranger, byMonth, factors, K: { LOOK, MIN_DAYS, MIN_UNITS, LONG, SPAN, MIN_FULL, MIN_N, MIN_P, PRIOR, CLIP } };
+module.exports = { prepare, speed, busy, guess, price, tests, bias, ranger, byMonth, K: { LOOK, MIN_DAYS, MIN_UNITS, LONG } };

@@ -1,6 +1,6 @@
 # The rule (4.4)
 
-One rule makes every number on the screen. Nothing else may add, hide or change a number. Changing anything here = a new rule number. (4.0 replaced 3.0 at once on 26 Nov 2026, on the agency's call, after the tests below; the usual quarter beside the old rule was skipped. 4.3 replaced the fixed 0.74 with each brand's own factor, below.)
+One rule makes every number on the screen. Nothing else may add, hide or change a number. Changing anything here = a new rule number. (4.0 replaced 3.0 at once on 26 Nov 2026, on the agency's call, after the tests below; the usual quarter beside the old rule was skipped. 4.3 replaced the fixed 0.74 with each brand's own factor; 4.5 removed it.)
 
 ## Facts (what Shopify recorded)
 
@@ -21,19 +21,19 @@ The variants making the first 80% of all Shopify net sales (drafts count too) in
 
 ## Money missed and could have sold (estimates, every product)
 
-    missed = speed × busy × price × days empty × factor        (the brand's factor for best sellers, or for the rest: that quarter's list)
+    missed = speed × busy × price × days empty        (4.5: no trim)
     could have sold = sold + missed
 
 - **Speed**: net pieces ÷ Full days, over its Full days in the 90 calendar days before the gap. Needs 60+ such days, **3+ pieces** and net sales above 0. A **best seller** with fewer than 60 Full days in those 90 (sold out too often lately) but a sale in them: its **last 60 Full days within the 365** before the gap instead (4.4). Other products: no fallback (it ran about 30% high for them). Still under 60: "too little history"; under 3 pieces: "too few sales".
 - **Price**: net sales ÷ pieces on those same days. So speed × price = the ₹ it makes a Full day.
 - **Busy**: the shop's net sales that day, this variant's own taken out, ÷ the same on the speed's days. Not under 0.
 - **Days empty**: an Empty day 1, less what it still sold that day (never under 0). The Half day it ran out ½ (what it sold before it ran out does not come off). The Half day it came back 0. Another variant of the same product Full that day: 0.
-- **Factor (4.3)**: measured on each brand's own data every time the report is built, apart for best sellers and the rest (by the list of each check's quarter). Every usable row gives 30-day checks that never overlap: the first starts on its first Full day, each next one on the first Full day at least 30 days after the last start. A check counts only when nothing ran out in its 30 calendar days (no Empty or Half day), it starts more than 30 days after a gap ended, and 10+ of its days are Full: guess = speed known before it × busy × price on each Full day, real = what it sold on them (each day counted once at most). raw = Σ real ÷ Σ guess; n = checks, p = products. Under 100 checks or 10 products: 1 ("not enough history yet"). Else (n × raw + 100) ÷ (n + 100), so a few checks lean toward 1; kept within 0.5–1.5 (capped = check the data). It applies to the ₹, the pieces and the days after 60 alike, and to the tests' guesses. (4.0–4.2 used a fixed 0.74 off the list and 1 for best sellers.)
+- **No trim (4.5)**: 4.3's brand factor (0.947 best sellers, 0.856 the rest on this brand) is gone. It moved the best-seller year by about 5%, less than one product's own error, and was hard to explain. Without it the 12 months read about ₹19.4 lakh best sellers instead of ₹18.4 lakh (Sammsara, 26 Nov 2026).
 - **After 60 days empty** (from the gap's first day): shown, never added.
 - **No ₹** (days still shown): under 60 Full days in the 90 before (a best seller with a sale in them: within the 365) ("too little history"), under 3 pieces sold in the days used ("too few sales"), already empty when the record began, sells at 0, gift line.
 - **Range** (90%): how far the tests below were off, by product (2,000 resamples), best sellers and others apart, a random mix of replays and comebacks, with counting noise (by product) and ±5.5% for the choice of model. The low end is never above what real comebacks alone say. Under 5 entries: no range.
 
-Why this rule (26 Nov 2026): plain to explain, and it beat 3.0 on best sellers (comebacks −13% → +7%, replays −17% → −6%, placebo +0%). Three separate critics (data, demand, tests) checked every step; what they changed: 60 days not 30 (short histories ran +79% high), the run-out day ½ with nothing taken off (it sells 2.7–3.5× a normal day before it empties), the comeback day 0, a correction off the list (4.0: a fixed 0.74; 4.3: measured per brand). 90 days not 365: per product the miss doubles over a year (14% → 31%). Busy by day, week or month: the same within 1%.
+Why this rule (26 Nov 2026): plain to explain, and it beat 3.0 on best sellers (comebacks −13% → +7%, replays −17% → −6%, placebo +0%). Three separate critics (data, demand, tests) checked every step; what they changed: 60 days not 30 (short histories ran +79% high), the run-out day ½ with nothing taken off (it sells 2.7–3.5× a normal day before it empties), the comeback day 0, a correction off the list (4.0: a fixed 0.74; 4.3: measured per brand; removed in 4.5). 90 days not 365: per product the miss doubles over a year (14% → 31%). Busy by day, week or month: the same within 1%.
 
 ## Proof (on the page, worked out again with new data)
 
@@ -44,7 +44,7 @@ Each with its 95% interval (by product).
 
 ## Lock
 
-A month is locked 3 days after it ends: empty days, speed, like-for-like, price, ₹ and range are saved and never worked out again under this rule. The best-seller list is locked on its quarter's first report. The current month says "so far" and can still move. Each locked month keeps the factors it was locked with; only open months use today's.
+A month is locked 3 days after it ends: empty days, speed, like-for-like, price, ₹ and range are saved and never worked out again under this rule. The best-seller list is locked on its quarter's first report. The current month says "so far" and can still move.
 
 ## Limits (said on the screen)
 
