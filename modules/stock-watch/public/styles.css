@@ -1215,7 +1215,7 @@ html.agency .rail a[data-view="reorder"], html.agency .owner { display: none !im
 .tile3.bad .tv { color: var(--lost); }
 .tile3 small { font-size: 12.5px; color: var(--soft); }
 a.tile3:hover { border-color: var(--brand); }
-.hgrid { display: grid; grid-template-columns: minmax(0, 1.75fr) minmax(300px, 1fr); gap: 14px; align-items: start; }
+.hgrid { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(300px, 1fr); gap: 14px; align-items: start; }
 .ycol { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 @media (max-width: 1279.98px) { .hgrid { grid-template-columns: minmax(0, 1fr); } }
 .olist { display: flex; flex-direction: column; }
@@ -1306,3 +1306,5 @@ html.agency .scope button { white-space: nowrap; }   /* 4.2.0: "Best sellers" on
 .zero b { color: var(--ink-2); font-weight: 600; }
 
 @media (max-width: 759.98px) { .top { flex-wrap: wrap; } .top .custom-dates:not([hidden]) { order: 99; flex: 1 1 100%; padding: 4px 0 6px; } .top .custom-dates input { flex: 1; min-width: 0; } }   /* 4.6.2: on a phone the dates get their own row; Show is never under another button */
+
+@media (min-width: 760px) { .ptable { font-size: 13px; } .ptable th, .ptable td { padding-left: 6px; padding-right: 6px; white-space: nowrap; } .ptable .pbar { width: 28px; } }   /* 4.6.3: Net sales + If in stock fit beside Missed */

@@ -266,12 +266,12 @@
     const bar = (x) => `<span class="pbar" aria-hidden="true"><i style="width:${Math.min(100, ((+x || 0) / max) * 100).toFixed(1)}%"></i></span>${x ? pct(x) : '–'}`;
     const refill = (x) => (x > 0 ? nDays(x) : '–');
     const startM = st && ms.length ? (st.slice(0, 7) < ms[ms.length - 1].key ? ms[ms.length - 1].key : st.slice(0, 7)) : null;
-    const divider = st ? `<tr class="started"><td colspan="5"><span>We started · ${esc(dayY(st))}</span></td></tr>` : '';
-    const rows = ms.map((m) => `<tr data-month="${m.key}" tabindex="0" class="${m.key === sel ? 'on' : ''}"><td>${esc(partOf(m) ? monthText(m) : `${mShort(m.key)} ${m.key.slice(0, 4)}`)}${m.closed ? '' : ' <small class="muted">so far</small>'}</td><td class="pc">${bar(m[sc].pct)}</td><td class="r"><b class="${m[sc].lost ? 'lostv' : 'muted'}">${m[sc].lost ? money(m[sc].lost) : '–'}</b></td><td class="r m-hide">${m[sc].out || '–'}</td><td class="r m-hide">${refill(m[sc].refill)}</td></tr>${m.key === startM ? divider : ''}`).join('');
+    const divider = st ? `<tr class="started"><td colspan="6"><span>We started · ${esc(dayY(st))}</span></td></tr>` : '';
+    const rows = ms.map((m) => `<tr data-month="${m.key}" tabindex="0" class="${m.key === sel ? 'on' : ''}"><td>${esc(partOf(m) ? monthText(m) : `${mShort(m.key)} ${m.key.slice(0, 4)}`)}${m.closed ? '' : ' <small class="muted">so far</small>'}</td><td class="r m-hide">${m[sc].sold ? money(m[sc].sold) : '–'}</td><td class="r"><b class="${m[sc].lost ? 'lostv' : 'muted'}">${m[sc].lost ? money(m[sc].lost) : '–'}</b></td><td class="r m-hide">${m[sc].sold ? money((m[sc].sold || 0) + (m[sc].lost || 0)) : '–'}</td><td class="pc">${bar(m[sc].pct)}</td><td class="r m-hide">${m[sc].out || '–'}</td></tr>${m.key === startM ? divider : ''}`).join('');
     return `<div class="panel" id="past"><div class="panel-head"><h2>Past months</h2><button class="btn ghost xs" id="csv-months">CSV</button></div>
-      <table class="mtable ptable"><thead><tr><th>Month</th><th>% of sales</th><th class="r">Missed</th><th class="r m-hide">Ran out</th><th class="r m-hide">Back in</th></tr></thead>
-      <tbody>${rows}<tr data-month="year" tabindex="0" class="yr${sel === 'year' ? ' on' : ''}"><td>${short(b) ? 'All months' : '12 months'}</td><td class="pc">${bar(h.pct)}</td><td class="r"><b class="lostv">${money(h.lost)}</b></td><td class="r m-hide">${inr.format(h.ranOut ?? h.bestRanOut ?? 0)}</td><td class="r m-hide">${refill(h.refill)}</td></tr></tbody></table>
-      <p class="muted small">% of sales = missed sales ÷ net sales of ${sc === 'all' ? 'all products' : 'best sellers'}.<span class="m-hide"> Back in = how long a sold-out item usually took to come back.</span></p></div>`;
+      <table class="mtable ptable"><thead><tr><th>Month</th><th class="r m-hide">Net sales</th><th class="r">Missed</th><th class="r m-hide" title="Net sales + missed sales">If in stock</th><th>% of sales</th><th class="r m-hide">Ran out</th></tr></thead>
+      <tbody>${rows}<tr data-month="year" tabindex="0" class="yr${sel === 'year' ? ' on' : ''}"><td>${short(b) ? 'All months' : '12 months'}</td><td class="r m-hide">${money(h.sold)}</td><td class="r"><b class="lostv">${money(h.lost)}</b></td><td class="r m-hide">${money((h.sold || 0) + (h.lost || 0))}</td><td class="pc">${bar(h.pct)}</td><td class="r m-hide">${inr.format(h.ranOut ?? h.bestRanOut ?? 0)}</td></tr></tbody></table>
+      <p class="muted small">If in stock = net sales + missed sales. % of sales = missed sales ÷ net sales of ${sc === 'all' ? 'all products' : 'best sellers'}.<span class="m-hide"> Days to refill are in the CSV.</span></p></div>`;
   }
 
   function brandView() {
@@ -331,8 +331,8 @@
   }
   function csvMonths() {
     const b = B(), sc = scope(), w = scopeName(sc);
-    const head = ['Month', 'From', 'To', `Sold ₹ (${w}, net, ex GST)`, `Missed ₹ (${w}, counted)`, '% of sales', `${sc === 'all' ? 'Products' : 'Best sellers'} that ran out`, `Empty days (${w})`, 'Days to refill (middle stock-out that came back)'];
-    const rows = monthsOf(b).map((m) => { const x = m[sc]; return [monthText(m), m.from, m.to, x.sold ?? m.sold, x.lost, x.pct, x.out, x.daysOut, x.refill ?? '']; });
+    const head = ['Month', 'From', 'To', `Net sales ₹ (${w}, as Shopify)`, `Missed sales ₹ (${w})`, `Net sales if in stock ₹ (${w})`, '% of sales', `${sc === 'all' ? 'Products' : 'Best sellers'} that ran out`, `Empty days (${w})`, 'Days to refill (middle stock-out that came back)'];
+    const rows = monthsOf(b).map((m) => { const x = m[sc]; return [monthText(m), m.from, m.to, x.sold ?? m.sold, x.lost, Math.round((x.sold ?? m.sold ?? 0) + (x.lost || 0)), x.pct, x.out, x.daysOut, x.refill ?? '']; });
     A.saveCsv(`brand-report-months-${sc === 'all' ? 'all-products' : 'best-sellers'}-${b.asOf.through}.csv`, [head, ...rows]);
   }
   function csvMonth() {
