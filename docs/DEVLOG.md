@@ -4,6 +4,9 @@ Newest first. Date · module · what changed and why · anything open.
 Shared copy for the team: https://claude.ai/artifact/27Q6x8r3rpZHYaNzhjW2Zq
 
 
+## 2026-11-27 · stock-watch 4.5.1
+The product panel's step 2 opens the busy number day by day (rest of the shop ÷ a normal shop day, weights, average). Parts carry `base` and `bdays`; rule label 4.5.1 relocks months once. Money unchanged.
+
 ## 2026-11-27 · stock-watch 4.5.0
 No trim. The agency found the brand factor (4.3) the hardest step to explain and it moved best sellers by about 5%. Removed from the money, the brand page and each product's working; rule 4.5 re-locks months. Tests: test/notrim.test.js replaces factor.test.js.
 

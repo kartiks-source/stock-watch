@@ -1300,3 +1300,5 @@ html.agency .scope button { white-space: nowrap; }   /* 4.2.0: "Best sellers" on
 #how-sure { scroll-margin-top: 140px; }   /* 4.3.1: the sticky month bar must not cover it on phones */
 
 .why-steps .why-steps li > b { display: block; color: var(--ink); }   /* 4.4: a step's heading on its own line, even inside a stock-out's line */
+
+.busy-work { margin-top: 6px; } .busy-work > summary { font-size: 13px; color: var(--ink-2); cursor: pointer; } .busy-work p { font-size: 13px; line-height: 1.45; color: var(--ink-2); margin: 6px 0; } .why-steps li .busy-work b { display: inline; color: var(--ink); } .busy-work .mtable { font-size: 12.5px; }   /* 4.5.1: the busy number, day by day */

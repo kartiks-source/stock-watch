@@ -26,7 +26,7 @@ The variants making the first 80% of all Shopify net sales (drafts count too) in
 
 - **Speed**: net pieces ÷ Full days, over its Full days in the 90 calendar days before the gap. Needs 60+ such days, **3+ pieces** and net sales above 0. A **best seller** with fewer than 60 Full days in those 90 (sold out too often lately) but a sale in them: its **last 60 Full days within the 365** before the gap instead (4.4). Other products: no fallback (it ran about 30% high for them). Still under 60: "too little history"; under 3 pieces: "too few sales".
 - **Price**: net sales ÷ pieces on those same days. So speed × price = the ₹ it makes a Full day.
-- **Busy**: the shop's net sales that day, this variant's own taken out, ÷ the same on the speed's days. Not under 0.
+- **Busy**: the shop's net sales that day, this variant's own taken out, ÷ the same on the speed's days. Not under 0. Averaged over the counted days with their weights (1, ½, 0); each part saves the days and the normal shop day so the screen shows the sum (4.5.1, same money).
 - **Days empty**: an Empty day 1, less what it still sold that day (never under 0). The Half day it ran out ½ (what it sold before it ran out does not come off). The Half day it came back 0. Another variant of the same product Full that day: 0.
 - **No trim (4.5)**: 4.3's brand factor (0.947 best sellers, 0.856 the rest on this brand) is gone. It moved the best-seller year by about 5%, less than one product's own error, and was hard to explain. Without it the 12 months read about ₹19.4 lakh best sellers instead of ₹18.4 lakh (Sammsara, 26 Nov 2026).
 - **After 60 days empty** (from the gap's first day): shown, never added.

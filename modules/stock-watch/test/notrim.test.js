@@ -38,7 +38,7 @@ const near = (a, b, e) => assert.ok(Math.abs(a - b) <= e, `${a} vs ${b}`);
 
 test('money = speed × how busy × days × price, nothing else; no factor in the report', () => {
   const { y, cat } = shop(store()), r = T.report(y, cat, opts);
-  assert.equal(T.RULE, '4.5'); assert.equal(r.rule, '4.5'); assert.equal(r.factor, undefined); assert.equal(M.factors, undefined);
+  assert.ok(T.RULE.startsWith('4.5')); assert.equal(r.rule, T.RULE); assert.equal(r.factor, undefined); assert.equal(M.factors, undefined);
   for (const m of r.months) assert.equal(m.factor, undefined, m.key);
   const p = r.rows.find((x) => x.id === '1').months['2026-08'].parts[0];
   assert.equal(p.adj, undefined); assert.equal(p.grp, undefined);
@@ -61,4 +61,14 @@ test('a month locked under 4.4 (with its trim) is worked out again under 4.5', (
   const a = r.months.find((m) => m.key === '2026-08'), f = fresh.months.find((m) => m.key === '2026-08');
   assert.equal(a.all.lost, f.all.lost, 'the old trimmed month is not used'); assert.ok(a.all.lost > 1);
   assert.ok(r.lock && r.lock.months['2026-08'], 'and it is locked again under 4.5');
+});
+
+test('4.5.1: each part carries its busy working; the days reproduce the busy number and the base is the speed’s', () => {
+  const { y, cat } = shop(store()), r = T.report(y, cat, opts), p = r.rows.find((x) => x.id === '1').months['2026-08'].parts[0];
+  assert.ok(p.base > 0 && p.bdays.length > 0);
+  let sw = 0, sb = 0; for (const [k, v, c] of p.bdays) { assert.match(k, /^2026-08-\d\d$/); assert.ok([0, 0.5, 1].includes(c)); sw += c; sb += (v / p.base) * c; }
+  near(sb / sw, p.busy, 0.002); near(sw, p.counted, 0.001);
+  assert.equal(p.bdays[0][2], 0.5, 'the day it ran out counts ½');
+  const all = (y.sales.all['2026-08-07'] || [0, 0])[1], own = ((y.sales.by['1'] || {})['2026-08-07'] || [0, 0])[1];
+  const d = p.bdays.find(([k]) => k === '2026-08-07'); assert.equal(d[1], Math.round(Math.max(0, all - own)), 'the rest of the shop that day');
 });

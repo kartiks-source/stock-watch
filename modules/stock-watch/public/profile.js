@@ -144,9 +144,18 @@
     const days = (n) => `${x2(n)} empty day${n === 1 ? '' : 's'}`, pc = (b) => Math.round(Math.abs(b - 1) * 100);
     const busyLine = (b) => (pc(b) === 0 ? 'The shop was as busy as usual on the empty days' : `The shop was ${pc(b)}% ${b > 1 ? 'busier' : 'quieter'} than usual on the empty days`);
     const pace = (u, d) => { if (!(u > 0)) return 'It sold nothing'; const e = d / u; return e > 1.05 ? `It sells about 1 piece every ${e < 10 ? Math.round(e * 10) / 10 : Math.round(e)} days` : `It sells about ${Math.round(u / d * 10) / 10} pieces a day`; };   // 4.3.1: say the pace before the ₹ a day, so a dear product's small daily ₹ makes sense
+    /* 4.5.1: the busy number worked out day by day: the rest of the shop's sales that day ÷ a normal shop day, averaged with the day weights */
+    const r3 = (n) => (Math.round(n * 1000) / 1000).toLocaleString('en-IN', { maximumFractionDigits: 3 });
+    const busyWork = (z) => {
+      if (!z.bdays || !z.bdays.length || !(z.base > 0)) return '';
+      let sw = 0, sb = 0;
+      const rows = z.bdays.map(([k, v, c]) => { const b = v / z.base; sw += c; sb += b * c; return `<tr><td>${+k.slice(8, 10)} ${mShort(k.slice(0, 7))}</td><td class="r">${ex(v)}</td><td class="r">${r3(b)}</td><td class="r">${c === 1 ? '1' : c === 0.5 ? '½' : '0'}</td></tr>`; }).join('');
+      if (!(sw > 0)) return '';
+      return `<details class="fold busy-work"><summary>How ${r3(z.busy)} is worked out</summary><p>A normal shop day = <b>${ex(z.base)}</b>: what the rest of the shop sold a day on the ${z.ref[2]} days this was in stock (${esc(span(z.ref[0], z.ref[1]))}). Each sold-out day: the rest of the shop’s sales that day ÷ ${ex(z.base)}. More than 1 = busier than normal, less than 1 = quieter.</p><div class="why-tbl"><table class="mtable"><thead><tr><th>Day</th><th class="r">Rest of the shop sold</th><th class="r">÷ ${ex(z.base)}</th><th class="r">Counts</th></tr></thead><tbody>${rows}</tbody></table></div><p>Average: (each day’s number × how much it counts) ${r3(sb)} ÷ ${x2(sw)} days = <b>${r3(sb / sw)}</b>. The day it ran out counts ½, the day it came back 0.</p></details>`;
+    };
     const steps = (z) => { const A = z.speed * z.price, T = A * z.ref[2], B = A * z.busy, N = z.perDay > 0 ? z.units / z.perDay : 0;   // 4.5: three steps, no trim
       return `<ol class="why-steps"><li><b>${pace(z.ref[3], z.ref[2])}, at ${ex(z.price)} each on average. That averages ${ex(A)} a day.</b><span>It sold ${x2(z.ref[3])} in its ${z.ref[2]} days in stock${z.fb ? '' : ' just before'} (${esc(span(z.ref[0], z.ref[1]))}), ${ex(T)} after discounts: ${ex(T)} ÷ ${z.ref[2]} = ${ex(A)}.${z.fb ? ' It was in stock fewer than 60 of the 90 days before it ran out, so these are its last 60 days in stock in the 12 months before.' : ''}</span></li>
-        <li><b>${busyLine(z.busy)}.</b><span>${ex(A)} × ${(Math.round(z.busy * 1000) / 1000).toLocaleString('en-IN', { maximumFractionDigits: 3 })} = ${ex(B)} a day.</span></li>
+        <li><b>${busyLine(z.busy)}.</b><span>${ex(A)} × ${r3(z.busy)} = ${ex(B)} a day.</span>${busyWork(z)}</li>
         <li><b>Days counted: ${x2(N)}.</b><span>Empty all day = 1, the day it ran out = ½, the day it came back = 0${z.counted != null && z.counted - N > 0.01 ? `: ${x2(z.counted)} days, less ${x2(z.counted - N)} days’ worth it still sold on them` : ''}.</span></li>
         <li><b>${ex(B)} × ${x2(N)} = ${ex(z.lost)}.</b></li></ol>`; };
     const part = (z) => `<li><b>${mon(z.month)}: ${days(z.empty)}${z.lost > 0 ? `, ${ex(z.lost)}` : ''}</b><span>${z.lost == null ? esc(none(z)) : `${z.first > 0 ? steps(z) : ''}${z.laterLost > 0 ? ` ${x2(z.later)} days came after 60 empty days: ${ex(z.laterLost)} if people still wanted it, not added.` : ''}${z.sib ? ` ${x2(z.sib)} days left out: another size or colour was in stock.` : ''}${z.closed ? ' Locked.' : ' So far: can still move.'}`}</span></li>`;
