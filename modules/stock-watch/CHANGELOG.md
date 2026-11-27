@@ -3,6 +3,14 @@
 User-facing changes, newest first. Semver: minor when a number's rule changes or a feature lands, patch for fixes. The version in `package.json` matches the top heading. Versions before 0.9.0 were reconstructed from `docs/DEVLOG.md` on 20 Nov 2026 (no tags existed); dates are the DEVLOG dates. Per DEVLOG, nothing from 0.6.0 on has been deployed yet. Since 1.0.0-rc.1, `/health`, `/status` and the page footer show the version and the build's commit (SW-056); `test/docs.test.js` checks the top heading matches `package.json`.
 
 
+## 4.6.2 · 2026-11-27 · All products in a clear order
+
+- Shopify's words everywhere: **Net sales** (was Sold; after discounts and returns, without tax and shipping, the same as Shopify's Net sales), **Missed sales** (was Money missed), **Net sales if in stock** (was Could have sold / Sold + missed).
+- By category / collection / tag (agency): Money missed and Could have sold columns; no "to order today" or monthly targets.
+- Phone: Custom dates get their own row, so Show can be tapped. Phone cards say "missed".
+- 12-month headline uses the tiles' one-decimal ₹ (₹19.4 lakh of ₹5.86 Cr).
+- All products opens sorted by money missed, highest first; then out now before in stock; then most sold. Clicking a header still sorts by that column.
+
 ## 4.6.1 · 2026-11-27 · tiles add up on screen
 
 - Sold, Missed and Could have sold show one decimal (₹40.1 lakh + ₹1.2 lakh = ₹41.3 lakh; ₹5.86 Cr + ₹19.4 lakh = ₹6.05 Cr).

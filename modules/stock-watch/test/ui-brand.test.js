@@ -51,12 +51,12 @@ test('1440: the Brand report is home, month first: bar, headline, three tiles, t
   assert.equal(await pg.textContent('#how-sure > summary'), 'How sure are we?');
   assert.ok(await pg.isHidden('.top .range'), 'the period buttons step aside');
   const tl = await pg.$$eval('.tiles3 .tl', (e) => e.map((x) => x.textContent));
-  assert.deepEqual(tl, ['Sold', 'Missed', 'Could have sold', 'Empty right now'], '4.6.0: the pitch in four tiles');
+  assert.deepEqual(tl, ['Net sales', 'Missed sales', 'Net sales if in stock', 'Empty right now'], '4.6.2: Shopify’s words');
   const rv = (s) => { const t = s.replace(/[₹,\s]/g, ''); const m = t.match(/^([\d.]+)(lakh|Cr|k)?$/); return m ? +m[1] * ({ lakh: 1e5, Cr: 1e7, k: 1e3 }[m[2]] || 1) : NaN; };
   const [so, mi, co] = await Promise.all(['#tile-sold .tv', '#tile-missed .tv', '#tile-could .tv'].map((q) => pg.textContent(q)));
   assert.ok(Math.abs(rv(so) + rv(mi) - rv(co)) <= Math.max(rv(co) * 0.02, 200), `sold + missed = could have sold: ${so} + ${mi} vs ${co}`);
   assert.ok(!/ · all in stock/.test(await pg.textContent('#tile-now')) || cur.best.out >= 0);
-  if (cur.prev) assert.match(await pg.textContent('#tile-missed small'), /^[\d.]+% of sales · (\d+–\d+ \w{3}|\w+): ₹/);
+  if (cur.prev) assert.match(await pg.textContent('#tile-missed small'), /^[\d.]+% of net sales · (\d+–\d+ \w{3}|\w+): ₹/);
   assert.equal(await pg.getAttribute('#tile-now', 'href'), '#best');
   assert.equal(await pg.$('#brand-chart'), null, 'no chart in a month');
   assert.equal(await pg.$('.top5'), null, 'no "Cost the most"');
@@ -85,14 +85,14 @@ test('1440: the Brand report is home, month first: bar, headline, three tiles, t
   await pg.click('.mstep[aria-label="Month before"]'); await pg.waitForSelector(`.ptable tr.on[data-month="${prev.key}"]`);
   await pg.reload(); await pg.waitForSelector(`.ptable tr.on[data-month="${prev.key}"]`);   // the address keeps the month
   const [dl2] = await Promise.all([pg.waitForEvent('download'), pg.click('#csv-month')]);
-  assert.match(fs.readFileSync(await dl2.path(), 'utf8'), /"Empty dates","Empty days","Money missed ₹".*"Shopify admin link","Website link"/);
+  assert.match(fs.readFileSync(await dl2.path(), 'utf8'), /"Empty dates","Empty days","Missed sales ₹".*"Shopify admin link","Website link"/);
   const [dl] = await Promise.all([pg.waitForEvent('download'), pg.click('#csv-months')]);
   assert.match(fs.readFileSync(await dl.path(), 'utf8'), /^﻿?"Month","From","To","Sold ₹ \(best sellers, net, ex GST\)","Missed ₹ \(best sellers, counted\)".*"Days to refill/);
   assert.match(await pg.textContent('.ptable thead'), /Back in/);
   /* the 12 months */
   await pg.click('.y12'); await pg.waitForSelector('#brand-chart svg .mb');
   assert.ok(pg.url().endsWith('#brand/12m'));
-  assert.match(await pg.textContent('.brand-h h1'), /^[\d,]+ of [\d,]+ best sellers ran out (in the last 12 months|since \d+ \w{3} \d{4})\. Sammsara \(demo\) missed about ₹[\d.,]+( lakh| Cr|k)? \([\d.]+% of ₹.+ sold\)\.$/);
+  assert.match(await pg.textContent('.brand-h h1'), /^[\d,]+ of [\d,]+ best sellers ran out (in the last 12 months|since \d+ \w{3} \d{4})\. Sammsara \(demo\) missed about ₹[\d.,]+( lakh| Cr|k)? \([\d.]+% of ₹.+ net sales\)\.$/);
   assert.ok(await pg.$('.heat .hrow .hc'), 'best seller × month grid');
   assert.equal(await pg.getAttribute('.ptable tr.on', 'data-month'), 'year');
   await pg.click(`.heat .hm[data-month="${prev.key}"]`); await pg.waitForSelector(`.ptable tr.on[data-month="${prev.key}"]`);
@@ -179,7 +179,7 @@ for (const [w, h] of [[1440, 900], [390, 844]]) {
     assert.match(await pg.textContent('#drawer .prank'), /^#\d+ of \d+ by sales, 12 months$/);
     assert.match(await pg.textContent('#drawer .pstory'), /^Sells about .+ when it is in stock\. (Ran out .+ in all\.|It never ran out .+\.) .*\(\d+ \w{3}.* – \d+ \w{3} \d{4}\)$/);
     const labels = await pg.$$eval('#drawer .kgrid .kv > span', (e) => e.map((x) => x.textContent));
-    for (const l of ['Sold, 12 months', 'Sells, on days in stock', 'On the shelf', 'Ran out', 'Money missed', 'Stock now', 'Last restock']) assert.ok(labels.includes(l), `${l} in ${labels}`);
+    for (const l of ['Net sales, 12 months', 'Sells, on days in stock', 'On the shelf', 'Ran out', 'Missed sales', 'Stock now', 'Last restock']) assert.ok(labels.includes(l), `${l} in ${labels}`);
     const heads = await pg.$$eval('#drawer h2', (e) => e.map((x) => x.textContent));
     assert.ok(!heads.includes('Trend'), 'no 30-day Trend card');
     for (const hd of ['12 months: sold and missed', 'Price and discount', 'Every day on the shelf', 'Stock level', 'Busy and quiet months', 'Details']) assert.ok(heads.includes(hd), `${hd} in ${heads}`);
@@ -217,8 +217,10 @@ test('1440 + 390: drawer opens at once, fold open by default and remembered, det
     assert.ok(inside, 'the box stays inside the drawer');
     /* keyboard focus on a price month, and a calendar day / stock day */
     await pg.focus('#drawer svg[aria-label="Price paid each month"] g.tipg');
+    await pg.waitForFunction(() => /Paid ₹|No sales/.test(document.getElementById('ptip').textContent), null, { timeout: 2000 }).catch(() => {});   // the box fills a frame after focus (was flaky)
     assert.match(await pg.textContent('#ptip'), /(Paid ₹[\d,]+ with GST|No sales).*sold/s);
     const day = await pg.$('#drawer .cal .cd[data-tip]'); await day.scrollIntoViewIfNeeded(); await day.click({ force: true });
+    await pg.waitForFunction(() => /In stock all day|Ran out or came back|Out of stock all day/.test(document.getElementById('ptip').textContent), null, { timeout: 2000 }).catch(() => {});
     assert.match(await pg.textContent('#ptip'), /\d+ \w{3} \d{4}(In stock all day|Ran out or came back|Out of stock all day).*sold/s);
     const sd = await pg.$('#drawer svg[aria-label="Stock at each day\'s end"] rect.tipg'); await sd.scrollIntoViewIfNeeded(); await sd.click({ force: true });
     assert.match(await pg.textContent('#ptip'), /in stock at the day’s end.*sold that day/s);

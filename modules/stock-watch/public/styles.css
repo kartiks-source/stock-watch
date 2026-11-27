@@ -1304,3 +1304,5 @@ html.agency .scope button { white-space: nowrap; }   /* 4.2.0: "Best sellers" on
 .busy-work { margin-top: 6px; } .busy-work > summary { font-size: 13px; color: var(--ink-2); cursor: pointer; } .busy-work p { font-size: 13px; line-height: 1.45; color: var(--ink-2); margin: 6px 0; } .why-steps li .busy-work b { display: inline; color: var(--ink); } .busy-work .mtable { font-size: 12.5px; } .busy-work .mtable th, .busy-work .mtable td { padding: 2px 8px; line-height: 1.35; }   /* 4.5.1: the busy number, day by day */
 
 .zero b { color: var(--ink-2); font-weight: 600; }
+
+@media (max-width: 759.98px) { .top { flex-wrap: wrap; } .top .custom-dates:not([hidden]) { order: 99; flex: 1 1 100%; padding: 4px 0 6px; } .top .custom-dates input { flex: 1; min-width: 0; } }   /* 4.6.2: on a phone the dates get their own row; Show is never under another button */
