@@ -87,8 +87,8 @@ test('1440: the Brand report is home, month first: bar, headline, three tiles, t
   const [dl2] = await Promise.all([pg.waitForEvent('download'), pg.click('#csv-month')]);
   assert.match(fs.readFileSync(await dl2.path(), 'utf8'), /"Empty dates","Empty days","Missed sales ₹".*"Shopify admin link","Website link"/);
   const [dl] = await Promise.all([pg.waitForEvent('download'), pg.click('#csv-months')]);
-  assert.match(fs.readFileSync(await dl.path(), 'utf8'), /^﻿?"Month","From","To","Sold ₹ \(best sellers, net, ex GST\)","Missed ₹ \(best sellers, counted\)".*"Days to refill/);
-  assert.match(await pg.textContent('.ptable thead'), /Back in/);
+  assert.match(fs.readFileSync(await dl.path(), 'utf8'), /^﻿?"Month","From","To","Net sales ₹ \(best sellers, as Shopify\)","Missed sales ₹ \(best sellers\)","Net sales if in stock ₹ \(best sellers\)".*"Days to refill/);
+  assert.match(await pg.textContent('.ptable thead'), /Net sales.*Missed.*If in stock/);
   /* the 12 months */
   await pg.click('.y12'); await pg.waitForSelector('#brand-chart svg .mb');
   assert.ok(pg.url().endsWith('#brand/12m'));
@@ -155,7 +155,7 @@ test('390: Brand report, Best sellers now and Ads usable on a phone, no sideways
     return { oneRow: t.length === 4 && new Set(t.map((x) => Math.round(x.top))).size === 2, strip: strip ? strip.width : 0, below: strip ? strip.top >= name.bottom - 1 : true, cols, bar: document.getElementById('monthbar').getBoundingClientRect().top };
   });
   assert.ok(lay.oneRow, '4.6.0: four tiles, two by two'); assert.ok(lay.below && (lay.strip === 0 || lay.strip > 200), `strip on line 2, wide: ${lay.strip}`);
-  assert.deepEqual(lay.cols, ['Month', '% of sales', 'Missed']); assert.ok(Math.abs(lay.bar) <= 1, `sticky bar at the top: ${lay.bar}`);
+  assert.deepEqual(lay.cols, ['Month', 'Missed', '% of sales']); assert.ok(Math.abs(lay.bar) <= 1, `sticky bar at the top: ${lay.bar}`);
   const m = await pg.$$eval('.ptable tbody tr[data-month]', (r) => r.map((x) => x.dataset.month));
   await pg.click(`.ptable tbody tr[data-month="${m[1]}"]`);
   await pg.waitForSelector(`.ptable tbody tr.on[data-month="${m[1]}"]`);

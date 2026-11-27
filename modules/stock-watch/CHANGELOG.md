@@ -3,6 +3,10 @@
 User-facing changes, newest first. Semver: minor when a number's rule changes or a feature lands, patch for fixes. The version in `package.json` matches the top heading. Versions before 0.9.0 were reconstructed from `docs/DEVLOG.md` on 20 Nov 2026 (no tags existed); dates are the DEVLOG dates. Per DEVLOG, nothing from 0.6.0 on has been deployed yet. Since 1.0.0-rc.1, `/health`, `/status` and the page footer show the version and the build's commit (SW-056); `test/docs.test.js` checks the top heading matches `package.json`.
 
 
+## 4.6.3 · 2026-11-27 · Past months shows net sales
+
+- Past months: Net sales and If in stock (net sales + missed sales) beside Missed, each month and the 12 months; also in its CSV. Phones keep Month, Missed, % of sales.
+
 ## 4.6.2 · 2026-11-27 · All products in a clear order
 
 - Shopify's words everywhere: **Net sales** (was Sold; after discounts and returns, without tax and shipping, the same as Shopify's Net sales), **Missed sales** (was Money missed), **Net sales if in stock** (was Could have sold / Sold + missed).
