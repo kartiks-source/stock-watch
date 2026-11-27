@@ -120,3 +120,16 @@ test('1440 + 390: the brand page says "· N of them: Shopify’s stock count is 
   }
   assert.equal(heights['390|3'], heights['390|0'], 'the phone headline keeps its lines');
 });
+
+test('1440 + 390: a keep-selling product\'s last days read "Keeps selling at 0 in Shopify · sells about N a day (12-month average)"', opts, async () => {
+  const txt = 'Keeps selling at 0 in Shopify · sells about 5 a day (12-month average)';
+  for (const [w, h] of SIZES) {
+    const pg = await drawer(w, h, (p) => { p.stockSeen = 'always'; }, (j) => { if (j.product) { j.product.why = txt; j.product.keepsWhy = txt; } });
+    await pg.waitForSelector('#hour-fold');
+    const fold = await pg.innerText('#hour-fold');
+    assert.ok(fold.includes(txt), fold.slice(0, 200)); assert.ok(!/No sales lately/.test(fold));
+    assert.equal(await sideways(pg), 0, `${w}`);
+    assert.deepEqual(pg.errors, []);
+    await pg.context().close();
+  }
+});

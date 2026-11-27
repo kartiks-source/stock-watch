@@ -135,3 +135,15 @@ test('the engine applies keep-selling day by day: a stock-out while set to keep 
   /* no flip recorded: byte-identical to the catalog alone */
   for (const o of [false, true]) assert.equal(JSON.stringify(run(o, { 9: [['2026-11-20', o ? 1 : 0]] })), JSON.stringify(run(o)), `${o}`);
 });
+
+test('keep selling now: the last days say "Keeps selling at 0 in Shopify · sells about N a day (12-month average)", never "No sales lately"', () => {
+  const sell = (i) => (i % 2 ? 1 : 0), ks = { id: 'k', price: 900, sell, level: (i) => 30 - Math.floor(i / 2), oversell: true };
+  const { y, cat } = shop([ks, ...many(6, 100, 500)]), r = T.report(y, cat, opts), x = r.rows.find((z) => z.id === 'k');
+  const rep = { products: [{ id: 'k', stock: 5, status: 'OK', sold: 0 }, { id: '100', stock: 50, status: 'OK', sold: 0 }], totals: {} };
+  S.period(rep, r, { from: r.span.from, to: r.span.to });
+  const days = r.months.reduce((a, m) => a + m.days, 0), n = x.pieces / days, txt = `Keeps selling at 0 in Shopify · sells about ${n >= 1 ? Math.round(n) : Math.round(n * 10) / 10} a day (12-month average)`;
+  assert.equal(rep.products[0].why, txt); assert.equal(rep.products[0].keepsWhy, txt);
+  assert.match(rep.products[1].why, /days of stock/, 'others as before'); assert.equal(rep.products[1].keepsWhy, undefined);
+  const H = require('../src/helpers'), E = require('../src/engine'), d = H.enrichDetail({ product: { ...rep.products[0], perDay: 0, daysLeft: null }, stockouts: [] }, E.DEFAULT_SETTINGS, Date.now());
+  assert.equal(d.product.why, txt, 'the drawer keeps it');
+});
